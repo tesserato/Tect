@@ -19,6 +19,13 @@
                 ]
             }
         ],
+        "grammars": [
+            {
+                "language": "tect",
+                "scopeName": "source.tect",
+                "path": "./syntaxes/tect.tmLanguage.json"
+            }
+        ],
         "semanticTokenTypes": [
             {
                 "id": "keyword"

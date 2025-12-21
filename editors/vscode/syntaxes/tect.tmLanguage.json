@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Tect",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.tect",
+      "begin": "#",
+      "end": "$"
+    }
+  ],
+  "scopeName": "source.tect"
+}
