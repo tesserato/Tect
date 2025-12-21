@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-all",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}/build.ps1"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

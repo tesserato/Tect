@@ -1,50 +1,39 @@
 {
     "name": "tect-vscode",
-    "displayName": "Tect Architecture Language",
-    "description": "Language support for Tect: The architecture meta-language",
-    "version": "0.0.0",
-    "publisher": "yourname",
+    "displayName": "Tect Architecture",
+    "version": "0.1.0",
+    "publisher": "tect-lang",
     "engines": {
         "vscode": "^1.75.0"
     },
-    "categories": [
-        "Programming Languages"
+    "activationEvents": [
+        "onLanguage:tect"
     ],
     "main": "./out/extension.js",
     "contributes": {
         "languages": [
             {
                 "id": "tect",
-                "aliases": [
-                    "Tect",
-                    "tect"
-                ],
                 "extensions": [
                     ".tect"
-                ],
-                "configuration": "./language-configuration.json"
+                ]
             }
         ],
         "semanticTokenTypes": [
             {
-                "id": "keyword",
-                "description": "Tect Keywords (Data, Function, Error)"
+                "id": "keyword"
             },
             {
-                "id": "type",
-                "description": "Data Structures"
+                "id": "type"
             },
             {
-                "id": "function",
-                "description": "Logic Functions"
+                "id": "function"
             },
             {
-                "id": "variable",
-                "description": "Instances and local names"
+                "id": "variable"
             },
             {
-                "id": "enum",
-                "description": "Errors"
+                "id": "enum"
             }
         ],
         "semanticTokenScopes": [
@@ -55,16 +44,21 @@
                         "keyword.control.tect"
                     ],
                     "type": [
-                        "entity.name.type.tect"
+                        "entity.name.type.tect",
+                        "support.type.tect"
                     ],
                     "function": [
-                        "entity.name.function.tect"
+                        "entity.name.function.tect",
+                        "support.function.tect"
                     ],
                     "variable": [
-                        "variable.other.tect"
+                        "variable.other.readwrite.tect",
+                        "variable.parameter.tect"
                     ],
                     "enum": [
-                        "entity.name.error.tect"
+                        "entity.name.error.tect",
+                        "markup.bold",
+                        "constant.language.tect"
                     ]
                 }
             }

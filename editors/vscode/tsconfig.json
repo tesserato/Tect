@@ -1,29 +1,15 @@
 {
-    "comments": {
-        "lineComment": "#"
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES6",
+        "outDir": "out",
+        "lib": ["ES6"],
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true
     },
-    "brackets": [
-        [
-            "(",
-            ")"
-        ],
-        [
-            "{",
-            "}"
-        ]
-    ],
-    "autoClosingPairs": [
-        [
-            "{",
-            "}"
-        ],
-        [
-            "(",
-            ")"
-        ],
-        [
-            "\"",
-            "\""
-        ]
+    "exclude": [
+        "node_modules",
+        ".vscode-test"
     ]
 }

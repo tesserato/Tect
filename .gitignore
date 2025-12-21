@@ -20,3 +20,5 @@ target
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 editors/vscode/node_modules
+editors/vscode/out/extension.js.map
+editors/vscode/package-lock.json
