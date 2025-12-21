@@ -21,6 +21,7 @@ impl LanguageServer for Backend {
             capabilities: ServerCapabilities {
                 // Enable Hover
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                // Enable Semantic Highlighting
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
                         SemanticTokensRegistrationOptions {
@@ -32,20 +33,21 @@ impl LanguageServer for Backend {
                                 }]),
                             },
                             semantic_tokens_options: SemanticTokensOptions {
+                                work_done_progress_options: Default::default(),
                                 legend: SemanticTokensLegend {
                                     token_types: vec![
                                         SemanticTokenType::KEYWORD,  // 0
                                         SemanticTokenType::TYPE,     // 1
                                         SemanticTokenType::FUNCTION, // 2
                                         SemanticTokenType::VARIABLE, // 3
-                                        SemanticTokenType::ENUM,     // 4 (Errors)
+                                        SemanticTokenType::ENUM,     // 4
                                     ],
                                     token_modifiers: vec![],
                                 },
+                                range: Some(false),
                                 full: Some(SemanticTokensFullOptions::Bool(true)),
-                                ..Default::default()
                             },
-                            static_registration_options: Default::default(),
+                            static_registration_options: StaticRegistrationOptions::default(),
                         },
                     ),
                 ),
@@ -55,49 +57,78 @@ impl LanguageServer for Backend {
         })
     }
 
-    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let uri = params.text_document_position_params.text_document.uri;
-        let pos = params.text_document_position_params.position;
-        let Ok(content) = std::fs::read_to_string(uri.to_file_path().unwrap()) else {
-            return Ok(None);
-        };
+async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+    let uri = params.text_document_position_params.text_document.uri;
+    let pos = params.text_document_position_params.position;
+    let Ok(content) = std::fs::read_to_string(uri.to_file_path().unwrap()) else { return Ok(None); };
 
-        let mut hover_text = None;
+    let mut symbols = HashMap::new();
+    let mut docs = HashMap::new();
 
-        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // We use flatten to check every single token in the file
-            for pair in pairs.flatten() {
-                let (line_start, col_start) = pair.line_col();
-                let line = (line_start - 1) as u32;
-                let col_begin = (col_start - 1) as u32;
-                let col_end = col_begin + pair.as_str().len() as u32;
+    if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
+        for pair in pairs.into_iter().next().unwrap().into_inner() {
+            let rule = pair.as_rule();
+            let mut current_docs = Vec::new();
+            let mut name = String::new();
 
-                // Check if the mouse is over this specific token
-                if pos.line == line && pos.character >= col_begin && pos.character < col_end {
-                    hover_text = match pair.as_rule() {
-                        Rule::ident => Some(format!("**Tect Identifier**: `{}`", pair.as_str())),
-                        Rule::kw_data => {
-                            Some("**Keyword**: `Data` - Defines a state structure.".into())
-                        }
-                        Rule::kw_error => {
-                            Some("**Keyword**: `Error` - Defines a failure branch.".into())
-                        }
-                        Rule::kw_func => Some(
-                            "**Keyword**: `Function` - Defines a logical transformation.".into(),
-                        ),
-                        _ => None,
-                    };
-                    if hover_text.is_some() {
-                        break;
+            // Walk inside data_def, error_def, etc.
+            for inner in pair.into_inner() {
+                match inner.as_rule() {
+                    Rule::comment => {
+                        let clean = inner.as_str().trim_start_matches('#').trim();
+                        current_docs.push(clean.to_string());
                     }
+                    Rule::ident if name.is_empty() => {
+                        name = inner.as_str().to_string();
+                        let type_idx = match rule {
+                            Rule::data_def => 1,
+                            Rule::error_def => 4,
+                            Rule::func_def => 2,
+                            _ => 3,
+                        };
+                        symbols.insert(name.clone(), type_idx);
+                    }
+                    _ => {}
+                }
+            }
+            if !name.is_empty() && !current_docs.is_empty() {
+                docs.insert(name, current_docs.join("\n"));
+            }
+        }
+    }
+
+        // Pass 2: Check if mouse is over a word
+        let mut response = None;
+        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
+            for pair in pairs.flatten() {
+                let (l, c) = pair.line_col();
+                let (line, col) = (l as u32 - 1, c as u32 - 1);
+                let len = pair.as_str().len() as u32;
+
+                if pos.line == line && pos.character >= col && pos.character < (col + len) {
+                    let word = pair.as_str();
+                    let type_label = match symbols.get(word) {
+                        Some(1) => "Data",
+                        Some(2) => "Function",
+                        Some(4) => "Error",
+                        _ => "Variable",
+                    };
+
+                    let mut md = format!("**{}**: `{}`", type_label, word);
+                    if let Some(doc) = docs.get(word) {
+                        md.push_str("\n\n---\n\n");
+                        md.push_str(doc);
+                    }
+                    response = Some(md);
+                    break;
                 }
             }
         }
 
-        Ok(hover_text.map(|text| Hover {
+        Ok(response.map(|value| Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: text,
+                value,
             }),
             range: None,
         }))
@@ -111,38 +142,29 @@ impl LanguageServer for Backend {
         let Ok(content) = std::fs::read_to_string(uri.to_file_path().unwrap()) else {
             return Ok(None);
         };
-
         let mut symbols = HashMap::new();
         let mut tokens = Vec::new();
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // FIX: Iterate through the top-level definitions to find names
-            // This ensures we know what 'Credentials' is even when used later.
+            // Learn defined names for coloring
             for pair in pairs.clone().into_iter().next().unwrap().into_inner() {
-                match pair.as_rule() {
-                    Rule::data_def => {
-                        if let Some(id) = pair.into_inner().nth(1) {
-                            symbols.insert(id.as_str().to_string(), 1);
-                        }
+                let rule = pair.as_rule();
+                for inner in pair.into_inner() {
+                    if let Rule::ident = inner.as_rule() {
+                        let type_idx = match rule {
+                            Rule::data_def => 1,
+                            Rule::error_def => 4,
+                            Rule::func_def => 2,
+                            _ => continue,
+                        };
+                        symbols.insert(inner.as_str().to_string(), type_idx);
+                        break;
                     }
-                    Rule::error_def => {
-                        if let Some(id) = pair.into_inner().nth(1) {
-                            symbols.insert(id.as_str().to_string(), 4);
-                        }
-                    }
-                    Rule::func_def => {
-                        if let Some(id) = pair.into_inner().nth(1) {
-                            symbols.insert(id.as_str().to_string(), 2);
-                        }
-                    }
-                    _ => {}
                 }
             }
 
-            // Pass 2: Generate token deltas
             let mut last_line = 0;
             let mut last_start = 0;
-
             for pair in pairs.flatten() {
                 let token_type = match pair.as_rule() {
                     Rule::kw_data | Rule::kw_error | Rule::kw_func => Some(0),
@@ -151,11 +173,8 @@ impl LanguageServer for Backend {
                 };
 
                 if let Some(type_idx) = token_type {
-                    let (line_raw, col_raw) = pair.line_col();
-                    let line = (line_raw - 1) as u32;
-                    let col = (col_raw - 1) as u32;
-                    let len = pair.as_str().len() as u32;
-
+                    let (l, c) = pair.line_col();
+                    let (line, col) = (l as u32 - 1, c as u32 - 1);
                     let delta_line = line - last_line;
                     let delta_start = if delta_line == 0 {
                         col - last_start
@@ -166,17 +185,15 @@ impl LanguageServer for Backend {
                     tokens.push(SemanticToken {
                         delta_line,
                         delta_start,
-                        length: len,
+                        length: pair.as_str().len() as u32,
                         token_type: type_idx,
                         token_modifiers_bitset: 0,
                     });
-
                     last_line = line;
                     last_start = col;
                 }
             }
         }
-
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
             data: tokens,

@@ -1,20 +1,33 @@
-WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
-COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* }
+// --- Whitespace (Horizontal Only) ---
+WHITESPACE = _{ " " | "\t" }
+ln         = _{ "\r\n" | "\n" }
 
-// Keywords as rules
-kw_data  = { "Data" }
-kw_error = { "Error" }
-kw_func  = { "Function" }
-arrow    = { "->" }
+// --- Comments ---
+comment = @{ "#" ~ (!ln ~ ANY)* }
+// A doc_line is a comment followed by exactly one newline
+doc_line = _{ comment ~ ln }
 
-ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+// --- Identifiers and Keywords ---
+ident    = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+kw_data  =  { "Data" }
+kw_error =  { "Error" }
+kw_func  =  { "Function" }
+arrow    =  { "->" }
 
-data_def  = { kw_data ~ ident }
-error_def = { kw_error ~ ident }
-func_def  = { kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
+// --- Definitions ---
+// doc_line* only matches if comments are stacked directly above the keyword
+data_def  = { doc_line* ~ kw_data ~ ident }
+error_def = { doc_line* ~ kw_error ~ ident }
+func_def  = { doc_line* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
+
 type_union = { ident ~ ("|" ~ ident)* }
 
+// --- Flow ---
 instantiation = { ident ~ ":" ~ ident }
 assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
 
-program = { SOI ~ (data_def | error_def | func_def | instantiation | assignment)* ~ EOI }
+// --- Root ---
+// We allow standalone comments or newlines between artifacts
+program = {
+    SOI ~ (data_def | error_def | func_def | instantiation | assignment | comment | ln)* ~ EOI
+}
