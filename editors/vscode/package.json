@@ -1,0 +1,86 @@
+{
+    "name": "tect-vscode",
+    "displayName": "Tect Architecture Language",
+    "description": "Language support for Tect: The architecture meta-language",
+    "version": "0.0.0",
+    "publisher": "yourname",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "tect",
+                "aliases": [
+                    "Tect",
+                    "tect"
+                ],
+                "extensions": [
+                    ".tect"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "semanticTokenTypes": [
+            {
+                "id": "keyword",
+                "description": "Tect Keywords (Data, Function, Error)"
+            },
+            {
+                "id": "type",
+                "description": "Data Structures"
+            },
+            {
+                "id": "function",
+                "description": "Logic Functions"
+            },
+            {
+                "id": "variable",
+                "description": "Instances and local names"
+            },
+            {
+                "id": "enum",
+                "description": "Errors"
+            }
+        ],
+        "semanticTokenScopes": [
+            {
+                "language": "tect",
+                "scopes": {
+                    "keyword": [
+                        "keyword.control.tect"
+                    ],
+                    "type": [
+                        "entity.name.type.tect"
+                    ],
+                    "function": [
+                        "entity.name.function.tect"
+                    ],
+                    "variable": [
+                        "variable.other.tect"
+                    ],
+                    "enum": [
+                        "entity.name.error.tect"
+                    ]
+                }
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^8.1.0"
+    },
+    "devDependencies": {
+        "@types/node": "^16.11.7",
+        "@types/vscode": "^1.75.0",
+        "typescript": "^4.9.4"
+    }
+}

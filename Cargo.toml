@@ -1,39 +1,5 @@
-[package]
-name = "Tect"
-version = "0.0.0"
-edition = "2021"
-
-authors = ["Tesserato <tesserato@hotmail.com>"]
-
-include = [
-    "src/**/*",
-    "README.md",
-    "LICENSE",
+[workspace]
+members = [
+    "server"
 ]
-description = "A meta-programming language for reasoning about code architecture."
-license = "MIT"
-
-homepage = "https://github.com/tesserato/Tect"
-repository = "https://github.com/tesserato/Tect"
-documentation = "https://docs.rs/Tect"
-
-readme = "README.md"
-
-keywords = [
-    "architecture",
-    "dsl",
-    "modeling",
-    "compiler",
-    "visualization"
-]
-
-categories = [
-    "development-tools",
-    "compilers",
-    "parser-implementations",
-    "visualization",
-]
-
-[dependencies]
-pest = "2.7"
-pest_derive = "2.7"
+resolver = "2"

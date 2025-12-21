@@ -1,0 +1,31 @@
+# --- 1. Data Definitions ---
+Data Credentials
+Data Session
+Data UserProfile
+
+# --- 2. Error Definitions ---
+Error InvalidPassword
+Error DatabaseOffline
+Error UserNotFound
+
+# --- 3. Function Contracts ---
+# Authenticate takes Credentials and returns a Session or one of two errors
+Function Authenticate(Credentials) -> Session | InvalidPassword | DatabaseOffline
+
+# FetchProfile takes a Session and returns a UserProfile or one of two errors
+Function FetchProfile(Session) -> UserProfile | UserNotFound | DatabaseOffline
+
+# --- 4. Architectural Flow ---
+
+# Mocking the initial input
+user_input: Credentials
+
+# Execution Step 1: Attempt Login
+# Tect Analyzer: "auth_res" now holds [Session | InvalidPassword | DatabaseOffline]
+auth_res = Authenticate(user_input)
+
+# Execution Step 2: Get Profile using the Session
+# Tect Analyzer Check: 
+# Warning! 'FetchProfile' requires 'Session'. 
+# 'auth_res' might be 'InvalidPassword' or 'DatabaseOffline'.
+profile_data = FetchProfile(auth_res)
