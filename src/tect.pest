@@ -1,0 +1,14 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* }
+
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+data_def  = { "Data" ~ ident }
+error_def = { "Error" ~ ident }
+func_def  = { "Function" ~ ident ~ "(" ~ ident ~ ")" ~ "->" ~ type_union }
+type_union = { ident ~ ("|" ~ ident)* }
+
+instantiation = { ident ~ ":" ~ ident }
+assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
+
+program = { SOI ~ (data_def | error_def | func_def | instantiation | assignment)* ~ EOI }
