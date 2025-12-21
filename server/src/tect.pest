@@ -1,11 +1,17 @@
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 COMMENT    = _{ "#" ~ (!"\n" ~ ANY)* }
 
+// Keywords as rules
+kw_data  = { "Data" }
+kw_error = { "Error" }
+kw_func  = { "Function" }
+arrow    = { "->" }
+
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-data_def  = { "Data" ~ ident }
-error_def = { "Error" ~ ident }
-func_def  = { "Function" ~ ident ~ "(" ~ ident ~ ")" ~ "->" ~ type_union }
+data_def  = { kw_data ~ ident }
+error_def = { kw_error ~ ident }
+func_def  = { kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
 type_union = { ident ~ ("|" ~ ident)* }
 
 instantiation = { ident ~ ":" ~ ident }
