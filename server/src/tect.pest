@@ -1,34 +1,51 @@
-WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+// Horizontal whitespace only
+WHITESPACE = _{ " " | "\t" }
+ln         = _{ "\r\n" | "\n" }
 
-// Capture comments
-comment = @{ "#" ~ (!("\r" | "\n") ~ ANY)* }
+// Comments and Docs
+comment  = @{ "#" ~ (!ln ~ ANY)* }
+doc_line =  { comment ~ ln }
 
-ident     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-kw_data   =  { "Data" }
-kw_error  =  { "Error" }
-kw_func   =  { "Function" }
-kw_for    =  { "For" }
-kw_in     =  { "in" }
-kw_match  =  { "Match" }
-kw_is     =  { "is" }
-kw_break  =  { "Break" }
-arrow     =  { "->" }
-fat_arrow =  { "=>" }
-number    = @{ ASCII_DIGIT+ }
-range     =  { number ~ ".." ~ number }
+ident  = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+number = @{ ASCII_DIGIT+ }
+range  =  { number ~ ".." ~ number }
 
-data_def   = { kw_data ~ ident }
-error_def  = { kw_error ~ ident }
-func_def   = { kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
+// Keywords
+kw_data   = { "Data" }
+kw_error  = { "Error" }
+kw_func   = { "Function" }
+kw_for    = { "For" }
+kw_in     = { "in" }
+kw_match  = { "Match" }
+kw_is     = { "is" }
+kw_break  = { "Break" }
+arrow     = { "->" }
+fat_arrow = { "=>" }
+
+// Definitions
+data_def   = { doc_line* ~ kw_data ~ ident }
+error_def  = { doc_line* ~ kw_error ~ ident }
+func_def   = { doc_line* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
 type_union = { ident ~ ("|" ~ ident)* }
 
-instantiation = { ident ~ ":" ~ ident }
-assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
+// Flow and Logic
+instantiation = { doc_line* ~ ident ~ ":" ~ ident }
+assignment    = { doc_line* ~ ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
+call          = { doc_line* ~ ident ~ "(" ~ ident ~ ")" }
 break_stmt    = { kw_break }
-for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ statement* ~ "}" }
-match_stmt    = { kw_match ~ ident ~ "{" ~ match_arm+ ~ "}" }
-match_arm     = { kw_is ~ ident ~ fat_arrow ~ "{" ~ statement* ~ "}" }
+for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
+match_stmt    = { kw_match ~ ident ~ "{" ~ (match_arm | ln)* ~ "}" }
+match_arm     = { kw_is ~ ident ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
 
-statement = _{ for_stmt | match_stmt | assignment | instantiation | break_stmt | comment }
+statement = _{
+    for_stmt
+  | match_stmt
+  | assignment
+  | instantiation
+  | call
+  | break_stmt
+  | comment
+  | ln
+}
 
-program = { SOI ~ (data_def | error_def | func_def | statement)* ~ EOI }
+program = { SOI ~ (data_def | error_def | func_def | statement | ln)* ~ EOI }

@@ -10,15 +10,148 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
-#[derive(Debug, Clone)]
-struct SymbolInfo {
-    kind: String,
-    detail: String,
-    docs: Option<String>,
+mod tests;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolInfo {
+    pub kind: String,
+    pub detail: String,
+    pub docs: Option<String>,
+}
+
+pub struct TectAnalyzer {
+    pub symbols: HashMap<String, SymbolInfo>,
+    pub func_returns: HashMap<String, String>,
+}
+
+impl TectAnalyzer {
+    pub fn new() -> Self {
+        Self {
+            symbols: HashMap::new(),
+            func_returns: HashMap::new(),
+        }
+    }
+
+    pub fn analyze(&mut self, content: &str) {
+        if let Ok(pairs) = TectParser::parse(Rule::program, content) {
+            let top_level = pairs.into_iter().next().unwrap().into_inner();
+
+            for pair in top_level.clone() {
+                self.collect_defs(pair);
+            }
+            for pair in top_level {
+                self.collect_usage(pair);
+            }
+        }
+    }
+
+    fn collect_defs(&mut self, pair: pest::iterators::Pair<Rule>) {
+        let rule = pair.as_rule();
+        if matches!(rule, Rule::data_def | Rule::error_def | Rule::func_def) {
+            let mut docs = Vec::new();
+            let mut name = String::new();
+            let mut ret = String::new();
+            for inner in pair.into_inner() {
+                match inner.as_rule() {
+                    Rule::doc_line => docs.push(
+                        inner
+                            .into_inner()
+                            .next()
+                            .unwrap()
+                            .as_str()
+                            .trim_start_matches('#')
+                            .trim()
+                            .to_string(),
+                    ),
+                    Rule::ident if name.is_empty() => name = inner.as_str().to_string(),
+                    Rule::type_union => ret = inner.as_str().to_string(),
+                    _ => {}
+                }
+            }
+            if !name.is_empty() {
+                let kind = if rule == Rule::data_def {
+                    "Data"
+                } else if rule == Rule::error_def {
+                    "Error"
+                } else {
+                    self.func_returns.insert(name.clone(), ret.clone());
+                    "Function"
+                };
+                self.symbols.insert(
+                    name.clone(),
+                    SymbolInfo {
+                        kind: kind.into(),
+                        detail: if ret.is_empty() { name } else { ret },
+                        docs: if docs.is_empty() {
+                            None
+                        } else {
+                            Some(docs.join("\n\n"))
+                        },
+                    },
+                );
+            }
+        }
+    }
+
+    fn collect_usage(&mut self, pair: pest::iterators::Pair<Rule>) {
+        match pair.as_rule() {
+            Rule::instantiation | Rule::assignment | Rule::call => {
+                let mut docs = Vec::new();
+                let mut idents = Vec::new();
+                let rule = pair.as_rule();
+                for inner in pair.into_inner() {
+                    match inner.as_rule() {
+                        Rule::doc_line => docs.push(
+                            inner
+                                .into_inner()
+                                .next()
+                                .unwrap()
+                                .as_str()
+                                .trim_start_matches('#')
+                                .trim()
+                                .to_string(),
+                        ),
+                        Rule::ident => idents.push(inner.as_str().to_string()),
+                        _ => {}
+                    }
+                }
+                if !idents.is_empty() {
+                    let name = idents[0].clone();
+                    let detail = if rule == Rule::instantiation {
+                        idents.get(1).cloned().unwrap_or_default()
+                    } else if rule == Rule::assignment {
+                        self.func_returns
+                            .get(&idents[1])
+                            .cloned()
+                            .unwrap_or("Unknown".into())
+                    } else {
+                        "Side Effect".into()
+                    };
+                    self.symbols.insert(
+                        name,
+                        SymbolInfo {
+                            kind: "Variable".into(),
+                            detail,
+                            docs: if docs.is_empty() {
+                                None
+                            } else {
+                                Some(docs.join("\n\n"))
+                            },
+                        },
+                    );
+                }
+            }
+            Rule::for_stmt | Rule::match_stmt | Rule::match_arm => {
+                for inner in pair.into_inner() {
+                    self.collect_usage(inner);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 struct Backend {
-    #[allow(dead_code)]
     client: Client,
     document_map: DashMap<Url, String>,
 }
@@ -48,11 +181,11 @@ impl LanguageServer for Backend {
                                 },
                                 legend: SemanticTokensLegend {
                                     token_types: vec![
-                                        SemanticTokenType::KEYWORD,  // 0
-                                        SemanticTokenType::TYPE,     // 1
-                                        SemanticTokenType::FUNCTION, // 2
-                                        SemanticTokenType::VARIABLE, // 3
-                                        SemanticTokenType::ENUM,     // 4
+                                        SemanticTokenType::KEYWORD,
+                                        SemanticTokenType::TYPE,
+                                        SemanticTokenType::FUNCTION,
+                                        SemanticTokenType::VARIABLE,
+                                        SemanticTokenType::ENUM,
                                     ],
                                     token_modifiers: vec![],
                                 },
@@ -68,144 +201,25 @@ impl LanguageServer for Backend {
             ..Default::default()
         })
     }
-
-    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+    async fn did_open(&self, p: DidOpenTextDocumentParams) {
         self.document_map
-            .insert(params.text_document.uri, params.text_document.text);
+            .insert(p.text_document.uri, p.text_document.text);
     }
-
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        if let Some(change) = params.content_changes.into_iter().next() {
-            self.document_map
-                .insert(params.text_document.uri, change.text);
+    async fn did_change(&self, p: DidChangeTextDocumentParams) {
+        if let Some(c) = p.content_changes.into_iter().next() {
+            self.document_map.insert(p.text_document.uri, c.text);
         }
     }
-
-    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let uri = params.text_document_position_params.text_document.uri;
-        let pos = params.text_document_position_params.position;
+    async fn hover(&self, p: HoverParams) -> Result<Option<Hover>> {
+        let uri = p.text_document_position_params.text_document.uri;
+        let pos = p.text_document_position_params.position;
         let Some(content) = self.document_map.get(&uri) else {
             return Ok(None);
         };
-
-        let mut symbols: HashMap<String, SymbolInfo> = HashMap::new();
-        let mut func_map: HashMap<String, String> = HashMap::new(); // func_name -> return_type
-        let mut comment_buffer: Vec<(usize, String)> = Vec::new();
-
+        let mut a = TectAnalyzer::new();
+        a.analyze(&content);
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            let all_pairs: Vec<_> = pairs.flatten().collect();
-
-            // -- PASS 1: Collect Definitions (Data, Error, Function) --
-            for pair in &all_pairs {
-                let (line, _) = pair.line_col();
-                match pair.as_rule() {
-                    Rule::comment => {
-                        comment_buffer.push((
-                            line,
-                            pair.as_str().trim_start_matches('#').trim().to_string(),
-                        ));
-                    }
-                    Rule::data_def | Rule::error_def | Rule::func_def => {
-                        let mut inner = pair.clone().into_inner();
-                        let name = inner
-                            .find(|p| p.as_rule() == Rule::ident)
-                            .map(|p| p.as_str().to_string());
-
-                        if let Some(n) = name {
-                            let mut docs = Vec::new();
-                            let mut check_line = line - 1;
-                            while let Some(idx) =
-                                comment_buffer.iter().rposition(|(l, _)| *l == check_line)
-                            {
-                                docs.push(comment_buffer.remove(idx).1);
-                                if check_line == 0 {
-                                    break;
-                                }
-                                check_line -= 1;
-                            }
-                            docs.reverse();
-                            let docs_str = if docs.is_empty() {
-                                None
-                            } else {
-                                Some(docs.join("\n\n"))
-                            };
-
-                            let (kind, detail) = match pair.as_rule() {
-                                Rule::data_def => ("Data".into(), n.clone()),
-                                Rule::error_def => ("Error".into(), n.clone()),
-                                _ => {
-                                    // It's a function, find the return type (the type_union)
-                                    let ret = pair
-                                        .clone()
-                                        .into_inner()
-                                        .find(|p| p.as_rule() == Rule::type_union)
-                                        .map(|p| p.as_str().to_string())
-                                        .unwrap_or("void".into());
-                                    func_map.insert(n.clone(), ret.clone());
-                                    ("Function".into(), ret)
-                                }
-                            };
-                            symbols.insert(
-                                n,
-                                SymbolInfo {
-                                    kind,
-                                    detail,
-                                    docs: docs_str,
-                                },
-                            );
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // -- PASS 2: Collect Variables (using Pass 1 data) --
-            for pair in &all_pairs {
-                let (line, _) = pair.line_col();
-                match pair.as_rule() {
-                    Rule::instantiation | Rule::assignment => {
-                        let mut inner = pair.clone().into_inner();
-                        let var_name = inner.next().unwrap().as_str().to_string();
-
-                        let mut docs = Vec::new();
-                        let mut check_line = line - 1;
-                        while let Some(idx) =
-                            comment_buffer.iter().rposition(|(l, _)| *l == check_line)
-                        {
-                            docs.push(comment_buffer.remove(idx).1);
-                            if check_line == 0 {
-                                break;
-                            }
-                            check_line -= 1;
-                        }
-                        docs.reverse();
-
-                        let detail = if pair.as_rule() == Rule::instantiation {
-                            inner.next().unwrap().as_str().to_string() // Direct type
-                        } else {
-                            let func_name = inner.next().unwrap().as_str(); // Assigned from func
-                            func_map.get(func_name).cloned().unwrap_or("Unknown".into())
-                        };
-
-                        symbols.insert(
-                            var_name,
-                            SymbolInfo {
-                                kind: "Variable".into(),
-                                detail,
-                                docs: if docs.is_empty() {
-                                    None
-                                } else {
-                                    Some(docs.join("\n\n"))
-                                },
-                            },
-                        );
-                    }
-                    _ => {}
-                }
-            }
-
-            // -- PASS 3: Hit Test --
-            for pair in &all_pairs {
+            for pair in pairs.flatten() {
                 if !matches!(
                     pair.as_rule(),
                     Rule::ident
@@ -220,11 +234,12 @@ impl LanguageServer for Backend {
                 }
                 let (l, c) = pair.line_col();
                 let (line, col) = (l as u32 - 1, c as u32 - 1);
-                let len = pair.as_str().len() as u32;
-
-                if pos.line == line && pos.character >= col && pos.character < (col + len) {
+                if pos.line == line
+                    && pos.character >= col
+                    && pos.character < (col + pair.as_str().len() as u32)
+                {
                     let word = pair.as_str();
-                    let val = if let Some(info) = symbols.get(word) {
+                    let val = if let Some(info) = a.symbols.get(word) {
                         format!(
                             "### {}: `{}`\n**Type**: `{}`{}",
                             info.kind,
@@ -242,7 +257,6 @@ impl LanguageServer for Backend {
                             Rule::kw_func => "### Keyword: `Function`".into(),
                             Rule::kw_match => "### Keyword: `Match`".into(),
                             Rule::kw_for => "### Keyword: `For`".into(),
-                            Rule::kw_is => "### Keyword: `is`".into(),
                             _ => format!("### Identifier: `{}`", word),
                         }
                     };
@@ -258,42 +272,19 @@ impl LanguageServer for Backend {
         }
         Ok(None)
     }
-
     async fn semantic_tokens_full(
         &self,
-        params: SemanticTokensParams,
+        p: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        let uri = params.text_document.uri;
+        let uri = p.text_document.uri;
         let Some(content) = self.document_map.get(&uri) else {
             return Ok(None);
         };
-        let mut symbols = HashMap::new();
+        let mut a = TectAnalyzer::new();
+        a.analyze(&content);
         let mut tokens = Vec::new();
-
+        let (mut last_l, mut last_s) = (0, 0);
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            for pair in pairs.clone().flatten() {
-                match pair.as_rule() {
-                    Rule::data_def => {
-                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
-                            symbols.insert(id.as_str().to_string(), 1);
-                        }
-                    }
-                    Rule::error_def => {
-                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
-                            symbols.insert(id.as_str().to_string(), 4);
-                        }
-                    }
-                    Rule::func_def => {
-                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
-                            symbols.insert(id.as_str().to_string(), 2);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            let mut last_line = 0;
-            let mut last_start = 0;
             for pair in pairs.flatten() {
                 let token_type = match pair.as_rule() {
                     Rule::kw_data
@@ -304,29 +295,31 @@ impl LanguageServer for Backend {
                     | Rule::kw_in
                     | Rule::kw_is
                     | Rule::kw_break => Some(0),
-                    Rule::ident => Some(*symbols.get(pair.as_str()).unwrap_or(&3)),
+                    Rule::ident => Some(
+                        match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
+                            Some("Data") => 1,
+                            Some("Function") => 2,
+                            Some("Error") => 4,
+                            _ => 3,
+                        },
+                    ),
                     Rule::number => Some(4),
                     _ => None,
                 };
-
-                if let Some(type_idx) = token_type {
+                if let Some(idx) = token_type {
                     let (l, c) = pair.line_col();
                     let (line, col) = (l as u32 - 1, c as u32 - 1);
-                    let delta_line = line - last_line;
-                    let delta_start = if delta_line == 0 {
-                        col - last_start
-                    } else {
-                        col
-                    };
+                    let delta_l = line - last_l;
+                    let delta_s = if delta_l == 0 { col - last_s } else { col };
                     tokens.push(SemanticToken {
-                        delta_line,
-                        delta_start,
+                        delta_line: delta_l,
+                        delta_start: delta_s,
                         length: pair.as_str().len() as u32,
-                        token_type: type_idx,
+                        token_type: idx,
                         token_modifiers_bitset: 0,
                     });
-                    last_line = line;
-                    last_start = col;
+                    last_l = line;
+                    last_s = col;
                 }
             }
         }
@@ -335,7 +328,6 @@ impl LanguageServer for Backend {
             data: tokens,
         })))
     }
-
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
