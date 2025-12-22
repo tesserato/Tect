@@ -1,7 +1,6 @@
-// Back to robust whitespace
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
 
-// Comments are captured
+// Capture comments
 comment = @{ "#" ~ (!("\r" | "\n") ~ ANY)* }
 
 ident     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -18,13 +17,11 @@ fat_arrow =  { "=>" }
 number    = @{ ASCII_DIGIT+ }
 range     =  { number ~ ".." ~ number }
 
-// Simple definitions
 data_def   = { kw_data ~ ident }
 error_def  = { kw_error ~ ident }
 func_def   = { kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
 type_union = { ident ~ ("|" ~ ident)* }
 
-// Flow
 instantiation = { ident ~ ":" ~ ident }
 assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
 break_stmt    = { kw_break }
@@ -32,13 +29,6 @@ for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ statement* ~ "}" }
 match_stmt    = { kw_match ~ ident ~ "{" ~ match_arm+ ~ "}" }
 match_arm     = { kw_is ~ ident ~ fat_arrow ~ "{" ~ statement* ~ "}" }
 
-statement = _{
-    for_stmt
-  | match_stmt
-  | assignment
-  | instantiation
-  | break_stmt
-  | comment
-}
+statement = _{ for_stmt | match_stmt | assignment | instantiation | break_stmt | comment }
 
 program = { SOI ~ (data_def | error_def | func_def | statement)* ~ EOI }

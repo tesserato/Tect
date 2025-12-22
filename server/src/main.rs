@@ -17,6 +17,7 @@ struct SymbolMetadata {
 }
 
 struct Backend {
+    #[allow(dead_code)]
     client: Client,
     document_map: DashMap<Url, String>,
 }
@@ -87,10 +88,10 @@ impl LanguageServer for Backend {
         };
 
         let mut symbols: HashMap<String, SymbolMetadata> = HashMap::new();
-        let mut comment_buffer: Vec<(usize, String)> = Vec::new(); // (line, content)
+        let mut comment_buffer: Vec<(usize, String)> = Vec::new();
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // PASS 1: Build Symbol Table and track comments
+            // PASS 1: Symbol and Doc Collection
             for pair in pairs.clone().flatten() {
                 let (line, _) = pair.line_col();
                 match pair.as_rule() {
@@ -106,10 +107,9 @@ impl LanguageServer for Backend {
                         };
                         if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
                             let name = id.as_str().to_string();
-
-                            // Get comments immediately preceding this line
                             let mut docs = Vec::new();
                             let mut current_line = line - 1;
+
                             while let Some(idx) =
                                 comment_buffer.iter().rposition(|(l, _)| *l == current_line)
                             {
@@ -121,15 +121,18 @@ impl LanguageServer for Backend {
                             }
                             docs.reverse();
 
+                            // JOIN WITH DOUBLE NEWLINE FOR MARKDOWN
+                            let description = if docs.is_empty() {
+                                None
+                            } else {
+                                Some(docs.join("\n\n"))
+                            };
+
                             symbols.insert(
                                 name,
                                 SymbolMetadata {
                                     kind: kind.into(),
-                                    description: if docs.is_empty() {
-                                        None
-                                    } else {
-                                        Some(docs.join("\n"))
-                                    },
+                                    description,
                                 },
                             );
                         }
@@ -138,7 +141,7 @@ impl LanguageServer for Backend {
                 }
             }
 
-            // PASS 2: Find what's under the cursor
+            // PASS 2: Hit Test
             for pair in pairs.flatten() {
                 if !matches!(
                     pair.as_rule(),
@@ -148,11 +151,13 @@ impl LanguageServer for Backend {
                         | Rule::kw_func
                         | Rule::kw_match
                         | Rule::kw_for
+                        | Rule::kw_is
+                        | Rule::kw_break
                 ) {
                     continue;
                 }
                 let (l, c) = pair.line_col();
-                let (line, col) = (l as u32 - 1, (c as u32 - 1));
+                let (line, col) = (l as u32 - 1, c as u32 - 1);
                 let len = pair.as_str().len() as u32;
 
                 if pos.line == line && pos.character >= col && pos.character < (col + len) {
@@ -174,6 +179,8 @@ impl LanguageServer for Backend {
                             Rule::kw_func => "### Keyword: `Function`".into(),
                             Rule::kw_match => "### Keyword: `Match`".into(),
                             Rule::kw_for => "### Keyword: `For`".into(),
+                            Rule::kw_is => "### Keyword: `is`".into(),
+                            Rule::kw_break => "### Keyword: `Break`".into(),
                             _ => format!("### Variable: `{}`", word),
                         }
                     };
