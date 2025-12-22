@@ -11,91 +11,91 @@
 # **Credentials Object**
 # Contains the sensitive user data required for a login attempt.
 # > *Note: This object should never be logged in plaintext.*
-Data Credentials
+data Credentials
 
 # **Session Token**
 # An ephemeral token granted upon successful authentication.
 # - `TTL`: 3600 seconds
 # - `Scope`: Read/Write
-Data Session
+data Session
 
 # **User Profile**
 # The canonical representation of the user in the system.
-Data UserProfile
+data UserProfile
 
 # --- 2. Error Definitions ---
 
 # **Invalid Password**
 # Triggered when the hashed password does not match the record.
 # *Status Code: 401*
-Error InvalidPassword
+error InvalidPassword
 
 # **Database Offline**
 # A transient error indicating the persistence layer is unreachable.
 # *Retry Policy: Exponential Backoff*
-Error DatabaseOffline
+error DatabaseOffline
 
 # **User Not Found**
 # Triggered when the provided identifier does not exist.
-Error UserNotFound
+error UserNotFound
 
 # --- 3. Function Contracts ---
 
 # ### Authentication Service
 # Verifies user identity against the database.
 # Returns a `Session` on success, otherwise branches into failure states.
-Function Authenticate(Credentials) -> Session | InvalidPassword | DatabaseOffline
+function Authenticate(Credentials) -> Session | InvalidPassword | DatabaseOffline
 
 # ### Profile Provider
 # Retrieves profile metadata for an active session.
-Function FetchProfile(Session) -> UserProfile | UserNotFound | DatabaseOffline
+function FetchProfile(Session) -> UserProfile | UserNotFound | DatabaseOffline
 
 # --- 4. Architectural Flow ---
 
 # Entry point: Mocked from UI
-user_input: Credentials
+userInput: Credentials
 
 # **Retry Strategy Implementation**
 # We attempt to authenticate up to 3 times in case of transient DB failures.
-For i in 0..3 {
+for i in 0..3 {
     
     # Execute the transformation
-    auth_res = Authenticate(user_input)
+    authRes = Authenticate(userInput)
 
     # Architectural Branching
-    Match auth_res {
+    match authRes {
         Session => {
-            # Type Narrowing: 'auth_res' is now treated as 'Session'
-            profile_data = FetchProfile(auth_res)
+            # Type Narrowing: 'authRes' is now treated as 'Session'
+            profileData = FetchProfile(authRes)
             
             # Handle profile results
-            Match profile_data {
+            match profileData {
                 UserProfile => {
                     # Success path: Exit the loop
-                    Break
+                    break
                 }
                 UserNotFound => {
                     # Logic Error: Session exists but user is gone
-                    Break
+                    break
                 }
                 DatabaseOffline => {
                     # Internal Error: Handle gracefully
                 }
                 _ => {
                     # Catch-all for unexpected states
-                    Break
+                    break
                 }
             }
         }
         InvalidPassword => {
             # Security: Terminate flow immediately on bad password
-            Break
+            break
         }
         DatabaseOffline => {
             # Flow: Loop will naturally retry until i=3
         }
         _ => {
-            Break
+            break
         }
     }
 }

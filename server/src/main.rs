@@ -63,7 +63,7 @@ impl TectAnalyzer {
                             .trim()
                             .to_string(),
                     ),
-                    Rule::ident if name.is_empty() => name = inner.as_str().to_string(),
+                    Rule::type_ident if name.is_empty() => name = inner.as_str().to_string(),
                     Rule::type_union => ret = inner.as_str().to_string(),
                     _ => {}
                 }
@@ -111,7 +111,9 @@ impl TectAnalyzer {
                                 .trim()
                                 .to_string(),
                         ),
-                        Rule::ident => idents.push(inner.as_str().to_string()),
+                        Rule::var_ident | Rule::type_ident => {
+                            idents.push(inner.as_str().to_string())
+                        }
                         _ => {}
                     }
                 }
@@ -130,7 +132,12 @@ impl TectAnalyzer {
                     self.symbols.insert(
                         name,
                         SymbolInfo {
-                            kind: "Variable".into(),
+                            kind: if rule == Rule::call {
+                                "Function Call"
+                            } else {
+                                "Variable"
+                            }
+                            .into(),
                             detail,
                             docs: if docs.is_empty() {
                                 None
@@ -222,7 +229,8 @@ impl LanguageServer for Backend {
             for pair in pairs.flatten() {
                 if !matches!(
                     pair.as_rule(),
-                    Rule::ident
+                    Rule::type_ident
+                        | Rule::var_ident
                         | Rule::kw_data
                         | Rule::kw_error
                         | Rule::kw_func
@@ -241,7 +249,7 @@ impl LanguageServer for Backend {
                     let word = pair.as_str();
                     let val = if let Some(info) = a.symbols.get(word) {
                         format!(
-                            "### {}: `{}`\n**Type**: `{}`{}",
+                            "### {}: `{}`\n**Type/Detail**: `{}`{}",
                             info.kind,
                             word,
                             info.detail,
@@ -252,13 +260,13 @@ impl LanguageServer for Backend {
                         )
                     } else {
                         match pair.as_rule() {
-                            Rule::kw_data => "### Keyword: `Data`".into(),
-                            Rule::kw_error => "### Keyword: `Error`".into(),
-                            Rule::kw_func => "### Keyword: `Function`".into(),
-                            Rule::kw_match => "### Keyword: `Match`".into(),
-                            Rule::kw_for => "### Keyword: `For`".into(),
+                            Rule::kw_data => "### Keyword: `data`".into(),
+                            Rule::kw_error => "### Keyword: `error`".into(),
+                            Rule::kw_func => "### Keyword: `function`".into(),
+                            Rule::kw_match => "### Keyword: `match`".into(),
+                            Rule::kw_for => "### Keyword: `for`".into(),
                             Rule::wildcard => "### Pattern: `Wildcard` (Exhaustive match)".into(),
-                            _ => format!("### Identifier: `{}`", word),
+                            _ => format!("### Symbol: `{}`", word),
                         }
                     };
                     return Ok(Some(Hover {
@@ -295,14 +303,15 @@ impl LanguageServer for Backend {
                     | Rule::kw_match
                     | Rule::kw_in
                     | Rule::kw_break => Some(0),
-                    Rule::ident => Some(
+                    Rule::type_ident => Some(
                         match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
                             Some("Data") => 1,
                             Some("Function") => 2,
                             Some("Error") => 4,
-                            _ => 3,
+                            _ => 1, // Default to type
                         },
                     ),
+                    Rule::var_ident => Some(3),
                     Rule::number | Rule::wildcard => Some(4),
                     _ => None,
                 };

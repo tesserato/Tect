@@ -6,36 +6,38 @@ ln         = _{ "\r\n" | "\n" }
 comment  = @{ "#" ~ (!ln ~ ANY)* }
 doc_line =  { comment ~ ln }
 
-ident    = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-number   = @{ ASCII_DIGIT+ }
-range    =  { number ~ ".." ~ number }
-wildcard =  { "_" }
+// Hard Casing Rules
+type_ident = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
+var_ident  = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
+number     = @{ ASCII_DIGIT+ }
+range      =  { number ~ ".." ~ number }
+wildcard   =  { "_" }
 
-// Keywords
-kw_data   = { "Data" }
-kw_error  = { "Error" }
-kw_func   = { "Function" }
-kw_for    = { "For" }
+// Keywords (Strict Lowercase)
+kw_data   = { "data" }
+kw_error  = { "error" }
+kw_func   = { "function" }
+kw_for    = { "for" }
 kw_in     = { "in" }
-kw_match  = { "Match" }
-kw_break  = { "Break" }
+kw_match  = { "match" }
+kw_break  = { "break" }
 arrow     = { "->" }
 fat_arrow = { "=>" }
 
 // Definitions
-data_def   = { doc_line* ~ kw_data ~ ident }
-error_def  = { doc_line* ~ kw_error ~ ident }
-func_def   = { doc_line* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
-type_union = { ident ~ ("|" ~ ident)* }
+data_def   = { doc_line* ~ kw_data ~ type_ident }
+error_def  = { doc_line* ~ kw_error ~ type_ident }
+func_def   = { doc_line* ~ kw_func ~ type_ident ~ "(" ~ type_ident ~ ")" ~ arrow ~ type_union }
+type_union = { type_ident ~ ("|" ~ type_ident)* }
 
 // Flow and Logic
-instantiation = { doc_line* ~ ident ~ ":" ~ ident }
-assignment    = { doc_line* ~ ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
-call          = { doc_line* ~ ident ~ "(" ~ ident ~ ")" }
+instantiation = { doc_line* ~ var_ident ~ ":" ~ type_ident }
+assignment    = { doc_line* ~ var_ident ~ "=" ~ type_ident ~ "(" ~ var_ident ~ ")" }
+call          = { doc_line* ~ type_ident ~ "(" ~ var_ident ~ ")" }
 break_stmt    = { kw_break }
-for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
-match_stmt    = { kw_match ~ ident ~ "{" ~ (match_arm | ln)* ~ "}" }
-match_arm     = { (ident | wildcard) ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
+for_stmt      = { kw_for ~ var_ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
+match_stmt    = { kw_match ~ var_ident ~ "{" ~ (match_arm | ln)* ~ "}" }
+match_arm     = { (type_ident | wildcard) ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
 
 statement = _{
     for_stmt
