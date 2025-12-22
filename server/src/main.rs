@@ -62,8 +62,7 @@ impl TectAnalyzer {
     }
 
     pub fn analyze(&mut self, content: &str) -> Result<()> {
-        let pairs = TectParser::parse(Rule::program, content)
-            .context("Parsing failed - check syntax and casing rules")?;
+        let pairs = TectParser::parse(Rule::program, content).context("Parsing failed")?;
         let top_level = pairs.into_iter().next().unwrap().into_inner();
 
         let nodes_before = top_level.clone();
@@ -84,7 +83,7 @@ impl TectAnalyzer {
         if matches!(rule, Rule::data_def | Rule::error_def | Rule::func_def) {
             let mut docs = Vec::new();
             let mut name = String::new();
-            let mut ret = String::new();
+            let mut ret_union = Vec::new();
             let mut input_type = String::new();
 
             for inner in pair.into_inner() {
@@ -101,7 +100,13 @@ impl TectAnalyzer {
                     ),
                     Rule::type_ident if name.is_empty() => name = inner.as_str().to_string(),
                     Rule::type_ident => input_type = inner.as_str().to_string(),
-                    Rule::type_union => ret = inner.as_str().to_string(),
+                    Rule::type_union => {
+                        for type_pair in inner.into_inner() {
+                            if type_pair.as_rule() == Rule::type_ident {
+                                ret_union.push(type_pair.as_str().trim().to_string());
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -112,22 +117,30 @@ impl TectAnalyzer {
                 } else if rule == Rule::error_def {
                     "Error"
                 } else {
-                    self.func_returns.insert(name.clone(), ret.clone());
+                    self.func_returns
+                        .insert(name.clone(), ret_union.join(" | "));
                     "Function"
                 };
 
-                let doc_str = if docs.is_empty() { None } else { Some(docs.join("\n")) };
-                
+                let doc_str = if docs.is_empty() {
+                    None
+                } else {
+                    Some(docs.join("\n"))
+                };
+
                 self.symbols.insert(
                     name.clone(),
                     SymbolInfo {
                         kind: kind.into(),
-                        detail: if ret.is_empty() { name.clone() } else { ret.clone() },
+                        detail: if ret_union.is_empty() {
+                            name.clone()
+                        } else {
+                            ret_union.join(" | ")
+                        },
                         docs: doc_str.clone(),
                     },
                 );
 
-                // Add to Graph
                 let id = format!("def:{}", name);
                 self.graph.nodes.push(Node {
                     id: id.clone(),
@@ -136,7 +149,6 @@ impl TectAnalyzer {
                     metadata: doc_str,
                 });
 
-                // Add definition edges for functions
                 if rule == Rule::func_def {
                     if !input_type.is_empty() {
                         self.graph.edges.push(Edge {
@@ -145,16 +157,12 @@ impl TectAnalyzer {
                             relation: "input_type".into(),
                         });
                     }
-                    if !ret.is_empty() {
-                        // For unions, we just link to the first one for simplicity in this schema
-                        let first_ret = ret.split('|').next().unwrap_or("").trim();
-                        if !first_ret.is_empty() {
-                            self.graph.edges.push(Edge {
-                                source: id,
-                                target: format!("def:{}", first_ret),
-                                relation: "output_type".into(),
-                            });
-                        }
+                    for ret_type in ret_union {
+                        self.graph.edges.push(Edge {
+                            source: id.clone(),
+                            target: format!("def:{}", ret_type),
+                            relation: "output_type".into(),
+                        });
                     }
                 }
             }
@@ -179,7 +187,9 @@ impl TectAnalyzer {
                                 .trim()
                                 .to_string(),
                         ),
-                        Rule::var_ident | Rule::type_ident => idents.push(inner.as_str().to_string()),
+                        Rule::var_ident | Rule::type_ident => {
+                            idents.push(inner.as_str().to_string())
+                        }
                         _ => {}
                     }
                 }
@@ -188,13 +198,23 @@ impl TectAnalyzer {
                     let (kind, detail) = if rule == Rule::instantiation {
                         ("Variable", idents.get(1).cloned().unwrap_or_default())
                     } else if rule == Rule::assignment {
-                        ("Variable", self.func_returns.get(&idents[1]).cloned().unwrap_or("Unknown".into()))
+                        (
+                            "Variable",
+                            self.func_returns
+                                .get(&idents[1])
+                                .cloned()
+                                .unwrap_or("Unknown".into()),
+                        )
                     } else {
                         ("Side Effect", "Call".into())
                     };
 
-                    let doc_str = if docs.is_empty() { None } else { Some(docs.join("\n")) };
-                    
+                    let doc_str = if docs.is_empty() {
+                        None
+                    } else {
+                        Some(docs.join("\n"))
+                    };
+
                     self.symbols.insert(
                         name.clone(),
                         SymbolInfo {
@@ -204,11 +224,10 @@ impl TectAnalyzer {
                         },
                     );
 
-                    // Add Node to Graph
-                    let id = if rule == Rule::call { 
-                        format!("call:{}", name) 
-                    } else { 
-                        format!("var:{}", name) 
+                    let id = if rule == Rule::call {
+                        format!("call:{}", name)
+                    } else {
+                        format!("var:{}", name)
                     };
 
                     self.graph.nodes.push(Node {
@@ -218,7 +237,6 @@ impl TectAnalyzer {
                         metadata: doc_str,
                     });
 
-                    // Add Flow Edges
                     match rule {
                         Rule::instantiation => {
                             self.graph.edges.push(Edge {
@@ -230,13 +248,11 @@ impl TectAnalyzer {
                         Rule::assignment => {
                             let func_name = &idents[1];
                             let arg_name = &idents[2];
-                            // var -> func
                             self.graph.edges.push(Edge {
                                 source: format!("var:{}", arg_name),
                                 target: format!("def:{}", func_name),
                                 relation: "argument_flow".into(),
                             });
-                            // func -> var
                             self.graph.edges.push(Edge {
                                 source: format!("def:{}", func_name),
                                 target: id,
@@ -420,7 +436,7 @@ impl LanguageServer for Backend {
                             Some("Data") => 1,
                             Some("Function") => 2,
                             Some("Error") => 4,
-                            _ => 1, // Default to type
+                            _ => 1,
                         },
                     ),
                     Rule::var_ident => Some(3),
@@ -457,58 +473,57 @@ impl LanguageServer for Backend {
 #[derive(ClapParser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Path to .tect file or directory
+    /// Optional path for CLI analysis. If omitted, starts LSP.
     input: Option<PathBuf>,
 
-    /// Output JSON path
     #[arg(short, long)]
     output: Option<PathBuf>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    // If the binary is started without arguments, Args::try_parse will fail
+    // and we should default to LSP mode.
+    let args_res = Args::try_parse();
 
-    if let Some(input_path) = args.input {
-        // CLI Mode
-        let mut analyzer = TectAnalyzer::new();
-        
-        let files = if input_path.is_dir() {
-            WalkDir::new(input_path)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map_or(false, |ext| ext == "tect"))
-                .map(|e| e.path().to_path_buf())
-                .collect::<Vec<_>>()
-        } else {
-            vec![input_path]
-        };
+    if let Ok(args) = args_res {
+        if let Some(input_path) = args.input {
+            // CLI Mode
+            let mut analyzer = TectAnalyzer::new();
+            let files = if input_path.is_dir() {
+                WalkDir::new(input_path)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "tect"))
+                    .map(|e| e.path().to_path_buf())
+                    .collect::<Vec<_>>()
+            } else {
+                vec![input_path]
+            };
 
-        for file in files {
-            let content = fs::read_to_string(&file)
-                .with_context(|| format!("Failed to read file: {:?}", file))?;
-            analyzer.analyze(&content)
-                .with_context(|| format!("Strict analysis failed for: {:?}", file))?;
+            for file in files {
+                let content = fs::read_to_string(&file)?;
+                analyzer.analyze(&content)?;
+            }
+
+            let json_output = serde_json::to_string_pretty(&analyzer.graph)?;
+            if let Some(out_path) = args.output {
+                fs::write(out_path, json_output)?;
+            } else {
+                println!("{}", json_output);
+            }
+            return Ok(());
         }
-
-        let json_output = serde_json::to_string_pretty(&analyzer.graph)?;
-        
-        if let Some(out_path) = args.output {
-            fs::write(out_path, json_output)?;
-        } else {
-            println!("{}", json_output);
-        }
-        
-        Ok(())
-    } else {
-        // LSP Mode
-        let (service, socket) = LspService::new(|client| Backend {
-            client,
-            document_map: DashMap::new(),
-        });
-        Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)
-            .serve(service)
-            .await;
-        Ok(())
     }
+
+    // Default: LSP Mode
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        document_map: DashMap::new(),
+    });
+    Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)
+        .serve(service)
+        .await;
+
+    Ok(())
 }
