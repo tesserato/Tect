@@ -21,11 +21,14 @@ mod tests {
     fn test_parse_match_arms() {
         let input = r#"
             Match res {
-                is Session => { 
+                Session => { 
                     Break 
                 }
-                is Error => { 
+                Error => { 
                     Log(e) 
+                }
+                _ => {
+                    Break
                 }
             }
         "#;

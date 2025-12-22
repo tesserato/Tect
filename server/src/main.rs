@@ -228,7 +228,7 @@ impl LanguageServer for Backend {
                         | Rule::kw_func
                         | Rule::kw_match
                         | Rule::kw_for
-                        | Rule::kw_is
+                        | Rule::wildcard
                 ) {
                     continue;
                 }
@@ -257,6 +257,7 @@ impl LanguageServer for Backend {
                             Rule::kw_func => "### Keyword: `Function`".into(),
                             Rule::kw_match => "### Keyword: `Match`".into(),
                             Rule::kw_for => "### Keyword: `For`".into(),
+                            Rule::wildcard => "### Pattern: `Wildcard` (Exhaustive match)".into(),
                             _ => format!("### Identifier: `{}`", word),
                         }
                     };
@@ -293,7 +294,6 @@ impl LanguageServer for Backend {
                     | Rule::kw_for
                     | Rule::kw_match
                     | Rule::kw_in
-                    | Rule::kw_is
                     | Rule::kw_break => Some(0),
                     Rule::ident => Some(
                         match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
@@ -303,7 +303,7 @@ impl LanguageServer for Backend {
                             _ => 3,
                         },
                     ),
-                    Rule::number => Some(4),
+                    Rule::number | Rule::wildcard => Some(4),
                     _ => None,
                 };
                 if let Some(idx) = token_type {

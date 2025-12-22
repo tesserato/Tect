@@ -64,31 +64,38 @@ For i in 0..3 {
 
     # Architectural Branching
     Match auth_res {
-        is Session => {
+        Session => {
             # Type Narrowing: 'auth_res' is now treated as 'Session'
             profile_data = FetchProfile(auth_res)
             
             # Handle profile results
             Match profile_data {
-                is UserProfile => {
+                UserProfile => {
                     # Success path: Exit the loop
                     Break
                 }
-                is UserNotFound => {
+                UserNotFound => {
                     # Logic Error: Session exists but user is gone
                     Break
                 }
-                is DatabaseOffline => {
+                DatabaseOffline => {
                     # Internal Error: Handle gracefully
+                }
+                _ => {
+                    # Catch-all for unexpected states
+                    Break
                 }
             }
         }
-        is InvalidPassword => {
+        InvalidPassword => {
             # Security: Terminate flow immediately on bad password
             Break
         }
-        is DatabaseOffline => {
+        DatabaseOffline => {
             # Flow: Loop will naturally retry until i=3
+        }
+        _ => {
+            Break
         }
     }
 }

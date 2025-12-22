@@ -22,3 +22,5 @@ target
 editors/vscode/node_modules
 editors/vscode/out/extension.js.map
 editors/vscode/package-lock.json
+codebase.md
+codebase_excluded_paths.txt

@@ -6,9 +6,10 @@ ln         = _{ "\r\n" | "\n" }
 comment  = @{ "#" ~ (!ln ~ ANY)* }
 doc_line =  { comment ~ ln }
 
-ident  = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-number = @{ ASCII_DIGIT+ }
-range  =  { number ~ ".." ~ number }
+ident    = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+number   = @{ ASCII_DIGIT+ }
+range    =  { number ~ ".." ~ number }
+wildcard =  { "_" }
 
 // Keywords
 kw_data   = { "Data" }
@@ -17,7 +18,6 @@ kw_func   = { "Function" }
 kw_for    = { "For" }
 kw_in     = { "in" }
 kw_match  = { "Match" }
-kw_is     = { "is" }
 kw_break  = { "Break" }
 arrow     = { "->" }
 fat_arrow = { "=>" }
@@ -35,7 +35,7 @@ call          = { doc_line* ~ ident ~ "(" ~ ident ~ ")" }
 break_stmt    = { kw_break }
 for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
 match_stmt    = { kw_match ~ ident ~ "{" ~ (match_arm | ln)* ~ "}" }
-match_arm     = { kw_is ~ ident ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
+match_arm     = { (ident | wildcard) ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
 
 statement = _{
     for_stmt
