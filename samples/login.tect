@@ -1,11 +1,21 @@
 # --- 1. Data Definitions ---
+
+# represents user login credentials
+# blah blah blah
 Data Credentials
+
+# represents a successful login session
 Data Session
+
+# represents user profile information
 Data UserProfile
 
 # --- 2. Error Definitions ---
 Error InvalidPassword
+
+# new comment
 Error DatabaseOffline
+
 Error UserNotFound
 
 # --- 3. Function Contracts ---

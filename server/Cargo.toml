@@ -35,7 +35,8 @@ categories = [
 ]
 
 [dependencies]
-pest = "2.7"
-pest_derive = "2.7"
+pest = "2.8"
+pest_derive = "2.8"
 tower-lsp = "0.20"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
+dashmap = "6.1"

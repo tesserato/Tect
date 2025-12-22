@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ pub struct TectParser;
 struct Backend {
     #[allow(dead_code)]
     client: Client,
+    document_map: DashMap<Url, String>,
 }
 
 #[tower_lsp::async_trait]
@@ -19,9 +21,11 @@ impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
-                // Enable Hover
+                // Sync text as user types
+                text_document_sync: Some(TextDocumentSyncCapability::Kind(
+                    TextDocumentSyncKind::FULL,
+                )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                // Enable Semantic Highlighting
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
                         SemanticTokensRegistrationOptions {
@@ -33,7 +37,9 @@ impl LanguageServer for Backend {
                                 }]),
                             },
                             semantic_tokens_options: SemanticTokensOptions {
-                                work_done_progress_options: Default::default(),
+                                work_done_progress_options: WorkDoneProgressOptions {
+                                    work_done_progress: None,
+                                },
                                 legend: SemanticTokensLegend {
                                     token_types: vec![
                                         SemanticTokenType::KEYWORD,  // 0
@@ -47,7 +53,7 @@ impl LanguageServer for Backend {
                                 range: Some(false),
                                 full: Some(SemanticTokensFullOptions::Bool(true)),
                             },
-                            static_registration_options: StaticRegistrationOptions::default(),
+                            static_registration_options: StaticRegistrationOptions { id: None },
                         },
                     ),
                 ),
@@ -57,47 +63,59 @@ impl LanguageServer for Backend {
         })
     }
 
-async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-    let uri = params.text_document_position_params.text_document.uri;
-    let pos = params.text_document_position_params.position;
-    let Ok(content) = std::fs::read_to_string(uri.to_file_path().unwrap()) else { return Ok(None); };
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        self.document_map
+            .insert(params.text_document.uri, params.text_document.text);
+    }
 
-    let mut symbols = HashMap::new();
-    let mut docs = HashMap::new();
-
-    if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-        for pair in pairs.into_iter().next().unwrap().into_inner() {
-            let rule = pair.as_rule();
-            let mut current_docs = Vec::new();
-            let mut name = String::new();
-
-            // Walk inside data_def, error_def, etc.
-            for inner in pair.into_inner() {
-                match inner.as_rule() {
-                    Rule::comment => {
-                        let clean = inner.as_str().trim_start_matches('#').trim();
-                        current_docs.push(clean.to_string());
-                    }
-                    Rule::ident if name.is_empty() => {
-                        name = inner.as_str().to_string();
-                        let type_idx = match rule {
-                            Rule::data_def => 1,
-                            Rule::error_def => 4,
-                            Rule::func_def => 2,
-                            _ => 3,
-                        };
-                        symbols.insert(name.clone(), type_idx);
-                    }
-                    _ => {}
-                }
-            }
-            if !name.is_empty() && !current_docs.is_empty() {
-                docs.insert(name, current_docs.join("\n"));
-            }
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        if let Some(change) = params.content_changes.into_iter().next() {
+            self.document_map
+                .insert(params.text_document.uri, change.text);
         }
     }
 
-        // Pass 2: Check if mouse is over a word
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params.position;
+        let Some(content) = self.document_map.get(&uri) else {
+            return Ok(None);
+        };
+
+        let mut symbols = HashMap::new();
+        let mut docs = HashMap::new();
+
+        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
+            for pair in pairs.into_iter().next().unwrap().into_inner() {
+                let rule = pair.as_rule();
+                let mut current_docs = Vec::new();
+                let mut name = String::new();
+
+                for inner in pair.into_inner() {
+                    match inner.as_rule() {
+                        Rule::comment => {
+                            let clean = inner.as_str().trim_start_matches('#').trim();
+                            current_docs.push(clean.to_string());
+                        }
+                        Rule::ident if name.is_empty() => {
+                            name = inner.as_str().to_string();
+                            let idx = match rule {
+                                Rule::data_def => 1,
+                                Rule::error_def => 4,
+                                Rule::func_def => 2,
+                                _ => 3,
+                            };
+                            symbols.insert(name.clone(), idx);
+                        }
+                        _ => {}
+                    }
+                }
+                if !name.is_empty() && !current_docs.is_empty() {
+                    docs.insert(name, current_docs.join("\n"));
+                }
+            }
+        }
+
         let mut response = None;
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
             for pair in pairs.flatten() {
@@ -107,17 +125,15 @@ async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
 
                 if pos.line == line && pos.character >= col && pos.character < (col + len) {
                     let word = pair.as_str();
-                    let type_label = match symbols.get(word) {
+                    let label = match symbols.get(word) {
                         Some(1) => "Data",
                         Some(2) => "Function",
                         Some(4) => "Error",
                         _ => "Variable",
                     };
-
-                    let mut md = format!("**{}**: `{}`", type_label, word);
+                    let mut md = format!("**{}**: `{}`", label, word);
                     if let Some(doc) = docs.get(word) {
-                        md.push_str("\n\n---\n\n");
-                        md.push_str(doc);
+                        md.push_str(&format!("\n\n---\n\n{}", doc));
                     }
                     response = Some(md);
                     break;
@@ -139,25 +155,25 @@ async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = params.text_document.uri;
-        let Ok(content) = std::fs::read_to_string(uri.to_file_path().unwrap()) else {
+        let Some(content) = self.document_map.get(&uri) else {
             return Ok(None);
         };
+
         let mut symbols = HashMap::new();
         let mut tokens = Vec::new();
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // Learn defined names for coloring
             for pair in pairs.clone().into_iter().next().unwrap().into_inner() {
                 let rule = pair.as_rule();
                 for inner in pair.into_inner() {
                     if let Rule::ident = inner.as_rule() {
-                        let type_idx = match rule {
+                        let idx = match rule {
                             Rule::data_def => 1,
                             Rule::error_def => 4,
                             Rule::func_def => 2,
                             _ => continue,
                         };
-                        symbols.insert(inner.as_str().to_string(), type_idx);
+                        symbols.insert(inner.as_str().to_string(), idx);
                         break;
                     }
                 }
@@ -207,7 +223,10 @@ async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
 
 #[tokio::main]
 async fn main() {
-    let (service, socket) = LspService::new(|client| Backend { client });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        document_map: DashMap::new(),
+    });
     Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)
         .serve(service)
         .await;
