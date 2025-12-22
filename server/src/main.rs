@@ -10,6 +10,12 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
+#[derive(Debug, Clone)]
+struct SymbolMetadata {
+    kind: String,
+    description: Option<String>,
+}
+
 struct Backend {
     #[allow(dead_code)]
     client: Client,
@@ -21,7 +27,6 @@ impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
-                // Sync text as user types
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
@@ -82,66 +87,122 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let mut symbols = HashMap::new();
-        let mut docs = HashMap::new();
+        let mut symbol_table: HashMap<String, SymbolMetadata> = HashMap::new();
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            for pair in pairs.into_iter().next().unwrap().into_inner() {
-                let rule = pair.as_rule();
-                let mut current_docs = Vec::new();
-                let mut name = String::new();
-
-                for inner in pair.into_inner() {
-                    match inner.as_rule() {
-                        Rule::comment => {
-                            let clean = inner.as_str().trim_start_matches('#').trim();
-                            current_docs.push(clean.to_string());
-                        }
-                        Rule::ident if name.is_empty() => {
-                            name = inner.as_str().to_string();
-                            let idx = match rule {
-                                Rule::data_def => 1,
-                                Rule::error_def => 4,
-                                Rule::func_def => 2,
-                                _ => 3,
-                            };
-                            symbols.insert(name.clone(), idx);
-                        }
-                        _ => {}
-                    }
-                }
-                if !name.is_empty() && !current_docs.is_empty() {
-                    docs.insert(name, current_docs.join("\n"));
-                }
-            }
-        }
-
-        let mut response = None;
-        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
+            // RECURSIVE SCAN: Visit every single rule to find definitions
             for pair in pairs.flatten() {
-                let (l, c) = pair.line_col();
-                let (line, col) = (l as u32 - 1, c as u32 - 1);
-                let len = pair.as_str().len() as u32;
+                match pair.as_rule() {
+                    Rule::data_def
+                    | Rule::error_def
+                    | Rule::func_def
+                    | Rule::instantiation
+                    | Rule::assignment => {
+                        let rule = pair.as_rule();
+                        let mut comments = Vec::new();
+                        let mut name = String::new();
 
-                if pos.line == line && pos.character >= col && pos.character < (col + len) {
-                    let word = pair.as_str();
-                    let label = match symbols.get(word) {
-                        Some(1) => "Data",
-                        Some(2) => "Function",
-                        Some(4) => "Error",
-                        _ => "Variable",
-                    };
-                    let mut md = format!("**{}**: `{}`", label, word);
-                    if let Some(doc) = docs.get(word) {
-                        md.push_str(&format!("\n\n---\n\n{}", doc));
+                        // Look at children to extract name and docs
+                        for inner in pair.into_inner() {
+                            match inner.as_rule() {
+                                Rule::comment => comments.push(
+                                    inner.as_str().trim_start_matches('#').trim().to_string(),
+                                ),
+                                Rule::ident if name.is_empty() => name = inner.as_str().to_string(),
+                                _ => {}
+                            }
+                        }
+
+                        if !name.is_empty() {
+                            let kind = match rule {
+                                Rule::data_def => "Data",
+                                Rule::error_def => "Error",
+                                Rule::func_def => "Function",
+                                _ => "Variable",
+                            };
+
+                            // Don't overwrite existing definitions with weaker ones (e.g. usage)
+                            symbol_table.entry(name).or_insert(SymbolMetadata {
+                                kind: kind.to_string(),
+                                description: if comments.is_empty() {
+                                    None
+                                } else {
+                                    Some(comments.join("\n"))
+                                },
+                            });
+                        }
                     }
-                    response = Some(md);
-                    break;
+                    _ => {}
                 }
             }
         }
 
-        Ok(response.map(|value| Hover {
+        let mut hover_content = None;
+        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
+            // Find the specific token under the cursor
+            for pair in pairs.flatten() {
+                let span = pair.as_span();
+                let (start_line, start_col) = span.start_pos().line_col();
+                let (end_line, end_col) = span.end_pos().line_col();
+
+                // Convert to 0-indexed
+                let s_line = (start_line - 1) as u32;
+                let s_col = (start_col - 1) as u32;
+                let e_line = (end_line - 1) as u32;
+                let e_col = (end_col - 1) as u32;
+
+                // Hit test
+                let is_hit = if pos.line > s_line && pos.line < e_line {
+                    true
+                } else if pos.line == s_line && pos.line == e_line {
+                    pos.character >= s_col && pos.character < e_col
+                } else if pos.line == s_line {
+                    pos.character >= s_col
+                } else if pos.line == e_line {
+                    pos.character < e_col
+                } else {
+                    false
+                };
+
+                if is_hit {
+                    let word = pair.as_str();
+                    let rule = pair.as_rule();
+
+                    // 1. Check if it's a Keyword
+                    let keyword_info = match rule {
+                        Rule::kw_data => Some(("Keyword", "Defines a **Data** structure.")),
+                        Rule::kw_error => Some(("Keyword", "Defines an **Error** branch.")),
+                        Rule::kw_func => Some(("Keyword", "Defines a **Function** contract.")),
+                        Rule::kw_match => Some(("Keyword", "Type-based branching logic.")),
+                        Rule::kw_for => Some(("Keyword", "Range-based iterative loop.")),
+                        Rule::kw_is => Some(("Keyword", "Type narrowing/check.")),
+                        Rule::arrow | Rule::fat_arrow => {
+                            Some(("Symbol", "Directional flow of data or logic."))
+                        }
+                        _ => None,
+                    };
+
+                    if let Some((kind, desc)) = keyword_info {
+                        hover_content =
+                            Some(format!("### {}: `{}`\n\n---\n\n{}", kind, word, desc));
+                    } else if let Some(meta) = symbol_table.get(word) {
+                        // 2. Check if it's a known identifier from our Symbol Table
+                        let mut md = format!("### {}: `{}`", meta.kind, word);
+                        if let Some(doc) = &meta.description {
+                            md.push_str("\n\n---\n\n");
+                            md.push_str(doc);
+                        }
+                        hover_content = Some(md);
+                    }
+
+                    if hover_content.is_some() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(hover_content.map(|value| Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value,
@@ -163,19 +224,24 @@ impl LanguageServer for Backend {
         let mut tokens = Vec::new();
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            for pair in pairs.clone().into_iter().next().unwrap().into_inner() {
-                let rule = pair.as_rule();
-                for inner in pair.into_inner() {
-                    if let Rule::ident = inner.as_rule() {
-                        let idx = match rule {
-                            Rule::data_def => 1,
-                            Rule::error_def => 4,
-                            Rule::func_def => 2,
-                            _ => continue,
-                        };
-                        symbols.insert(inner.as_str().to_string(), idx);
-                        break;
+            for pair in pairs.clone().flatten() {
+                match pair.as_rule() {
+                    Rule::data_def => {
+                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
+                            symbols.insert(id.as_str().to_string(), 1);
+                        }
                     }
+                    Rule::error_def => {
+                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
+                            symbols.insert(id.as_str().to_string(), 4);
+                        }
+                    }
+                    Rule::func_def => {
+                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
+                            symbols.insert(id.as_str().to_string(), 2);
+                        }
+                    }
+                    _ => {}
                 }
             }
 
@@ -183,8 +249,16 @@ impl LanguageServer for Backend {
             let mut last_start = 0;
             for pair in pairs.flatten() {
                 let token_type = match pair.as_rule() {
-                    Rule::kw_data | Rule::kw_error | Rule::kw_func => Some(0),
+                    Rule::kw_data
+                    | Rule::kw_error
+                    | Rule::kw_func
+                    | Rule::kw_for
+                    | Rule::kw_match
+                    | Rule::kw_in
+                    | Rule::kw_is
+                    | Rule::kw_break => Some(0),
                     Rule::ident => Some(*symbols.get(pair.as_str()).unwrap_or(&3)),
+                    Rule::number => Some(4),
                     _ => None,
                 };
 

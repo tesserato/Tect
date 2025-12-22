@@ -1,41 +1,94 @@
+# # Authentication & Profile System
+# This module handles the core **Identity Flow** of the application.
+# 
+# ### Key Artifacts:
+# - `Credentials`: The raw input from the user.
+# - `Session`: The proof of authentication.
+# - `UserProfile`: The final data payload.
+
 # --- 1. Data Definitions ---
 
-# represents user login credentials
-# blah blah blah
+# **Credentials Object**
+# Contains the sensitive user data required for a login attempt.
+# > *Note: This object should never be logged in plaintext.*
 Data Credentials
 
-# represents a successful login session
+# **Session Token**
+# An ephemeral token granted upon successful authentication.
+# - `TTL`: 3600 seconds
+# - `Scope`: Read/Write
 Data Session
 
-# represents user profile information
+# **User Profile**
+# The canonical representation of the user in the system.
 Data UserProfile
 
 # --- 2. Error Definitions ---
+
+# **Invalid Password**
+# Triggered when the hashed password does not match the record.
+# *Status Code: 401*
 Error InvalidPassword
 
-# new comment
+# **Database Offline**
+# A transient error indicating the persistence layer is unreachable.
+# *Retry Policy: Exponential Backoff*
 Error DatabaseOffline
 
+# **User Not Found**
+# Triggered when the provided identifier does not exist.
 Error UserNotFound
 
 # --- 3. Function Contracts ---
-# Authenticate takes Credentials and returns a Session or one of two errors
+
+# ### Authentication Service
+# Verifies user identity against the database.
+# Returns a `Session` on success, otherwise branches into failure states.
 Function Authenticate(Credentials) -> Session | InvalidPassword | DatabaseOffline
 
-# FetchProfile takes a Session and returns a UserProfile or one of two errors
+# ### Profile Provider
+# Retrieves profile metadata for an active session.
 Function FetchProfile(Session) -> UserProfile | UserNotFound | DatabaseOffline
 
 # --- 4. Architectural Flow ---
 
-# Mocking the initial input
+# Entry point: Mocked from UI
 user_input: Credentials
 
-# Execution Step 1: Attempt Login
-# Tect Analyzer: "auth_res" now holds [Session | InvalidPassword | DatabaseOffline]
-auth_res = Authenticate(user_input)
+# **Retry Strategy Implementation**
+# We attempt to authenticate up to 3 times in case of transient DB failures.
+For i in 0..3 {
+    
+    # Execute the transformation
+    auth_res = Authenticate(user_input)
 
-# Execution Step 2: Get Profile using the Session
-# Tect Analyzer Check: 
-# Warning! 'FetchProfile' requires 'Session'. 
-# 'auth_res' might be 'InvalidPassword' or 'DatabaseOffline'.
-profile_data = FetchProfile(auth_res)
+    # Architectural Branching
+    Match auth_res {
+        is Session => {
+            # Type Narrowing: 'auth_res' is now treated as 'Session'
+            profile_data = FetchProfile(auth_res)
+            
+            # Handle profile results
+            Match profile_data {
+                is UserProfile => {
+                    # Success path: Exit the loop
+                    Break
+                }
+                is UserNotFound => {
+                    # Logic Error: Session exists but user is gone
+                    Break
+                }
+                is DatabaseOffline => {
+                    # Internal Error: Handle gracefully
+                }
+            }
+        }
+        is InvalidPassword => {
+            # Security: Terminate flow immediately on bad password
+            Break
+        }
+        is DatabaseOffline => {
+            # Flow: Loop will naturally retry until i=3
+        }
+    }
+}

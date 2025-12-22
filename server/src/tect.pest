@@ -1,33 +1,44 @@
-// --- Whitespace (Horizontal Only) ---
-WHITESPACE = _{ " " | "\t" }
-ln         = _{ "\r\n" | "\n" }
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+comment    = @{ "#" ~ (!"\n" ~ ANY)* }
 
-// --- Comments ---
-comment = @{ "#" ~ (!ln ~ ANY)* }
-// A doc_line is a comment followed by exactly one newline
-doc_line = _{ comment ~ ln }
+// Keywords
+kw_data   = { "Data" }
+kw_error  = { "Error" }
+kw_func   = { "Function" }
+kw_for    = { "For" }
+kw_in     = { "in" }
+kw_match  = { "Match" }
+kw_is     = { "is" }
+kw_break  = { "Break" }
+arrow     = { "->" }
+fat_arrow = { "=>" }
 
-// --- Identifiers and Keywords ---
-ident    = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-kw_data  =  { "Data" }
-kw_error =  { "Error" }
-kw_func  =  { "Function" }
-arrow    =  { "->" }
+ident  = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+number = @{ ASCII_DIGIT+ }
+range  =  { number ~ ".." ~ number }
 
-// --- Definitions ---
-// doc_line* only matches if comments are stacked directly above the keyword
-data_def  = { doc_line* ~ kw_data ~ ident }
-error_def = { doc_line* ~ kw_error ~ ident }
-func_def  = { doc_line* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
-
+// Definitions
+data_def   = { comment* ~ kw_data ~ ident }
+error_def  = { comment* ~ kw_error ~ ident }
+func_def   = { comment* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
 type_union = { ident ~ ("|" ~ ident)* }
 
-// --- Flow ---
+// Flow Statements
 instantiation = { ident ~ ":" ~ ident }
 assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
+break_stmt    = { kw_break }
 
-// --- Root ---
-// We allow standalone comments or newlines between artifacts
-program = {
-    SOI ~ (data_def | error_def | func_def | instantiation | assignment | comment | ln)* ~ EOI
+for_stmt   = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ statement* ~ "}" }
+match_stmt = { kw_match ~ ident ~ "{" ~ match_arm+ ~ "}" }
+match_arm  = { kw_is ~ ident ~ fat_arrow ~ "{" ~ statement* ~ "}" }
+
+statement = _{
+    for_stmt
+  | match_stmt
+  | assignment
+  | instantiation
+  | break_stmt
+  | comment
 }
+
+program = { SOI ~ (data_def | error_def | func_def | statement)* ~ EOI }
