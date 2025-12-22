@@ -17,7 +17,6 @@ struct SymbolMetadata {
 }
 
 struct Backend {
-    #[allow(dead_code)]
     client: Client,
     document_map: DashMap<Url, String>,
 }
@@ -87,128 +86,108 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let mut symbol_table: HashMap<String, SymbolMetadata> = HashMap::new();
+        let mut symbols: HashMap<String, SymbolMetadata> = HashMap::new();
+        let mut comment_buffer: Vec<(usize, String)> = Vec::new(); // (line, content)
 
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // RECURSIVE SCAN: Visit every single rule to find definitions
-            for pair in pairs.flatten() {
+            // PASS 1: Build Symbol Table and track comments
+            for pair in pairs.clone().flatten() {
+                let (line, _) = pair.line_col();
                 match pair.as_rule() {
-                    Rule::data_def
-                    | Rule::error_def
-                    | Rule::func_def
-                    | Rule::instantiation
-                    | Rule::assignment => {
-                        let rule = pair.as_rule();
-                        let mut comments = Vec::new();
-                        let mut name = String::new();
+                    Rule::comment => {
+                        let text = pair.as_str().trim_start_matches('#').trim().to_string();
+                        comment_buffer.push((line, text));
+                    }
+                    Rule::data_def | Rule::error_def | Rule::func_def => {
+                        let kind = match pair.as_rule() {
+                            Rule::data_def => "Data",
+                            Rule::error_def => "Error",
+                            _ => "Function",
+                        };
+                        if let Some(id) = pair.into_inner().find(|p| p.as_rule() == Rule::ident) {
+                            let name = id.as_str().to_string();
 
-                        // Look at children to extract name and docs
-                        for inner in pair.into_inner() {
-                            match inner.as_rule() {
-                                Rule::comment => comments.push(
-                                    inner.as_str().trim_start_matches('#').trim().to_string(),
-                                ),
-                                Rule::ident if name.is_empty() => name = inner.as_str().to_string(),
-                                _ => {}
+                            // Get comments immediately preceding this line
+                            let mut docs = Vec::new();
+                            let mut current_line = line - 1;
+                            while let Some(idx) =
+                                comment_buffer.iter().rposition(|(l, _)| *l == current_line)
+                            {
+                                docs.push(comment_buffer.remove(idx).1);
+                                if current_line == 0 {
+                                    break;
+                                }
+                                current_line -= 1;
                             }
-                        }
+                            docs.reverse();
 
-                        if !name.is_empty() {
-                            let kind = match rule {
-                                Rule::data_def => "Data",
-                                Rule::error_def => "Error",
-                                Rule::func_def => "Function",
-                                _ => "Variable",
-                            };
-
-                            // Don't overwrite existing definitions with weaker ones (e.g. usage)
-                            symbol_table.entry(name).or_insert(SymbolMetadata {
-                                kind: kind.to_string(),
-                                description: if comments.is_empty() {
-                                    None
-                                } else {
-                                    Some(comments.join("\n"))
+                            symbols.insert(
+                                name,
+                                SymbolMetadata {
+                                    kind: kind.into(),
+                                    description: if docs.is_empty() {
+                                        None
+                                    } else {
+                                        Some(docs.join("\n"))
+                                    },
                                 },
-                            });
+                            );
                         }
                     }
                     _ => {}
                 }
             }
-        }
 
-        let mut hover_content = None;
-        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            // Find the specific token under the cursor
+            // PASS 2: Find what's under the cursor
             for pair in pairs.flatten() {
-                let span = pair.as_span();
-                let (start_line, start_col) = span.start_pos().line_col();
-                let (end_line, end_col) = span.end_pos().line_col();
+                if !matches!(
+                    pair.as_rule(),
+                    Rule::ident
+                        | Rule::kw_data
+                        | Rule::kw_error
+                        | Rule::kw_func
+                        | Rule::kw_match
+                        | Rule::kw_for
+                ) {
+                    continue;
+                }
+                let (l, c) = pair.line_col();
+                let (line, col) = (l as u32 - 1, (c as u32 - 1));
+                let len = pair.as_str().len() as u32;
 
-                // Convert to 0-indexed
-                let s_line = (start_line - 1) as u32;
-                let s_col = (start_col - 1) as u32;
-                let e_line = (end_line - 1) as u32;
-                let e_col = (end_col - 1) as u32;
-
-                // Hit test
-                let is_hit = if pos.line > s_line && pos.line < e_line {
-                    true
-                } else if pos.line == s_line && pos.line == e_line {
-                    pos.character >= s_col && pos.character < e_col
-                } else if pos.line == s_line {
-                    pos.character >= s_col
-                } else if pos.line == e_line {
-                    pos.character < e_col
-                } else {
-                    false
-                };
-
-                if is_hit {
+                if pos.line == line && pos.character >= col && pos.character < (col + len) {
                     let word = pair.as_str();
-                    let rule = pair.as_rule();
-
-                    // 1. Check if it's a Keyword
-                    let keyword_info = match rule {
-                        Rule::kw_data => Some(("Keyword", "Defines a **Data** structure.")),
-                        Rule::kw_error => Some(("Keyword", "Defines an **Error** branch.")),
-                        Rule::kw_func => Some(("Keyword", "Defines a **Function** contract.")),
-                        Rule::kw_match => Some(("Keyword", "Type-based branching logic.")),
-                        Rule::kw_for => Some(("Keyword", "Range-based iterative loop.")),
-                        Rule::kw_is => Some(("Keyword", "Type narrowing/check.")),
-                        Rule::arrow | Rule::fat_arrow => {
-                            Some(("Symbol", "Directional flow of data or logic."))
+                    let val = if let Some(meta) = symbols.get(word) {
+                        format!(
+                            "### {}: `{}`{}",
+                            meta.kind,
+                            word,
+                            meta.description
+                                .as_ref()
+                                .map(|d| format!("\n\n---\n\n{}", d))
+                                .unwrap_or_default()
+                        )
+                    } else {
+                        match pair.as_rule() {
+                            Rule::kw_data => "### Keyword: `Data`".into(),
+                            Rule::kw_error => "### Keyword: `Error`".into(),
+                            Rule::kw_func => "### Keyword: `Function`".into(),
+                            Rule::kw_match => "### Keyword: `Match`".into(),
+                            Rule::kw_for => "### Keyword: `For`".into(),
+                            _ => format!("### Variable: `{}`", word),
                         }
-                        _ => None,
                     };
-
-                    if let Some((kind, desc)) = keyword_info {
-                        hover_content =
-                            Some(format!("### {}: `{}`\n\n---\n\n{}", kind, word, desc));
-                    } else if let Some(meta) = symbol_table.get(word) {
-                        // 2. Check if it's a known identifier from our Symbol Table
-                        let mut md = format!("### {}: `{}`", meta.kind, word);
-                        if let Some(doc) = &meta.description {
-                            md.push_str("\n\n---\n\n");
-                            md.push_str(doc);
-                        }
-                        hover_content = Some(md);
-                    }
-
-                    if hover_content.is_some() {
-                        break;
-                    }
+                    return Ok(Some(Hover {
+                        contents: HoverContents::Markup(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: val,
+                        }),
+                        range: None,
+                    }));
                 }
             }
         }
-
-        Ok(hover_content.map(|value| Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value,
-            }),
-            range: None,
-        }))
+        Ok(None)
     }
 
     async fn semantic_tokens_full(
@@ -219,7 +198,6 @@ impl LanguageServer for Backend {
         let Some(content) = self.document_map.get(&uri) else {
             return Ok(None);
         };
-
         let mut symbols = HashMap::new();
         let mut tokens = Vec::new();
 
@@ -271,7 +249,6 @@ impl LanguageServer for Backend {
                     } else {
                         col
                     };
-
                     tokens.push(SemanticToken {
                         delta_line,
                         delta_start,

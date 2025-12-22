@@ -1,36 +1,36 @@
+// Back to robust whitespace
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
-comment    = @{ "#" ~ (!"\n" ~ ANY)* }
 
-// Keywords
-kw_data   = { "Data" }
-kw_error  = { "Error" }
-kw_func   = { "Function" }
-kw_for    = { "For" }
-kw_in     = { "in" }
-kw_match  = { "Match" }
-kw_is     = { "is" }
-kw_break  = { "Break" }
-arrow     = { "->" }
-fat_arrow = { "=>" }
+// Comments are captured
+comment = @{ "#" ~ (!("\r" | "\n") ~ ANY)* }
 
-ident  = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-number = @{ ASCII_DIGIT+ }
-range  =  { number ~ ".." ~ number }
+ident     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+kw_data   =  { "Data" }
+kw_error  =  { "Error" }
+kw_func   =  { "Function" }
+kw_for    =  { "For" }
+kw_in     =  { "in" }
+kw_match  =  { "Match" }
+kw_is     =  { "is" }
+kw_break  =  { "Break" }
+arrow     =  { "->" }
+fat_arrow =  { "=>" }
+number    = @{ ASCII_DIGIT+ }
+range     =  { number ~ ".." ~ number }
 
-// Definitions
-data_def   = { comment* ~ kw_data ~ ident }
-error_def  = { comment* ~ kw_error ~ ident }
-func_def   = { comment* ~ kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
+// Simple definitions
+data_def   = { kw_data ~ ident }
+error_def  = { kw_error ~ ident }
+func_def   = { kw_func ~ ident ~ "(" ~ ident ~ ")" ~ arrow ~ type_union }
 type_union = { ident ~ ("|" ~ ident)* }
 
-// Flow Statements
+// Flow
 instantiation = { ident ~ ":" ~ ident }
 assignment    = { ident ~ "=" ~ ident ~ "(" ~ ident ~ ")" }
 break_stmt    = { kw_break }
-
-for_stmt   = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ statement* ~ "}" }
-match_stmt = { kw_match ~ ident ~ "{" ~ match_arm+ ~ "}" }
-match_arm  = { kw_is ~ ident ~ fat_arrow ~ "{" ~ statement* ~ "}" }
+for_stmt      = { kw_for ~ ident ~ kw_in ~ range ~ "{" ~ statement* ~ "}" }
+match_stmt    = { kw_match ~ ident ~ "{" ~ match_arm+ ~ "}" }
+match_arm     = { kw_is ~ ident ~ fat_arrow ~ "{" ~ statement* ~ "}" }
 
 statement = _{
     for_stmt
