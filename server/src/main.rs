@@ -77,38 +77,67 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    fn parse_comments(raw: &str) -> Option<String> {
+        let docs: Vec<String> = raw
+            .lines()
+            .map(|l| l.trim().trim_start_matches('#').trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+
+        if docs.is_empty() {
+            None
+        } else {
+            Some(docs.join("\n\n"))
+        }
+    }
+
     fn scrape_definitions(&mut self, content: &str) {
-        let re_data = Regex::new(r"data\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
-        let re_err = Regex::new(r"error\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
-        let re_group = Regex::new(r"group\s+([a-z][a-zA-Z0-9_]*)").unwrap();
+        let re_data = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*data\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+        let re_err = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*error\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+        let re_group =
+            Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*group\s+([a-z][a-zA-Z0-9_]*)").unwrap();
+        let re_func = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*function\s+([A-Z][a-zA-Z0-9_]*)\s*\(([A-Z][a-zA-Z0-9_]*)\)\s*->\s*([^@\n\r{]+)").unwrap();
 
         for cap in re_data.captures_iter(content) {
             self.symbols.insert(
-                cap[1].to_string(),
+                cap[2].to_string(),
                 SymbolInfo {
                     kind: "Data".into(),
-                    detail: cap[1].to_string(),
-                    docs: Some("Domain entity definition.".into()),
+                    detail: cap[2].to_string(),
+                    docs: Self::parse_comments(&cap[1]),
                 },
             );
         }
         for cap in re_err.captures_iter(content) {
             self.symbols.insert(
-                cap[1].to_string(),
+                cap[2].to_string(),
                 SymbolInfo {
                     kind: "Error".into(),
-                    detail: cap[1].to_string(),
-                    docs: Some("Architectural failure state definition.".into()),
+                    detail: cap[2].to_string(),
+                    docs: Self::parse_comments(&cap[1]),
                 },
             );
         }
         for cap in re_group.captures_iter(content) {
             self.symbols.insert(
-                cap[1].to_string(),
+                cap[2].to_string(),
                 SymbolInfo {
                     kind: "Group".into(),
-                    detail: format!("Module: {}", &cap[1]),
-                    docs: Some("Logical architectural container.".into()),
+                    detail: format!("Module: {}", &cap[2]),
+                    docs: Self::parse_comments(&cap[1]),
+                },
+            );
+        }
+        for cap in re_func.captures_iter(content) {
+            let name = cap[2].to_string();
+            let input = cap[3].to_string();
+            let output = cap[4].trim().to_string();
+            self.symbols.insert(
+                name,
+                SymbolInfo {
+                    kind: "Function".into(),
+                    detail: format!("{} -> {}", input, output),
+                    docs: Self::parse_comments(&cap[1]),
                 },
             );
         }
@@ -180,6 +209,12 @@ impl TectAnalyzer {
         }
 
         if !name.is_empty() {
+            let detail = if rule == Rule::func_def {
+                format!("{} -> {}", input_type, ret_union.join(" | "))
+            } else {
+                name.clone()
+            };
+
             let kind = match rule {
                 Rule::data_def => "Data",
                 Rule::error_def => "Error",
@@ -189,6 +224,7 @@ impl TectAnalyzer {
                     "Function"
                 }
             };
+
             let doc_str = if docs.is_empty() {
                 None
             } else {
@@ -198,11 +234,7 @@ impl TectAnalyzer {
                 name.clone(),
                 SymbolInfo {
                     kind: kind.into(),
-                    detail: if ret_union.is_empty() {
-                        name.clone()
-                    } else {
-                        ret_union.join(" | ")
-                    },
+                    detail,
                     docs: doc_str.clone(),
                 },
             );
@@ -423,7 +455,7 @@ impl LanguageServer for Backend {
 
                     let val = if let Some(info) = a.symbols.get(lookup) {
                         format!(
-                            "### {}: `{}`\n**Type/Detail**: `{}`{}",
+                            "### {}: `{}`\n**Type**: `{}`{}",
                             info.kind,
                             lookup,
                             info.detail,
