@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
                 WalkDir::new(input_path)
                     .into_iter()
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "tect"))
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "tect"))
                     .map(|e| e.path().to_path_buf())
                     .collect::<Vec<_>>()
             } else {

@@ -1,5 +1,4 @@
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
-use crate::models::SymbolInfo;
 use dashmap::DashMap;
 use pest::Parser;
 use regex::Regex;

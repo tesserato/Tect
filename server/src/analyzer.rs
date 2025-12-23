@@ -285,7 +285,7 @@ impl TectAnalyzer {
 
         if !idents.is_empty() || rule == Rule::break_stmt {
             let name = idents
-                .get(0)
+                .first()
                 .cloned()
                 .unwrap_or_else(|| "break".to_string());
             let (kind, detail) = if rule == Rule::instantiation {
