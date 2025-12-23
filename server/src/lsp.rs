@@ -7,13 +7,16 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
+/// The Language Server implementation for the Tect language.
 pub struct Backend {
     pub client: Client,
+    /// Stores the current state of documents open in the editor.
     pub document_map: DashMap<Url, String>,
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
+    /// Configures server capabilities including full text sync, hover tooltips, and semantic tokens.
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -70,6 +73,8 @@ impl LanguageServer for Backend {
         }
     }
 
+    /// Provides rich architectural context tooltips. Uses a regex-first fallback
+    /// to ensure tooltips work even when the formal parser is blocked by syntax errors.
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -82,6 +87,7 @@ impl LanguageServer for Backend {
 
         let lines: Vec<&str> = content.lines().collect();
         if let Some(line) = lines.get(pos.line as usize) {
+            // Match potential tokens under cursor (including @ for group tags)
             let word_re = Regex::new(r"(@?[a-zA-Z0-9_:]+)").unwrap();
             for cap in word_re.find_iter(line) {
                 if pos.character >= cap.start() as u32 && pos.character <= cap.end() as u32 {
@@ -107,6 +113,7 @@ impl LanguageServer for Backend {
                                 .unwrap_or_default()
                         )
                     } else {
+                        // Fallback for keywords not in the symbol table
                         match lookup {
                             "data" => "### Keyword: `data`\nDefines a domain entity artifact.".into(),
                             "error" => "### Keyword: `error`\nDefines an architectural failure state.".into(),
@@ -137,6 +144,8 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Computes semantic tokens for the entire document to provide accurate coloring
+    /// for architectural entities (Functions, Data, Groups, etc.).
     async fn semantic_tokens_full(
         &self,
         p: SemanticTokensParams,
@@ -149,6 +158,7 @@ impl LanguageServer for Backend {
         let _ = a.analyze(&content);
         let mut tokens = Vec::new();
         let (mut last_l, mut last_s) = (0, 0);
+
         if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
             for pair in pairs.flatten() {
                 let token_type = match pair.as_rule() {

@@ -10,24 +10,29 @@ import {
 
 let client: LanguageClient;
 
+/**
+ * Entry point for the VS Code extension. 
+ * Orchestrates binary discovery and Language Client lifecycle.
+ */
 export function activate(context: ExtensionContext) {
-    // Determine binary name based on OS
+    // Platform-specific binary discovery (LSP is written in Rust)
     const isWindows = os.platform() === 'win32';
     const binaryName = isWindows ? 'tect.exe' : 'tect';
 
-    // Path to the Rust binary in the workspace root target folder
-    // This assumes the extension is at <root>/editors/vscode
+    // Discovery logic: Looks in the target/debug folder relative to the extension
     const serverModule = context.asAbsolutePath(
         path.join('..', '..', 'target', 'debug', binaryName)
     );
 
-    console.log(`Attempting to start Tect LS from: ${serverModule}`);
+    console.log(`Tect: Starting Language Server from: ${serverModule}`);
 
+    // Configuration for launching the server process via stdio
     const serverOptions: ServerOptions = {
         run: { command: serverModule, transport: TransportKind.stdio },
         debug: { command: serverModule, transport: TransportKind.stdio }
     };
 
+    // Client-side configuration: watch .tect files and handle synchronization
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
         synchronize: {
@@ -35,6 +40,7 @@ export function activate(context: ExtensionContext) {
         }
     };
 
+    // Instantiate and launch the Language Client
     client = new LanguageClient(
         'tectServer',
         'Tect Language Server',
@@ -42,13 +48,17 @@ export function activate(context: ExtensionContext) {
         clientOptions
     );
 
+    // Start the client and log connectivity status
     client.start().then(() => {
-        console.log('Tect Language Server started successfully.');
+        console.log('Tect: Language Server connected successfully.');
     }).catch((err) => {
-        console.error('Failed to start Tect Language Server:', err);
+        console.error('Tect: Failed to establish server connection:', err);
     });
 }
 
+/**
+ * Cleanly terminates the Language Client connection upon extension deactivation.
+ */
 export function deactivate(): Thenable<void> | undefined {
     if (!client) {
         return undefined;

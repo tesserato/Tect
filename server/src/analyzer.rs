@@ -5,18 +5,26 @@ use pest_derive::Parser;
 use regex::Regex;
 use std::collections::HashMap;
 
+/// The formal Pest parser implementation for the Tect grammar.
 #[derive(Parser)]
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
+/// The primary engine for extracting architectural meaning from Tect source code.
+/// It maintains state for symbol resolution, function returns, and graph construction.
 pub struct TectAnalyzer {
+    /// Maps symbol names to their architectural metadata.
     pub symbols: HashMap<String, SymbolInfo>,
+    /// Maps function names to their return type unions for flow inference.
     pub func_returns: HashMap<String, String>,
+    /// The generated graph structure for CLI export.
     pub graph: Graph,
+    /// Tracks the current 'group' block during recursive traversal.
     current_group: String,
 }
 
 impl TectAnalyzer {
+    /// Creates a new analyzer with a default "global" group context.
     pub fn new() -> Self {
         Self {
             symbols: HashMap::new(),
@@ -26,10 +34,14 @@ impl TectAnalyzer {
         }
     }
 
+    /// Orchestrates analysis using a two-pass approach:
+    /// 1. Scavenging definitions via Regex (Best-effort for LSP features).
+    /// 2. Formal parsing via Pest for precise graph construction and inference.
     pub fn analyze(&mut self, content: &str) -> Result<()> {
         self.scrape_definitions(content);
 
-        let pairs = TectParser::parse(Rule::program, content).context("Formal parsing failed")?;
+        let pairs = TectParser::parse(Rule::program, content)
+            .context("Formal parsing failed - check syntax rules")?;
 
         let top_level = pairs.into_iter().next().unwrap().into_inner();
         for pair in top_level {
@@ -38,6 +50,7 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    /// Cleans and formats raw '#' comments into Markdown paragraphs.
     fn parse_comments(raw: &str) -> Option<String> {
         let docs: Vec<String> = raw
             .lines()
@@ -52,7 +65,10 @@ impl TectAnalyzer {
         }
     }
 
+    /// Performs a loose regex pass to identify definitions even in malformed files.
+    /// This ensures that IDE features like 'Hover' work while the user is still typing.
     fn scrape_definitions(&mut self, content: &str) {
+        // Patterns to match multi-line comments followed by keywords
         let re_data = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*data\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
         let re_err = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*error\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
         let re_group =
@@ -108,6 +124,7 @@ impl TectAnalyzer {
         }
     }
 
+    /// Dispatches Pest pairs to specialized collection methods based on grammar rules.
     fn process_pair(&mut self, pair: pest::iterators::Pair<Rule>) {
         match pair.as_rule() {
             Rule::group_block => {
@@ -141,6 +158,7 @@ impl TectAnalyzer {
         }
     }
 
+    /// Processes formal architectural definitions and builds node edges for type signatures.
     fn collect_defs(&mut self, pair: pest::iterators::Pair<Rule>) {
         let rule = pair.as_rule();
         let mut docs = Vec::new();
@@ -237,6 +255,8 @@ impl TectAnalyzer {
         }
     }
 
+    /// Maps runtime occurrences (variables and calls) to the architectural graph.
+    /// Infers variable types based on function return definitions.
     fn collect_usage(&mut self, pair: pest::iterators::Pair<Rule>) {
         let rule = pair.as_rule();
         let mut idents = Vec::new();
