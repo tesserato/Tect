@@ -122,10 +122,11 @@ impl TectAnalyzer {
                     "Function"
                 };
 
+                // Use double newlines for Markdown paragraphs in Hover tooltips
                 let doc_str = if docs.is_empty() {
                     None
                 } else {
-                    Some(docs.join("\n"))
+                    Some(docs.join("\n\n"))
                 };
 
                 self.symbols.insert(
@@ -212,7 +213,7 @@ impl TectAnalyzer {
                     let doc_str = if docs.is_empty() {
                         None
                     } else {
-                        Some(docs.join("\n"))
+                        Some(docs.join("\n\n"))
                     };
 
                     self.symbols.insert(
@@ -362,6 +363,8 @@ impl LanguageServer for Backend {
                         | Rule::kw_func
                         | Rule::kw_match
                         | Rule::kw_for
+                        | Rule::kw_break
+                        | Rule::kw_in
                         | Rule::wildcard
                 ) {
                     continue;
@@ -386,12 +389,14 @@ impl LanguageServer for Backend {
                         )
                     } else {
                         match pair.as_rule() {
-                            Rule::kw_data => "### Keyword: `data`".into(),
-                            Rule::kw_error => "### Keyword: `error`".into(),
-                            Rule::kw_func => "### Keyword: `function`".into(),
-                            Rule::kw_match => "### Keyword: `match`".into(),
-                            Rule::kw_for => "### Keyword: `for`".into(),
-                            Rule::wildcard => "### Pattern: `Wildcard` (Exhaustive match)".into(),
+                            Rule::kw_data => "### Keyword: `data`\nDefines a new **Data** artifact (domain entity).\n\n**Usage:**\n```tect\ndata Name\n```".into(),
+                            Rule::kw_error => "### Keyword: `error`\nDefines a new **Error** artifact (failure state).\n\n**Usage:**\n```tect\nerror Name\n```".into(),
+                            Rule::kw_func => "### Keyword: `function`\nDefines a **Function Contract** (transformation).\n\n**Usage:**\n```tect\nfunction Name(InputType) -> OutputType\n```".into(),
+                            Rule::kw_match => "### Keyword: `match`\nHandles architectural branching based on types.\n\n**Usage:**\n```tect\nmatch result {\n    Type => { ... }\n    _ => { ... }\n}\n```".into(),
+                            Rule::kw_for => "### Keyword: `for`\nDefines a repetition loop over a numeric range.\n\n**Usage:**\n```tect\nfor i in 0..10 { ... }\n```".into(),
+                            Rule::kw_break => "### Keyword: `break`\nImmediately terminates the execution of the current `for` loop.".into(),
+                            Rule::kw_in => "### Keyword: `in`\nUsed within a `for` loop to specify the range to iterate over.".into(),
+                            Rule::wildcard => "### Pattern: `_` (Wildcard)\nAn exhaustive catch-all pattern for `match` branches.".into(),
                             _ => format!("### Symbol: `{}`", word),
                         }
                     };
@@ -482,13 +487,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // If the binary is started without arguments, Args::try_parse will fail
-    // and we should default to LSP mode.
     let args_res = Args::try_parse();
 
     if let Ok(args) = args_res {
         if let Some(input_path) = args.input {
-            // CLI Mode
             let mut analyzer = TectAnalyzer::new();
             let files = if input_path.is_dir() {
                 WalkDir::new(input_path)
@@ -516,7 +518,6 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Default: LSP Mode
     let (service, socket) = LspService::new(|client| Backend {
         client,
         document_map: DashMap::new(),

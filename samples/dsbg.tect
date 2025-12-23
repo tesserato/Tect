@@ -1,120 +1,148 @@
-# # DSBG: Dead Simple Blog Generator Architecture
-# This module models the static site generation pipeline for DSBG.
+# # DSBG: Dead Simple Blog Generator - Detailed Architecture
+# This module provides a high-fidelity model of the static site generation pipeline.
 
 # --- 1. Data Definitions ---
 
-# **Global Configuration**
-# Holds flags and paths parsed from the CLI entry point.
+# **CLI Settings**
+# Stores runtime flags: paths, metadata, sorting rules, and theme selection.
 data Settings
 
-# **Content Artifact**
-# Represents a processed Markdown or HTML file with its metadata.
+# **Source Payload**
+# Raw data read from the filesystem before processing.
+data SourceFile
+
+# **Processed Article**
+# Metadata-enriched object containing HTML fragments and extracted tags.
 data Article
 
 # **Template Registry**
-# Pre-parsed Go templates for Article, Index, and RSS.
+# The collection of compiled Article, Index, and RSS Go templates.
 data SiteTemplates
 
-# **Social Target**
-# Configuration for custom sharing buttons.
-data ShareButton
+# **Global Search Index**
+# JSON structure containing text snippets for client-side search.
+data SearchIndex
+
+# **Site Metadata**
+# Aggregated information used for generating RSS feeds and Sitemaps.
+data FeedData
 
 # --- 2. Error Definitions ---
 
-# **File System Error**
-# Triggered by missing directories, permission issues, or failed asset copies.
+# **Environment Error**
+# Permissions, missing directories, or IO interruptions.
 error FileSystemError
 
 # **Parsing Error**
-# Triggered by malformed Markdown frontmatter or invalid HTML.
-error ParsingError
+# YAML Frontmatter syntax errors or malformed HTML meta tags.
+error MetadataError
 
-# **Template Error**
-# Triggered by execution failures during HTML generation.
-error TemplateExecutionError
+# **Broken Reference**
+# Triggered when a Markdown image or link points to a non-existent local file.
+error ResourceMissingError
 
-# --- 3. Function Contracts ---
+# **Logic Error**
+# Failure during Go template execution (e.g., missing fields).
+error TemplateError
 
-# ### Template Loader
-# Loads and parses embedded templates from the assets folder.
-function LoadTemplates(Settings) -> SiteTemplates | FileSystemError
+# **User Config Error**
+# Invalid CLI flags or unsupported sort orders.
+error ConfigurationError
 
-# ### File Processor
-# Orchestrates the conversion of a source file into an Article object.
-function ProcessSource(Settings) -> Article | ParsingError | FileSystemError
+# --- 3. Functional Pipeline ---
 
-# ### Markdown Transformer
-# Specifically handles Goldmark AST parsing and resource extraction.
-function ParseMarkdown(Article) -> Article | ParsingError
+# ### Initialization Stage
+# Validates paths and ensures the output directory is ready.
+function PrepareOutput(Settings) -> Settings | FileSystemError | ConfigurationError
 
-# ### HTML Generator
-# Applies SiteTemplates to Article data to produce the final static string.
-function RenderHtml(Article) -> String | TemplateExecutionError
+# ### Asset Management
+# Copies CSS, JS, and Favicons from embedded memory or custom paths.
+function DeployStaticAssets(Settings) -> Settings | FileSystemError
 
-# ### Index Generator
-# Aggregates all processed articles into the main blog homepage.
-function GenerateIndex(Settings) -> String | TemplateExecutionError
+# ### Metadata Extraction
+# Parses Frontmatter (Markdown) or Meta Tags (HTML) into an Article.
+function ExtractMetadata(SourceFile) -> Article | MetadataError
 
-# --- 4. Architectural Flow ---
+# ### Link Processing
+# Validates and relocates referenced images/PDFs to the output folder.
+function ResolveResources(Article) -> Article | ResourceMissingError | FileSystemError
 
-# Entry Point: Initialize System
+# ### Page Generation
+# Injects Article content into the HTML template.
+function RenderPage(Article) -> String | TemplateError
+
+# ### Aggregation
+# Combines all processed articles into the final index and RSS artifacts.
+function FinalizeSite(Settings) -> String | FileSystemError | TemplateError
+
+# --- 4. Execution Flow ---
+
+# 1. Start: CLI Parse
 appSettings: Settings
-templateRegistry = LoadTemplates(appSettings)
+initStatus = PrepareOutput(appSettings)
 
-match templateRegistry {
-    SiteTemplates => {
-        # Execution Loop: Process files found in the input path
-        for filePath in 0..100 {
-            
-            # Extract metadata and raw content
-            processingResult = ProcessSource(appSettings)
-
-            match processingResult {
-                Article => {
-                    # Apply Templates & Logic
-                    renderResult = RenderHtml(processingResult)
+match initStatus {
+    Settings => {
+        # 2. Setup environment
+        assetStatus = DeployStaticAssets(initStatus)
+        
+        match assetStatus {
+            Settings => {
+                # 3. Concurrent Processing Loop
+                # Models the Go worker pool processing up to 100 files
+                for i in 0..100 {
                     
-                    match renderResult {
-                        String => {
-                            # Successfully generated static file
+                    # Simulation of walking the input directory
+                    rawFile: SourceFile
+                    processedArt = ExtractMetadata(rawFile)
+
+                    match processedArt {
+                        Article => {
+                            # Narrowing: Handle Assets & Rendering
+                            linkedArt = ResolveResources(processedArt)
+                            
+                            match linkedArt {
+                                Article => {
+                                    finalHtml = RenderPage(linkedArt)
+                                    # Output file is written to disk
+                                }
+                                ResourceMissingError => {
+                                    # Log warning (DSBG -ignore-errors logic)
+                                }
+                                _ => { break }
+                            }
                         }
-                        TemplateExecutionError => {
-                            # Handle rendering failure
-                            break
+                        MetadataError => {
+                            # Handle malformed frontmatter
                         }
-                        _ => {
-                            break
-                        }
+                        _ => { break }
                     }
                 }
-                ParsingError => {
-                    # Handle frontmatter or content errors
-                }
-                FileSystemError => {
-                    # Handle missing files
-                }
-                _ => {
-                    break
-                }
-            }
-        }
 
-        # Finalize Build: Generate aggregate artifacts
-        indexPage = GenerateIndex(appSettings)
-        
-        match indexPage {
-            String => {
-                # Success: Write index.html to output path
+                # 4. Global Artifact Generation
+                # Once all articles are processed, generate Index and RSS
+                buildResult = FinalizeSite(appSettings)
+
+                match buildResult {
+                    String => {
+                        # Build Complete: Successfully updated Index/RSS/Search
+                    }
+                    TemplateError => {
+                        # Critical: Index or RSS template failed
+                    }
+                    _ => { break }
+                }
             }
-            _ => {
-                # Failure: Index generation failed
+            FileSystemError => {
+                # Could not copy style.css or script.js
             }
+            _ => { break }
         }
     }
-    FileSystemError => {
-        # Critical: System cannot find templates
+    ConfigurationError => {
+        # Invalid input/output paths provided by user
     }
     _ => {
-        # Unexpected state
+        # Unexpected termination
     }
 }
