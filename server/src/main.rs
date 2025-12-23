@@ -3,6 +3,7 @@ use clap::Parser as ClapParser;
 use dashmap::DashMap;
 use pest::Parser;
 use pest_derive::Parser;
+use regex::Regex;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
@@ -65,42 +66,68 @@ impl TectAnalyzer {
     }
 
     pub fn analyze(&mut self, content: &str) -> Result<()> {
-        let pairs = TectParser::parse(Rule::program, content).context("Parsing failed")?;
-        let top_level = pairs.into_iter().next().unwrap().into_inner();
+        self.scrape_definitions(content);
 
+        let pairs = TectParser::parse(Rule::program, content).context("Formal parsing failed")?;
+
+        let top_level = pairs.into_iter().next().unwrap().into_inner();
         for pair in top_level {
             self.process_pair(pair);
         }
-
         Ok(())
+    }
+
+    fn scrape_definitions(&mut self, content: &str) {
+        let re_data = Regex::new(r"data\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+        let re_err = Regex::new(r"error\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+        let re_group = Regex::new(r"group\s+([a-z][a-zA-Z0-9_]*)").unwrap();
+
+        for cap in re_data.captures_iter(content) {
+            self.symbols.insert(
+                cap[1].to_string(),
+                SymbolInfo {
+                    kind: "Data".into(),
+                    detail: cap[1].to_string(),
+                    docs: Some("Domain entity definition.".into()),
+                },
+            );
+        }
+        for cap in re_err.captures_iter(content) {
+            self.symbols.insert(
+                cap[1].to_string(),
+                SymbolInfo {
+                    kind: "Error".into(),
+                    detail: cap[1].to_string(),
+                    docs: Some("Architectural failure state definition.".into()),
+                },
+            );
+        }
+        for cap in re_group.captures_iter(content) {
+            self.symbols.insert(
+                cap[1].to_string(),
+                SymbolInfo {
+                    kind: "Group".into(),
+                    detail: format!("Module: {}", &cap[1]),
+                    docs: Some("Logical architectural container.".into()),
+                },
+            );
+        }
     }
 
     fn process_pair(&mut self, pair: pest::iterators::Pair<Rule>) {
         match pair.as_rule() {
             Rule::group_block => {
                 let mut inner = pair.into_inner();
-                let _kw = inner.next(); // group keyword
-                let name_pair = inner.next().unwrap();
-                let group_name = name_pair.as_str().to_string();
-
-                // Register group as a symbol so we can hover it
-                self.symbols.insert(
-                    group_name.clone(),
-                    SymbolInfo {
-                        kind: "Group".into(),
-                        detail: format!("Architectural Module: {}", group_name),
-                        docs: Some(format!(
-                            "Logical container for related architectural components."
-                        )),
-                    },
-                );
-
-                let old_group = self.current_group.clone();
-                self.current_group = group_name;
-                for p in inner {
-                    self.process_pair(p);
+                let _kw = inner.next();
+                if let Some(name_pair) = inner.next() {
+                    let group_name = name_pair.as_str().to_string();
+                    let old_group = self.current_group.clone();
+                    self.current_group = group_name;
+                    for p in inner {
+                        self.process_pair(p);
+                    }
+                    self.current_group = old_group;
                 }
-                self.current_group = old_group;
             }
             Rule::data_def | Rule::error_def | Rule::func_def => self.collect_defs(pair),
             Rule::instantiation | Rule::assignment | Rule::call | Rule::break_stmt => {
@@ -291,7 +318,7 @@ impl TectAnalyzer {
                         relation: "type_definition".into(),
                     });
                 }
-                Rule::assignment => {
+                Rule::assignment if idents.len() >= 3 => {
                     self.graph.edges.push(Edge {
                         source: format!("var:{}", idents[2]),
                         target: format!("def:{}", idents[1]),
@@ -303,7 +330,7 @@ impl TectAnalyzer {
                         relation: "result_flow".into(),
                     });
                 }
-                Rule::call => {
+                Rule::call if idents.len() >= 2 => {
                     self.graph.edges.push(Edge {
                         source: format!("var:{}", idents[1]),
                         target: format!("def:{}", idents[0]),
@@ -317,7 +344,6 @@ impl TectAnalyzer {
 }
 
 struct Backend {
-    #[allow(dead_code)]
     client: Client,
     document_map: DashMap<Url, String>,
 }
@@ -347,12 +373,12 @@ impl LanguageServer for Backend {
                                 },
                                 legend: SemanticTokensLegend {
                                     token_types: vec![
-                                        SemanticTokenType::KEYWORD,   // 0
-                                        SemanticTokenType::TYPE,      // 1
-                                        SemanticTokenType::FUNCTION,  // 2
-                                        SemanticTokenType::VARIABLE,  // 3
-                                        SemanticTokenType::ENUM,      // 4
-                                        SemanticTokenType::DECORATOR, // 5
+                                        SemanticTokenType::KEYWORD,
+                                        SemanticTokenType::TYPE,
+                                        SemanticTokenType::FUNCTION,
+                                        SemanticTokenType::VARIABLE,
+                                        SemanticTokenType::ENUM,
+                                        SemanticTokenType::DECORATOR,
                                     ],
                                     token_modifiers: vec![],
                                 },
@@ -383,42 +409,23 @@ impl LanguageServer for Backend {
         let Some(content) = self.document_map.get(&uri) else {
             return Ok(None);
         };
+
         let mut a = TectAnalyzer::new();
         let _ = a.analyze(&content);
-        if let Ok(pairs) = TectParser::parse(Rule::program, &content) {
-            for pair in pairs.flatten() {
-                let rule = pair.as_rule();
-                if !matches!(
-                    rule,
-                    Rule::type_ident
-                        | Rule::var_ident
-                        | Rule::kw_data
-                        | Rule::kw_error
-                        | Rule::kw_func
-                        | Rule::kw_match
-                        | Rule::kw_for
-                        | Rule::kw_break
-                        | Rule::kw_in
-                        | Rule::kw_group
-                        | Rule::wildcard
-                        | Rule::group_tag
-                ) {
-                    continue;
-                }
 
-                let (l, c) = pair.line_col();
-                let (line, col) = (l as u32 - 1, c as u32 - 1);
-                if pos.line == line
-                    && pos.character >= col
-                    && pos.character < (col + pair.as_str().len() as u32)
-                {
-                    let word = pair.as_str();
+        let lines: Vec<&str> = content.lines().collect();
+        if let Some(line) = lines.get(pos.line as usize) {
+            let word_re = Regex::new(r"(@?[a-zA-Z0-9_:]+)").unwrap();
+            for cap in word_re.find_iter(line) {
+                if pos.character >= cap.start() as u32 && pos.character <= cap.end() as u32 {
+                    let word = cap.as_str();
                     let lookup = word.trim_start_matches('@');
+
                     let val = if let Some(info) = a.symbols.get(lookup) {
                         format!(
                             "### {}: `{}`\n**Type/Detail**: `{}`{}",
                             info.kind,
-                            word,
+                            lookup,
                             info.detail,
                             info.docs
                                 .as_ref()
@@ -426,24 +433,29 @@ impl LanguageServer for Backend {
                                 .unwrap_or_default()
                         )
                     } else {
-                        match rule {
-                            Rule::kw_data => "### Keyword: `data`\nDefines a domain entity.".into(),
-                            Rule::kw_error => "### Keyword: `error`\nDefines a failure state.".into(),
-                            Rule::kw_func => "### Keyword: `function`\nDefines a transformation contract.".into(),
-                            Rule::kw_match => "### Keyword: `match`\nArchitectural branching.".into(),
-                            Rule::kw_for => "### Keyword: `for`\nRepetition loop.".into(),
-                            Rule::kw_group => "### Keyword: `group`\nStarts an architectural cluster block.".into(),
-                            Rule::group_tag => format!("### Group Attachment: `@` \nAssigns this specific node to the group: `{}`", lookup).into(),
-                            Rule::wildcard => "### Wildcard: `_`\nCatch-all match pattern.".into(),
-                            _ => format!("### Symbol: `{}`", word),
+                        match lookup {
+                            "data" => "### Keyword: `data`\nDefines a domain entity artifact.".into(),
+                            "error" => "### Keyword: `error`\nDefines an architectural failure state.".into(),
+                            "function" => "### Keyword: `function`\nDefines a transformation contract.".into(),
+                            "match" => "### Keyword: `match`\nArchitectural branching based on result types.".into(),
+                            "for" => "### Keyword: `for`\nRepresents a repetition loop.".into(),
+                            "group" => "### Keyword: `group`\nLogical architectural container.".into(),
+                            "break" => "### Keyword: `break`\nExits the current loop.".into(),
+                            "_" => "### Wildcard: `_`\nCatch-all match pattern.".into(),
+                            _ if word.starts_with('@') => format!("### Group Assignment\nAssigns this node to the module: `{}`", lookup),
+                            _ => format!("### Symbol: `{}`", lookup),
                         }
                     };
+
                     return Ok(Some(Hover {
                         contents: HoverContents::Markup(MarkupContent {
                             kind: MarkupKind::Markdown,
                             value: val,
                         }),
-                        range: None,
+                        range: Some(Range::new(
+                            Position::new(pos.line, cap.start() as u32),
+                            Position::new(pos.line, cap.end() as u32),
+                        )),
                     }));
                 }
             }
@@ -483,7 +495,7 @@ impl LanguageServer for Backend {
                     ),
                     Rule::var_ident => Some(
                         match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
-                            Some("Group") => 4,
+                            Some("Group") => 1,
                             _ => 3,
                         },
                     ),
@@ -544,7 +556,7 @@ async fn main() -> Result<()> {
             };
             for file in files {
                 let content = fs::read_to_string(&file)?;
-                analyzer.analyze(&content)?;
+                let _ = analyzer.analyze(&content);
             }
             let json_output = serde_json::to_string_pretty(&analyzer.graph)?;
             if let Some(out_path) = args.output {

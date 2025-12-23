@@ -12,6 +12,10 @@
             "match": "\\b(data|error|function|for|in|match|break|group)\\b"
         },
         {
+            "name": "entity.name.tag.group.tect",
+            "match": "@[a-z][a-zA-Z0-9_]*"
+        },
+        {
             "name": "entity.name.type.tect",
             "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
         },
@@ -26,10 +30,6 @@
         {
             "name": "constant.numeric.tect",
             "match": "\\b[0-9]+\\b"
-        },
-        {
-            "name": "entity.name.section.group.tect",
-            "match": "@[a-z][a-zA-Z0-9_]*"
         }
     ],
     "scopeName": "source.tect"
