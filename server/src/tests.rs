@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{Rule, TectAnalyzer, TectParser};
+    use crate::analyzer::{Rule, TectAnalyzer, TectParser};
     use pest::Parser;
 
     #[test]
@@ -103,12 +103,10 @@ mod tests {
 
     #[test]
     fn test_strict_casing_failure() {
-        // Lowercase data name should fail
         let input = "data credentials";
         let pair = TectParser::parse(Rule::program, input);
         assert!(pair.is_err());
 
-        // Uppercase variable name should fail
         let input = "User_Input: Credentials";
         let pair = TectParser::parse(Rule::program, input);
         assert!(pair.is_err());
