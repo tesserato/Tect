@@ -27,4 +27,5 @@ pub struct SymbolInfo {
     pub kind: String,
     pub detail: String,
     pub docs: Option<String>,
+    pub group: Option<String>,
 }
