@@ -1,0 +1,120 @@
+# # DSBG: Dead Simple Blog Generator Architecture
+# This module models the static site generation pipeline for DSBG.
+
+# --- 1. Data Definitions ---
+
+# **Global Configuration**
+# Holds flags and paths parsed from the CLI entry point.
+data Settings
+
+# **Content Artifact**
+# Represents a processed Markdown or HTML file with its metadata.
+data Article
+
+# **Template Registry**
+# Pre-parsed Go templates for Article, Index, and RSS.
+data SiteTemplates
+
+# **Social Target**
+# Configuration for custom sharing buttons.
+data ShareButton
+
+# --- 2. Error Definitions ---
+
+# **File System Error**
+# Triggered by missing directories, permission issues, or failed asset copies.
+error FileSystemError
+
+# **Parsing Error**
+# Triggered by malformed Markdown frontmatter or invalid HTML.
+error ParsingError
+
+# **Template Error**
+# Triggered by execution failures during HTML generation.
+error TemplateExecutionError
+
+# --- 3. Function Contracts ---
+
+# ### Template Loader
+# Loads and parses embedded templates from the assets folder.
+function LoadTemplates(Settings) -> SiteTemplates | FileSystemError
+
+# ### File Processor
+# Orchestrates the conversion of a source file into an Article object.
+function ProcessSource(Settings) -> Article | ParsingError | FileSystemError
+
+# ### Markdown Transformer
+# Specifically handles Goldmark AST parsing and resource extraction.
+function ParseMarkdown(Article) -> Article | ParsingError
+
+# ### HTML Generator
+# Applies SiteTemplates to Article data to produce the final static string.
+function RenderHtml(Article) -> String | TemplateExecutionError
+
+# ### Index Generator
+# Aggregates all processed articles into the main blog homepage.
+function GenerateIndex(Settings) -> String | TemplateExecutionError
+
+# --- 4. Architectural Flow ---
+
+# Entry Point: Initialize System
+appSettings: Settings
+templateRegistry = LoadTemplates(appSettings)
+
+match templateRegistry {
+    SiteTemplates => {
+        # Execution Loop: Process files found in the input path
+        for filePath in 0..100 {
+            
+            # Extract metadata and raw content
+            processingResult = ProcessSource(appSettings)
+
+            match processingResult {
+                Article => {
+                    # Apply Templates & Logic
+                    renderResult = RenderHtml(processingResult)
+                    
+                    match renderResult {
+                        String => {
+                            # Successfully generated static file
+                        }
+                        TemplateExecutionError => {
+                            # Handle rendering failure
+                            break
+                        }
+                        _ => {
+                            break
+                        }
+                    }
+                }
+                ParsingError => {
+                    # Handle frontmatter or content errors
+                }
+                FileSystemError => {
+                    # Handle missing files
+                }
+                _ => {
+                    break
+                }
+            }
+        }
+
+        # Finalize Build: Generate aggregate artifacts
+        indexPage = GenerateIndex(appSettings)
+        
+        match indexPage {
+            String => {
+                # Success: Write index.html to output path
+            }
+            _ => {
+                # Failure: Index generation failed
+            }
+        }
+    }
+    FileSystemError => {
+        # Critical: System cannot find templates
+    }
+    _ => {
+        # Unexpected state
+    }
+}
