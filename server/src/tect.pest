@@ -46,6 +46,9 @@ group_block   = { kw_group ~ var_ident ~ "{" ~ (statement | ln)* ~ "}" }
 
 statement = _{
     group_block
+  | data_def
+  | error_def
+  | func_def
   | for_stmt
   | match_stmt
   | assignment
@@ -56,4 +59,4 @@ statement = _{
   | ln
 }
 
-program = { SOI ~ (data_def | error_def | func_def | statement | ln)* ~ EOI }
+program = { SOI ~ (statement)* ~ EOI }

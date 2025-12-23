@@ -10,6 +10,7 @@ mod analyzer;
 mod lsp;
 mod models;
 mod tests;
+mod test_parse;
 
 /// The primary entry point for the Tect toolset.
 ///
