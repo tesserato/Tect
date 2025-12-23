@@ -1,12 +1,36 @@
 {
-  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Tect",
-  "patterns": [
-    {
-      "name": "comment.line.number-sign.tect",
-      "begin": "#",
-      "end": "$"
-    }
-  ],
-  "scopeName": "source.tect"
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Tect",
+    "patterns": [
+        {
+            "name": "comment.line.number-sign.tect",
+            "begin": "#",
+            "end": "$"
+        },
+        {
+            "name": "keyword.control.tect",
+            "match": "\\b(data|error|function|for|in|match|break|group)\\b"
+        },
+        {
+            "name": "entity.name.type.tect",
+            "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        },
+        {
+            "name": "variable.other.tect",
+            "match": "\\b[a-z][a-zA-Z0-9_]*\\b"
+        },
+        {
+            "name": "keyword.operator.tect",
+            "match": "(->|=>|:|\\||=)"
+        },
+        {
+            "name": "constant.numeric.tect",
+            "match": "\\b[0-9]+\\b"
+        },
+        {
+            "name": "entity.name.section.group.tect",
+            "match": "@[a-z][a-zA-Z0-9_]*"
+        }
+    ],
+    "scopeName": "source.tect"
 }

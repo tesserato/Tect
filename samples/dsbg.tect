@@ -1,148 +1,76 @@
-# # DSBG: Dead Simple Blog Generator - Detailed Architecture
-# This module provides a high-fidelity model of the static site generation pipeline.
+# # DSBG: Dead Simple Blog Generator - Clustered Architecture
+# This module demonstrates logical grouping of parsing, IO, and generation stages.
 
-# --- 1. Data Definitions ---
+group domain {
+    # **CLI Settings**
+    data Settings
+    # **Source Payload**
+    data SourceFile
+    # **Processed Article**
+    data Article
+    # **Template Registry**
+    data SiteTemplates
+    
+    error FileSystemError
+    error MetadataError
+    error TemplateError
+}
 
-# **CLI Settings**
-# Stores runtime flags: paths, metadata, sorting rules, and theme selection.
-data Settings
+group initialization {
+    # Validates paths and ensures the output directory is ready.
+    function PrepareOutput(Settings) -> Settings | FileSystemError
+    # Copies CSS, JS, and Favicons.
+    function DeployStaticAssets(Settings) -> Settings | FileSystemError
+}
 
-# **Source Payload**
-# Raw data read from the filesystem before processing.
-data SourceFile
+group parsing {
+    # Parses Frontmatter (Markdown) or Meta Tags (HTML).
+    function ExtractMetadata(SourceFile) -> Article | MetadataError
+    # Validates and relocates referenced images.
+    function ResolveResources(Article) -> Article | FileSystemError
+}
 
-# **Processed Article**
-# Metadata-enriched object containing HTML fragments and extracted tags.
-data Article
+group generation {
+    # Injects Article content into the HTML template.
+    function RenderPage(Article) -> String | TemplateError
+    # Aggregates processed articles into Index and RSS.
+    function FinalizeSite(Settings) -> String | TemplateError
+}
 
-# **Template Registry**
-# The collection of compiled Article, Index, and RSS Go templates.
-data SiteTemplates
+# --- Execution Flow ---
 
-# **Global Search Index**
-# JSON structure containing text snippets for client-side search.
-data SearchIndex
-
-# **Site Metadata**
-# Aggregated information used for generating RSS feeds and Sitemaps.
-data FeedData
-
-# --- 2. Error Definitions ---
-
-# **Environment Error**
-# Permissions, missing directories, or IO interruptions.
-error FileSystemError
-
-# **Parsing Error**
-# YAML Frontmatter syntax errors or malformed HTML meta tags.
-error MetadataError
-
-# **Broken Reference**
-# Triggered when a Markdown image or link points to a non-existent local file.
-error ResourceMissingError
-
-# **Logic Error**
-# Failure during Go template execution (e.g., missing fields).
-error TemplateError
-
-# **User Config Error**
-# Invalid CLI flags or unsupported sort orders.
-error ConfigurationError
-
-# --- 3. Functional Pipeline ---
-
-# ### Initialization Stage
-# Validates paths and ensures the output directory is ready.
-function PrepareOutput(Settings) -> Settings | FileSystemError | ConfigurationError
-
-# ### Asset Management
-# Copies CSS, JS, and Favicons from embedded memory or custom paths.
-function DeployStaticAssets(Settings) -> Settings | FileSystemError
-
-# ### Metadata Extraction
-# Parses Frontmatter (Markdown) or Meta Tags (HTML) into an Article.
-function ExtractMetadata(SourceFile) -> Article | MetadataError
-
-# ### Link Processing
-# Validates and relocates referenced images/PDFs to the output folder.
-function ResolveResources(Article) -> Article | ResourceMissingError | FileSystemError
-
-# ### Page Generation
-# Injects Article content into the HTML template.
-function RenderPage(Article) -> String | TemplateError
-
-# ### Aggregation
-# Combines all processed articles into the final index and RSS artifacts.
-function FinalizeSite(Settings) -> String | FileSystemError | TemplateError
-
-# --- 4. Execution Flow ---
-
-# 1. Start: CLI Parse
-appSettings: Settings
-initStatus = PrepareOutput(appSettings)
+appSettings: Settings @initialization
+initStatus = PrepareOutput(appSettings) @initialization
 
 match initStatus {
     Settings => {
-        # 2. Setup environment
-        assetStatus = DeployStaticAssets(initStatus)
+        assetStatus = DeployStaticAssets(initStatus) @initialization
         
         match assetStatus {
             Settings => {
-                # 3. Concurrent Processing Loop
-                # Models the Go worker pool processing up to 100 files
                 for i in 0..100 {
-                    
-                    # Simulation of walking the input directory
-                    rawFile: SourceFile
-                    processedArt = ExtractMetadata(rawFile)
+                    rawFile: SourceFile @parsing
+                    processedArt = ExtractMetadata(rawFile) @parsing
 
                     match processedArt {
                         Article => {
-                            # Narrowing: Handle Assets & Rendering
-                            linkedArt = ResolveResources(processedArt)
+                            linkedArt = ResolveResources(processedArt) @parsing
                             
                             match linkedArt {
                                 Article => {
-                                    finalHtml = RenderPage(linkedArt)
-                                    # Output file is written to disk
-                                }
-                                ResourceMissingError => {
-                                    # Log warning (DSBG -ignore-errors logic)
+                                    finalHtml = RenderPage(linkedArt) @generation
                                 }
                                 _ => { break }
                             }
-                        }
-                        MetadataError => {
-                            # Handle malformed frontmatter
                         }
                         _ => { break }
                     }
                 }
 
-                # 4. Global Artifact Generation
-                # Once all articles are processed, generate Index and RSS
-                buildResult = FinalizeSite(appSettings)
-
-                match buildResult {
-                    String => {
-                        # Build Complete: Successfully updated Index/RSS/Search
-                    }
-                    TemplateError => {
-                        # Critical: Index or RSS template failed
-                    }
-                    _ => { break }
-                }
-            }
-            FileSystemError => {
-                # Could not copy style.css or script.js
+                buildResult = FinalizeSite(appSettings) @generation
             }
             _ => { break }
         }
     }
-    ConfigurationError => {
-        # Invalid input/output paths provided by user
-    }
-    _ => {
-        # Unexpected termination
-    }
+    _ => { break }
 }

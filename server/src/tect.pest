@@ -13,7 +13,7 @@ number     = @{ ASCII_DIGIT+ }
 range      =  { number ~ ".." ~ number }
 wildcard   =  { "_" }
 
-// Keywords (Strict Lowercase)
+// Keywords
 kw_data   = { "data" }
 kw_error  = { "error" }
 kw_func   = { "function" }
@@ -21,8 +21,12 @@ kw_for    = { "for" }
 kw_in     = { "in" }
 kw_match  = { "match" }
 kw_break  = { "break" }
+kw_group  = { "group" }
 arrow     = { "->" }
 fat_arrow = { "=>" }
+
+// Group Tag (Atomic for better highlighting/hover)
+group_tag = @{ "@" ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Definitions
 data_def   = { doc_line* ~ kw_data ~ type_ident }
@@ -31,16 +35,18 @@ func_def   = { doc_line* ~ kw_func ~ type_ident ~ "(" ~ type_ident ~ ")" ~ arrow
 type_union = { type_ident ~ ("|" ~ type_ident)* }
 
 // Flow and Logic
-instantiation = { doc_line* ~ var_ident ~ ":" ~ type_ident }
-assignment    = { doc_line* ~ var_ident ~ "=" ~ type_ident ~ "(" ~ var_ident ~ ")" }
-call          = { doc_line* ~ type_ident ~ "(" ~ var_ident ~ ")" }
-break_stmt    = { kw_break }
+instantiation = { doc_line* ~ var_ident ~ ":" ~ type_ident ~ group_tag? }
+assignment    = { doc_line* ~ var_ident ~ "=" ~ type_ident ~ "(" ~ var_ident ~ ")" ~ group_tag? }
+call          = { doc_line* ~ type_ident ~ "(" ~ var_ident ~ ")" ~ group_tag? }
+break_stmt    = { kw_break ~ group_tag? }
 for_stmt      = { kw_for ~ var_ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
 match_stmt    = { kw_match ~ var_ident ~ "{" ~ (match_arm | ln)* ~ "}" }
 match_arm     = { (type_ident | wildcard) ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
+group_block   = { kw_group ~ var_ident ~ "{" ~ (statement | ln)* ~ "}" }
 
 statement = _{
-    for_stmt
+    group_block
+  | for_stmt
   | match_stmt
   | assignment
   | instantiation
