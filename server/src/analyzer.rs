@@ -1,30 +1,32 @@
-use crate::models::{Edge, Graph, Node, SymbolInfo};
+use crate::models::{Edge, Graph, Kind, Node, SymbolInfo};
 use anyhow::{Context, Result};
 use pest::Parser;
 use pest_derive::Parser;
 use regex::Regex;
 use std::collections::HashMap;
 
-/// The formal Pest parser implementation for the Tect grammar.
+/// The primary parser driver utilizing the Pest grammar defined in `tect.pest`.
 #[derive(Parser)]
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
-/// The primary engine for extracting architectural meaning from Tect source code.
-/// It maintains state for symbol resolution, function returns, and graph construction.
+/// The core engine responsible for analyzing Tect source files.
+///
+/// It performs structural analysis to extract architectural entities and their
+/// relationships, supporting both precise graph generation and fuzzy LSP features.
 pub struct TectAnalyzer {
-    /// Maps symbol names to their architectural metadata.
+    /// Stores metadata for all identified symbols (Data, Functions, etc.).
     pub symbols: HashMap<String, SymbolInfo>,
-    /// Maps function names to their return type unions for flow inference.
+    /// Tracks the return types of functions to enable flow inference.
     pub func_returns: HashMap<String, String>,
-    /// The generated graph structure for CLI export.
+    /// The generated graph object suitable for JSON export.
     pub graph: Graph,
-    /// Tracks the current 'group' block during recursive traversal.
+    /// Internal state tracking the current active architectural group.
     current_group: String,
 }
 
 impl TectAnalyzer {
-    /// Creates a new analyzer with a default "global" group context.
+    /// Initializes a new analyzer with a default "global" scope.
     pub fn new() -> Self {
         Self {
             symbols: HashMap::new(),
@@ -34,9 +36,11 @@ impl TectAnalyzer {
         }
     }
 
-    /// Orchestrates analysis using a two-pass approach:
-    /// 1. Scavenging definitions via Regex (Best-effort for LSP features).
-    /// 2. Formal parsing via Pest for precise graph construction and inference.
+    /// Orchestrates the analysis of Tect source content.
+    ///
+    /// This follows a multi-pass strategy:
+    /// 1. Scrape definitions via Regex for immediate availability.
+    /// 2. Formally parse the AST via Pest for relational integrity.
     pub fn analyze(&mut self, content: &str) -> Result<()> {
         self.scrape_definitions(content);
 
@@ -50,7 +54,7 @@ impl TectAnalyzer {
         Ok(())
     }
 
-    /// Cleans and formats raw '#' comments into Markdown paragraphs.
+    /// Internal helper to clean and format '#' comment blocks into Markdown.
     fn parse_comments(raw: &str) -> Option<String> {
         let docs: Vec<String> = raw
             .lines()
@@ -65,10 +69,11 @@ impl TectAnalyzer {
         }
     }
 
-    /// Performs a loose regex pass to identify definitions even in malformed files.
-    /// This ensures that IDE features like 'Hover' work while the user is still typing.
+    /// Performs a high-speed scavenging pass using Regular Expressions.
+    ///
+    /// This allows the analyzer to populate the symbol table even when the file
+    /// is syntactically incomplete, which is critical for LSP responsiveness.
     fn scrape_definitions(&mut self, content: &str) {
-        // Patterns to match multi-line comments followed by keywords
         let re_data = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*data\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
         let re_err = Regex::new(r"(?m)((?:^\s*#.*\r?\n)*)\s*error\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
         let re_group =
@@ -79,7 +84,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 cap[2].to_string(),
                 SymbolInfo {
-                    kind: "Data".into(),
+                    kind: Kind::Data,
                     detail: cap[2].to_string(),
                     docs: Self::parse_comments(&cap[1]),
                     group: None,
@@ -90,7 +95,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 cap[2].to_string(),
                 SymbolInfo {
-                    kind: "Error".into(),
+                    kind: Kind::Error,
                     detail: cap[2].to_string(),
                     docs: Self::parse_comments(&cap[1]),
                     group: None,
@@ -101,7 +106,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 cap[2].to_string(),
                 SymbolInfo {
-                    kind: "Group".into(),
+                    kind: Kind::Group,
                     detail: format!("Module: {}", &cap[2]),
                     docs: Self::parse_comments(&cap[1]),
                     group: None,
@@ -115,7 +120,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 name,
                 SymbolInfo {
-                    kind: "Function".into(),
+                    kind: Kind::Function,
                     detail: format!("{} -> {}", input, output),
                     docs: Self::parse_comments(&cap[1]),
                     group: None,
@@ -124,7 +129,7 @@ impl TectAnalyzer {
         }
     }
 
-    /// Dispatches Pest pairs to specialized collection methods based on grammar rules.
+    /// Dispatches grammar rules to specific collectors during structural traversal.
     fn process_pair(&mut self, pair: pest::iterators::Pair<Rule>) {
         match pair.as_rule() {
             Rule::group_block => {
@@ -158,7 +163,7 @@ impl TectAnalyzer {
         }
     }
 
-    /// Processes formal architectural definitions and builds node edges for type signatures.
+    /// Analyzes formal definitions and maps their architectural signatures to nodes and edges.
     fn collect_defs(&mut self, pair: pest::iterators::Pair<Rule>) {
         let rule = pair.as_rule();
         let mut docs = Vec::new();
@@ -199,12 +204,12 @@ impl TectAnalyzer {
             };
 
             let kind = match rule {
-                Rule::data_def => "Data",
-                Rule::error_def => "Error",
+                Rule::data_def => Kind::Data,
+                Rule::error_def => Kind::Error,
                 _ => {
                     self.func_returns
                         .insert(name.clone(), ret_union.join(" | "));
-                    "Function"
+                    Kind::Function
                 }
             };
 
@@ -216,7 +221,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 name.clone(),
                 SymbolInfo {
-                    kind: kind.into(),
+                    kind,
                     detail,
                     docs: doc_str.clone(),
                     group: if self.current_group != "global" {
@@ -229,7 +234,7 @@ impl TectAnalyzer {
 
             self.graph.nodes.push(Node {
                 id: format!("def:{}", name),
-                kind: kind.into(),
+                kind,
                 label: name.clone(),
                 metadata: doc_str,
                 group: self.current_group.clone(),
@@ -245,18 +250,20 @@ impl TectAnalyzer {
                     });
                 }
                 for ret in ret_union {
-                    self.graph.edges.push(Edge {
-                        source: id.clone(),
-                        target: format!("def:{}", ret),
-                        relation: "output_type".into(),
-                    });
+                    if ret != "None" {
+                        self.graph.edges.push(Edge {
+                            source: id.clone(),
+                            target: format!("def:{}", ret),
+                            relation: "output_type".into(),
+                        });
+                    }
                 }
             }
         }
     }
 
-    /// Maps runtime occurrences (variables and calls) to the architectural graph.
-    /// Infers variable types based on function return definitions.
+    /// Maps runtime occurrences (variables, calls, logic) to graph instances.
+    /// Performs type inference based on previous function return mappings.
     fn collect_usage(&mut self, pair: pest::iterators::Pair<Rule>) {
         let rule = pair.as_rule();
         let mut idents = Vec::new();
@@ -288,20 +295,20 @@ impl TectAnalyzer {
                 .first()
                 .cloned()
                 .unwrap_or_else(|| "break".to_string());
-            let (kind, detail) = if rule == Rule::instantiation {
-                ("Variable", idents.get(1).cloned().unwrap_or_default())
-            } else if rule == Rule::assignment {
-                (
-                    "Variable",
-                    self.func_returns
+
+            let (kind, detail) = match rule {
+                Rule::instantiation => (Kind::Variable, idents.get(1).cloned().unwrap_or_default()),
+                Rule::assignment => {
+                    let ret = self
+                        .func_returns
                         .get(&idents[1])
                         .cloned()
-                        .unwrap_or("Unknown".into()),
-                )
-            } else if rule == Rule::break_stmt {
-                ("Logic", "Exit Loop".into())
-            } else {
-                ("Side Effect", "Call".into())
+                        .unwrap_or_else(|| "Unknown".into());
+                    (Kind::Variable, ret)
+                }
+                Rule::break_stmt => (Kind::Logic, "Exit Loop".into()),
+                Rule::call => (Kind::Function, "Procedural Call (None-Returning)".into()),
+                _ => (Kind::Variable, "Unknown".into()),
             };
 
             let group = inline_group.unwrap_or_else(|| self.current_group.clone());
@@ -318,7 +325,7 @@ impl TectAnalyzer {
 
             self.graph.nodes.push(Node {
                 id: id.clone(),
-                kind: kind.into(),
+                kind,
                 label: name.clone(),
                 metadata: doc_str.clone(),
                 group: group.clone(),
@@ -326,7 +333,7 @@ impl TectAnalyzer {
             self.symbols.insert(
                 name,
                 SymbolInfo {
-                    kind: kind.into(),
+                    kind,
                     detail: detail.clone(),
                     docs: doc_str,
                     group: if group != "global" { Some(group) } else { None },

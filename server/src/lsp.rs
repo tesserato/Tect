@@ -1,4 +1,5 @@
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
+use crate::models::Kind;
 use dashmap::DashMap;
 use pest::Parser;
 use regex::Regex;
@@ -6,16 +7,20 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-/// The Language Server implementation for the Tect language.
+/// The implementation of the Tect Language Server backend.
+///
+/// This handles the state of open documents and fulfills LSP requests
+/// (hover, semantic tokens) by interacting with the `TectAnalyzer`.
 pub struct Backend {
+    #[allow(dead_code)]
     pub client: Client,
-    /// Stores the current state of documents open in the editor.
+    /// Maps file URLs to their current in-memory content.
     pub document_map: DashMap<Url, String>,
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    /// Configures server capabilities including full text sync, hover tooltips, and semantic tokens.
+    /// Negotiates capabilities with the VS Code client upon connection.
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -72,8 +77,10 @@ impl LanguageServer for Backend {
         }
     }
 
-    /// Provides rich architectural context tooltips. Uses a regex-first fallback
-    /// to ensure tooltips work even when the formal parser is blocked by syntax errors.
+    /// Fulfils 'Hover' requests by providing architectural context for the token at the cursor.
+    ///
+    /// This implementation uses a fast Regex-based word detection to ensure tooltips appear
+    /// even in syntactically invalid files (common during active typing).
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -86,7 +93,7 @@ impl LanguageServer for Backend {
 
         let lines: Vec<&str> = content.lines().collect();
         if let Some(line) = lines.get(pos.line as usize) {
-            // Match potential tokens under cursor (including @ for group tags)
+            // Find words including the '@' prefix for groups
             let word_re = Regex::new(r"(@?[a-zA-Z0-9_:]+)").unwrap();
             for cap in word_re.find_iter(line) {
                 if pos.character >= cap.start() as u32 && pos.character <= cap.end() as u32 {
@@ -112,17 +119,18 @@ impl LanguageServer for Backend {
                                 .unwrap_or_default()
                         )
                     } else {
-                        // Fallback for keywords not in the symbol table
+                        // Keyword tooltips for built-in Tect concepts
                         match lookup {
                             "data" => "### Keyword: `data`\nDefines a domain entity artifact.".into(),
                             "error" => "### Keyword: `error`\nDefines an architectural failure state.".into(),
                             "function" => "### Keyword: `function`\nDefines a transformation contract.".into(),
                             "match" => "### Keyword: `match`\nArchitectural branching based on result types.".into(),
                             "for" => "### Keyword: `for`\nRepresents a repetition loop.".into(),
-                            "group" => "### Keyword: `group`\nLogical architectural container.".into(),
-                            "break" => "### Keyword: `break`\nExits the current loop.".into(),
-                            "_" => "### Wildcard: `_`\nCatch-all match pattern.".into(),
-                            _ if word.starts_with('@') => format!("### Group Assignment\nAssigns this node to the module: `{}`", lookup),
+                            "group" => "### Keyword: `group`\nLogical architectural container for modular organization.".into(),
+                            "break" => "### Keyword: `break`\nExits the current repetition loop.".into(),
+                            "None" => "### Built-in Type: `None`\nRepresents the absence of data (Architectural Unit).".into(),
+                            "_" => "### Wildcard: `_`\nCatch-all match pattern for architectural branching.".into(),
+                            _ if word.starts_with('@') => format!("### Group Assignment\nAssigns this statement to the module: `{}`", lookup),
                             _ => format!("### Symbol: `{}`", lookup),
                         }
                     };
@@ -143,8 +151,8 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
-    /// Computes semantic tokens for the entire document to provide accurate coloring
-    /// for architectural entities (Functions, Data, Groups, etc.).
+    /// Provides semantic token classification for sophisticated editor highlighting.
+    /// Maps Tect architectural concepts (Functions, Groups, Data) to standard LSP token types.
     async fn semantic_tokens_full(
         &self,
         p: SemanticTokensParams,
@@ -169,20 +177,16 @@ impl LanguageServer for Backend {
                     | Rule::kw_in
                     | Rule::kw_break
                     | Rule::kw_group => Some(0),
-                    Rule::type_ident => Some(
-                        match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
-                            Some("Data") => 1,
-                            Some("Function") => 2,
-                            Some("Error") => 4,
-                            _ => 1,
-                        },
-                    ),
-                    Rule::var_ident => Some(
-                        match a.symbols.get(pair.as_str()).map(|s| s.kind.as_str()) {
-                            Some("Group") => 1,
-                            _ => 3,
-                        },
-                    ),
+                    Rule::type_ident => Some(match a.symbols.get(pair.as_str()).map(|s| s.kind) {
+                        Some(Kind::Data) => 1,
+                        Some(Kind::Function) => 2,
+                        Some(Kind::Error) => 4,
+                        _ => 1,
+                    }),
+                    Rule::var_ident => Some(match a.symbols.get(pair.as_str()).map(|s| s.kind) {
+                        Some(Kind::Group) => 1,
+                        _ => 3,
+                    }),
                     Rule::number | Rule::wildcard => Some(4),
                     Rule::group_tag => Some(5),
                     _ => None,
