@@ -8,27 +8,23 @@ use walkdir::WalkDir;
 
 mod analyzer;
 mod graphviz;
+mod html;
 mod lsp;
 mod models;
 mod tests;
 mod test_parse;
 
 /// The primary entry point for the Tect toolset.
-///
-/// Tect can be executed in two distinct modes:
-/// 1. **CLI Mode**: Triggered by providing an input path. Generates an architectural graph.
-/// 2. **LSP Mode**: Default mode when no path is provided. Acts as a Language Server backend.
 #[derive(ClapParser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// The architectural source file or directory to analyze.
-    /// If omitted, the tool starts the Language Server.
     input: Option<PathBuf>,
 
-    /// Specifies the target path to save the generated architectural model.
-    /// Supported extensions:
-    /// - `.json` (default)
-    /// - `.dot`  (Graphviz, optimized for text-heavy nodes)
+    /// Output path:
+    /// - `.json` → raw semantic graph
+    /// - `.dot`  → Graphviz
+    /// - `.html` → Interactive visualization
     #[arg(short, long)]
     output: Option<PathBuf>,
 }
@@ -57,15 +53,20 @@ async fn main() -> Result<()> {
                 let _ = analyzer.analyze(&content);
             }
 
-            if let Some(out_path) = args.output {
-                match out_path.extension().and_then(|e| e.to_str()) {
+            if let Some(out) = args.output {
+                match out.extension().and_then(|e| e.to_str()) {
                     Some("dot") => {
                         let dot = graphviz::to_dot(&analyzer.graph);
-                        fs::write(out_path, dot)?;
+                        fs::write(out, dot)?;
+                    }
+                    Some("html") => {
+                        let dot = graphviz::to_dot(&analyzer.graph);
+                        let html = html::wrap_dot(&dot);
+                        fs::write(out, html)?;
                     }
                     _ => {
                         let json = serde_json::to_string_pretty(&analyzer.graph)?;
-                        fs::write(out_path, json)?;
+                        fs::write(out, json)?;
                     }
                 }
             } else {
@@ -77,7 +78,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Default: start Language Server
+    // Default: Language Server mode
     let (service, socket) = LspService::new(|client| lsp::Backend {
         client,
         document_map: DashMap::new(),

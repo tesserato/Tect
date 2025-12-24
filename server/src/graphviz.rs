@@ -2,12 +2,13 @@ use crate::models::{Graph, Kind};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Converts the semantic architectural graph into a Graphviz DOT representation.
+/// Converts the semantic architectural graph into Graphviz DOT.
 ///
-/// This renderer is optimized for text-heavy nodes:
-/// - Compact labels for layout stability
-/// - Full documentation exposed via tooltips
-/// - Groups mapped to Graphviz clusters
+/// Rendering rules:
+/// - `Data` and `Error` definitions are NOT rendered
+/// - Variable nodes embed their type directly
+/// - Long documentation is exposed via tooltips only
+/// - Groups are mapped to clusters
 pub fn to_dot(graph: &Graph) -> String {
     let mut out = String::new();
 
@@ -16,9 +17,13 @@ pub fn to_dot(graph: &Graph) -> String {
     writeln!(out, "  compound=true;").unwrap();
     writeln!(out, "  node [shape=box, fontname=\"Inter\"];").unwrap();
 
-    // --- Group nodes into clusters ---
+    // Group nodes by cluster
     let mut groups: HashMap<&str, Vec<&crate::models::Node>> = HashMap::new();
     for node in &graph.nodes {
+        // Skip pure type definitions
+        if matches!(node.kind, Kind::Data | Kind::Error) {
+            continue;
+        }
         groups.entry(&node.group).or_default().push(node);
     }
 
@@ -32,7 +37,7 @@ pub fn to_dot(graph: &Graph) -> String {
         }
 
         for n in nodes {
-            let label = compact_label(n);
+            let label = node_label(n);
             let tooltip = n.metadata.clone().unwrap_or_default();
 
             writeln!(
@@ -51,25 +56,43 @@ pub fn to_dot(graph: &Graph) -> String {
         }
     }
 
-    // --- Render edges ---
+    // Render edges (excluding edges pointing to hidden nodes)
     for e in &graph.edges {
-        writeln!(
-            out,
-            "  \"{}\" -> \"{}\" [label=\"{}\"];",
-            e.source, e.target, e.relation
-        )
-        .unwrap();
+        if graph.nodes.iter().any(|n| {
+            n.id == e.source && !matches!(n.kind, Kind::Data | Kind::Error)
+        }) && graph.nodes.iter().any(|n| {
+            n.id == e.target && !matches!(n.kind, Kind::Data | Kind::Error)
+        }) {
+            writeln!(
+                out,
+                "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                e.source, e.target, e.relation
+            )
+            .unwrap();
+        }
     }
 
     writeln!(out, "}}").unwrap();
     out
 }
 
-/// Produces a compact HTML-like label suitable for dense graphs.
-fn compact_label(n: &crate::models::Node) -> String {
+/// Generates a clean, compact node label.
+fn node_label(n: &crate::models::Node) -> String {
     match n.kind {
+        Kind::Variable => {
+            let ty = n
+                .metadata
+                .as_ref()
+                .and_then(|m| m.lines().next())
+                .unwrap_or("Unknown");
+            format!(
+                "<b>{}</b><br/><font point-size=\"10\">: {}</font>",
+                escape(&n.label),
+                escape(ty)
+            )
+        }
         Kind::Function => {
-            let subtitle = n
+            let sig = n
                 .metadata
                 .as_ref()
                 .and_then(|m| m.lines().next())
@@ -77,7 +100,7 @@ fn compact_label(n: &crate::models::Node) -> String {
             format!(
                 "<b>{}</b><br/><font point-size=\"10\">{}</font>",
                 escape(&n.label),
-                escape(subtitle)
+                escape(sig)
             )
         }
         _ => format!("<b>{}</b>", escape(&n.label)),
@@ -92,7 +115,7 @@ fn escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Ensures cluster identifiers are DOT-safe.
+/// Sanitizes identifiers for DOT cluster names.
 fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
