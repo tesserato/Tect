@@ -1,0 +1,91 @@
+digraph Tect {
+  node [shape=box, fontname="Inter", style=rounded];
+
+  subgraph cluster_initialization {
+    label="initialization";
+    labelloc="t";
+    labeljust="l";
+    color="#444444";
+
+    "var:appSettings" [
+      label=< <b>appSettings</b><br/><font point-size="10">: Settings</font> >,
+      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
+      style="filled,rounded"
+    ];
+
+    "def:PrepareOutput" [
+      label=< <b>PrepareOutput</b> >,
+      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
+      style="filled,rounded"
+    ];
+
+    "def:DeployStaticAssets" [
+      label=< <b>DeployStaticAssets</b> >,
+      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
+      style="filled,rounded"
+    ];
+  }
+
+  subgraph cluster_parsing {
+    label="parsing";
+    labelloc="t";
+    labeljust="l";
+    color="#444444";
+
+    "var:rawFile" [
+      label=< <b>rawFile</b><br/><font point-size="10">: SourceFile</font> >,
+      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
+      style="filled,rounded"
+    ];
+
+    "def:ExtractMetadata" [
+      label=< <b>ExtractMetadata</b> >,
+      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
+      style="filled,rounded"
+    ];
+
+    "var:processedArt" [
+      label=< <b>processedArt</b><br/><font point-size="10">: Article</font> >,
+      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
+      style="filled,rounded"
+    ];
+  }
+
+  subgraph cluster_generation {
+    label="generation";
+    labelloc="t";
+    labeljust="l";
+    color="#444444";
+
+    "def:RenderPage" [
+      label=< <b>RenderPage</b> >,
+      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
+      style="filled,rounded"
+    ];
+
+    "var:finalHtml" [
+      label=< <b>finalHtml</b><br/><font point-size="10">: String</font> >,
+      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
+      style="filled,rounded"
+    ];
+  }
+
+  // --- Edges (force-directed, directional) ---
+  "var:appSettings" -> "def:PrepareOutput"
+    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
+
+  "def:PrepareOutput" -> "def:DeployStaticAssets"
+    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
+
+  "var:rawFile" -> "def:ExtractMetadata"
+    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
+
+  "def:ExtractMetadata" -> "var:processedArt"
+    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
+
+  "var:processedArt" -> "def:RenderPage"
+    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
+
+  "def:RenderPage" -> "var:finalHtml"
+    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
+}

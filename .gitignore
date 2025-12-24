@@ -28,5 +28,4 @@ graph.json
 editors/vscode/out/extension.js
 *.png
 *.svg
-*.dot
 *.html

@@ -2,10 +2,11 @@ use crate::models::{Graph, Kind};
 use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Generates a force-directed architectural graph with:
+/// Force-directed architectural graph with:
 /// - semantic edge strength
 /// - directional arrows
-/// - soft architectural groups
+/// - soft groups
+/// - semantic color coding
 pub fn to_dot(graph: &Graph) -> String {
     let mut out = String::new();
 
@@ -13,11 +14,22 @@ pub fn to_dot(graph: &Graph) -> String {
     writeln!(out, "  layout=neato;").unwrap();
     writeln!(out, "  overlap=false;").unwrap();
     writeln!(out, "  splines=true;").unwrap();
-    writeln!(out, "  node [shape=box, fontname=\"Inter\"];").unwrap();
+    writeln!(
+        out,
+        "  node [shape=box, fontname=\"Inter\", style=rounded];"
+    )
+    .unwrap();
+
+    // Helper: visible nodes only
+    let is_visible = |id: &str| {
+        graph
+            .nodes
+            .iter()
+            .any(|n| n.id == id && !matches!(n.kind, Kind::Data | Kind::Error))
+    };
 
     // --- Group nodes by architectural group ---
     let mut groups: HashMap<&str, Vec<&crate::models::Node>> = HashMap::new();
-
     for n in &graph.nodes {
         if matches!(n.kind, Kind::Data | Kind::Error) {
             continue;
@@ -25,26 +37,38 @@ pub fn to_dot(graph: &Graph) -> String {
         groups.entry(&n.group).or_default().push(n);
     }
 
-    // --- Emit grouped nodes ---
+    // --- Emit groups + nodes ---
     for (group, nodes) in groups {
         let clustered = group != "global";
 
         if clustered {
             writeln!(out, "  subgraph cluster_{} {{", sanitize(group)).unwrap();
             writeln!(out, "    label=\"{}\";", group).unwrap();
-            writeln!(out, "    style=rounded;").unwrap();
+            writeln!(out, "    labelloc=\"t\";").unwrap();
+            writeln!(out, "    labeljust=\"l\";").unwrap();
             writeln!(out, "    color=\"#444444\";").unwrap();
         }
 
         for n in nodes {
             let label = node_label(n);
+            let (fill, border, font) = node_colors(n.kind);
 
             let extra = match n.kind {
-                Kind::Logic => "shape=octagon,color=\"#cc6666\",fontcolor=\"#cc6666\"",
+                Kind::Logic => "shape=octagon",
                 _ => "",
             };
 
-            writeln!(out, "    \"{}\" [label=<{}> {}];", n.id, label, extra).unwrap();
+            writeln!(
+                out,
+                "    \"{}\" [label=<{}>, fillcolor=\"{}\", color=\"{}\", fontcolor=\"{}\", style=\"filled,rounded\" {}];",
+                n.id,
+                label,
+                fill,
+                border,
+                font,
+                extra
+            )
+            .unwrap();
         }
 
         if clustered {
@@ -54,12 +78,16 @@ pub fn to_dot(graph: &Graph) -> String {
 
     // --- Directed edges with force physics ---
     for e in &graph.edges {
+        if !is_visible(&e.source) || !is_visible(&e.target) {
+            continue;
+        }
+
         let (weight, len, width, style) = edge_physics(&e.relation);
 
         writeln!(
             out,
             "  \"{}\" -> \"{}\" \
-             [weight={}, len={}, penwidth={}, style=\"{}\", constraint=false];",
+             [weight={}, len={}, penwidth={}, style=\"{}\", constraint=false, color=\"#888888\"];",
             e.source, e.target, weight, len, width, style
         )
         .unwrap();
@@ -67,6 +95,16 @@ pub fn to_dot(graph: &Graph) -> String {
 
     writeln!(out, "}}").unwrap();
     out
+}
+
+/// Semantic color palette per node kind.
+fn node_colors(kind: Kind) -> (&'static str, &'static str, &'static str) {
+    match kind {
+        Kind::Variable => ("#7ec97e", "#4f9f4f", "#1f3d1f"), // green
+        Kind::Function => ("#6b88a6", "#4a657f", "#1e2d3a"), // blue-gray
+        Kind::Logic => ("#f2dede", "#cc6666", "#8b2e2e"),    // control
+        _ => ("#e0e0e0", "#999999", "#333333"),              // neutral
+    }
 }
 
 /// Maps architectural semantics to force + visual properties.
@@ -94,8 +132,6 @@ fn node_label(n: &crate::models::Node) -> String {
                 escape(ty)
             )
         }
-        Kind::Function => format!("<b>{}</b>", escape(&n.label)),
-        Kind::Logic => format!("<b>{}</b>", escape(&n.label)),
         _ => format!("<b>{}</b>", escape(&n.label)),
     }
 }
