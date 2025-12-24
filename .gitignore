@@ -27,3 +27,5 @@ codebase_excluded_paths.txt
 architecture.png
 graph.json
 editors/vscode/out/extension.js
+architecture.svg
+*.dot
