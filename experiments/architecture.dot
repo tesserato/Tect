@@ -1,91 +1,52 @@
-digraph Tect {
-  node [shape=box, fontname="Inter", style=rounded];
-
-  subgraph cluster_initialization {
-    label="initialization";
-    labelloc="t";
-    labeljust="l";
-    color="#444444";
-
-    "var:appSettings" [
-      label=< <b>appSettings</b><br/><font point-size="10">: Settings</font> >,
-      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
-      style="filled,rounded"
+digraph {
+    "configuration" [
+        label = "configuration\nHolds the settings";
+        color="green";
     ];
 
-    "def:PrepareOutput" [
-      label=< <b>PrepareOutput</b> >,
-      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
-      style="filled,rounded"
+    "pathToConfiguration" [
+        label = "path To Configuration\nPath to a configuration file";
+        color="green";
     ];
 
-    "def:DeployStaticAssets" [
-      label=< <b>DeployStaticAssets</b> >,
-      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
-      style="filled,rounded"
-    ];
-  }
-
-  subgraph cluster_parsing {
-    label="parsing";
-    labelloc="t";
-    labeljust="l";
-    color="#444444";
-
-    "var:rawFile" [
-      label=< <b>rawFile</b><br/><font point-size="10">: SourceFile</font> >,
-      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
-      style="filled,rounded"
+    "initialCommand" [
+        label = "initial Command";
+        color="green";
     ];
 
-    "def:ExtractMetadata" [
-      label=< <b>ExtractMetadata</b> >,
-      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
-      style="filled,rounded"
+    "initialCommandMalformedError" [
+        color="red";
+        label="initial Command Malformed Error";
     ];
 
-    "var:processedArt" [
-      label=< <b>processedArt</b><br/><font point-size="10">: Article</font> >,
-      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
-      style="filled,rounded"
-    ];
-  }
-
-  subgraph cluster_generation {
-    label="generation";
-    labelloc="t";
-    labeljust="l";
-    color="#444444";
-
-    "def:RenderPage" [
-      label=< <b>RenderPage</b> >,
-      fillcolor="#6b88a6", color="#4a657f", fontcolor="#1e2d3a",
-      style="filled,rounded"
+    "readConfiguration" [
+        label = "read Configuration\nReads the configuration from file";
+        color="blue";
     ];
 
-    "var:finalHtml" [
-      label=< <b>finalHtml</b><br/><font point-size="10">: String</font> >,
-      fillcolor="#7ec97e", color="#4f9f4f", fontcolor="#1f3d1f",
-      style="filled,rounded"
+    "processInitialCommand" [
+        label="process Initial Command\nMatches the initial command to actions";
+        color="blue";
     ];
-  }
 
-  // --- Edges (force-directed, directional) ---
-  "var:appSettings" -> "def:PrepareOutput"
-    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
+    "fileNotFoundError" [
+        label="file Not Found Error";
+        color="red";
+    ];
 
-  "def:PrepareOutput" -> "def:DeployStaticAssets"
-    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
+    "configurationMalformedError" [
+        label="configuration Malformed Error";
+        color="red";
+    ];
 
-  "var:rawFile" -> "def:ExtractMetadata"
-    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
+    initialCommand -> processInitialCommand;
+    processInitialCommand -> configuration;
+    processInitialCommand -> pathToConfiguration;
+    processInitialCommand -> initialCommandMalformedError;
 
-  "def:ExtractMetadata" -> "var:processedArt"
-    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
-
-  "var:processedArt" -> "def:RenderPage"
-    [weight=4, len=2, penwidth=1.5, constraint=false, color="#888888"];
-
-  "def:RenderPage" -> "var:finalHtml"
-    [weight=10, len=1, penwidth=2.5, constraint=false, color="#888888"];
+    pathToConfiguration -> readConfiguration;
+    readConfiguration -> configuration;
+    readConfiguration -> fileNotFoundError;
+    readConfiguration -> configurationMalformedError;
+    
 }

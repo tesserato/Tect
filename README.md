@@ -9,22 +9,31 @@ A meta-programming language for reasoning about code architecture.
 - [ ] show errors, etc: make sure when parsing is broken
 
 
-I am thinking of adding a new type called group, to let the user simulate structs, oop classes, etc. 
+# kinds
 
-Usage:
+data
+error recuperable errors : warning if not dealt with
+group
+function
+flow?
+ok? 
+panic? Irrecuperable error, aborts program
 
-group Group_one
-group Group_two
+# keywords
+loop?
+match?
 
-Group_one authRes = Authenticate(userInput) # marks authRes as belonging to Group_one
+# types
 
-errors = Group_two{
-    DatabaseOffline,
-    UserNotFound
-}
+data Table
+data pathString
+data BooleanShouldSave
 
-including group, what is the exact name of what we have?
+error FileNotFound
+error 
+# functions
 
-group, function, error and data are types, right?
+receive errors and or data and can output multiple combinations of errors and data
 
-What about the rest?
+function loadTable(pathString) -> Table | FileNotFound
+function saveTable(Table, pathString) -> ok | panic
