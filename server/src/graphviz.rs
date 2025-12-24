@@ -1,44 +1,66 @@
 use crate::models::{Graph, Kind};
+use std::collections::HashMap;
 use std::fmt::Write;
 
-/// Generates a force-directed Graphviz DOT graph.
-///
-/// The layout is driven by semantic edge strength so that
-/// nodes self-organize based on interaction density.
+/// Generates a force-directed architectural graph with:
+/// - semantic edge strength
+/// - directional arrows
+/// - soft architectural groups
 pub fn to_dot(graph: &Graph) -> String {
     let mut out = String::new();
 
-    writeln!(out, "graph Tect {{").unwrap();
+    writeln!(out, "digraph Tect {{").unwrap();
     writeln!(out, "  layout=neato;").unwrap();
     writeln!(out, "  overlap=false;").unwrap();
     writeln!(out, "  splines=true;").unwrap();
     writeln!(out, "  node [shape=box, fontname=\"Inter\"];").unwrap();
 
-    // --- Nodes ---
+    // --- Group nodes by architectural group ---
+    let mut groups: HashMap<&str, Vec<&crate::models::Node>> = HashMap::new();
+
     for n in &graph.nodes {
-        // Hide pure type definitions
         if matches!(n.kind, Kind::Data | Kind::Error) {
             continue;
         }
-
-        let label = node_label(n);
-
-        let extra = match n.kind {
-            Kind::Logic => "shape=octagon,color=\"#cc6666\",fontcolor=\"#cc6666\"",
-            _ => "",
-        };
-
-        writeln!(out, "  \"{}\" [label=<{}> {}];", n.id, label, extra).unwrap();
+        groups.entry(&n.group).or_default().push(n);
     }
 
-    // --- Edges (force-driven) ---
+    // --- Emit grouped nodes ---
+    for (group, nodes) in groups {
+        let clustered = group != "global";
+
+        if clustered {
+            writeln!(out, "  subgraph cluster_{} {{", sanitize(group)).unwrap();
+            writeln!(out, "    label=\"{}\";", group).unwrap();
+            writeln!(out, "    style=rounded;").unwrap();
+            writeln!(out, "    color=\"#444444\";").unwrap();
+        }
+
+        for n in nodes {
+            let label = node_label(n);
+
+            let extra = match n.kind {
+                Kind::Logic => "shape=octagon,color=\"#cc6666\",fontcolor=\"#cc6666\"",
+                _ => "",
+            };
+
+            writeln!(out, "    \"{}\" [label=<{}> {}];", n.id, label, extra).unwrap();
+        }
+
+        if clustered {
+            writeln!(out, "  }}").unwrap();
+        }
+    }
+
+    // --- Directed edges with force physics ---
     for e in &graph.edges {
-        let (weight, len, width) = edge_physics(&e.relation);
+        let (weight, len, width, style) = edge_physics(&e.relation);
 
         writeln!(
             out,
-            "  \"{}\" -- \"{}\" [weight={}, len={}, penwidth={}, constraint=false];",
-            e.source, e.target, weight, len, width
+            "  \"{}\" -> \"{}\" \
+             [weight={}, len={}, penwidth={}, style=\"{}\", constraint=false];",
+            e.source, e.target, weight, len, width, style
         )
         .unwrap();
     }
@@ -47,14 +69,14 @@ pub fn to_dot(graph: &Graph) -> String {
     out
 }
 
-/// Maps architectural semantics to physical force parameters.
-fn edge_physics(rel: &str) -> (f32, f32, f32) {
+/// Maps architectural semantics to force + visual properties.
+fn edge_physics(rel: &str) -> (f32, f32, f32, &'static str) {
     match rel {
-        "result_flow" => (10.0, 1.0, 2.5),
-        "argument_flow" => (4.0, 2.0, 1.5),
-        "call" => (2.0, 3.0, 1.0),
-        "control_flow" | "break" => (1.0, 4.0, 0.8),
-        _ => (1.0, 4.0, 0.8),
+        "result_flow" => (10.0, 1.0, 2.5, "solid"),
+        "argument_flow" => (4.0, 2.0, 1.5, "solid"),
+        "call" => (2.0, 3.0, 1.0, "dotted"),
+        "control_flow" | "break" => (1.0, 4.0, 0.8, "dashed"),
+        _ => (1.0, 4.0, 0.8, "dotted"),
     }
 }
 
@@ -82,4 +104,10 @@ fn escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+fn sanitize(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
 }
