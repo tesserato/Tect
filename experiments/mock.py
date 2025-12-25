@@ -51,6 +51,13 @@ LoadTemplates = Function(
     produces=[SiteTemplates],
 )
 
+LoadSource = Function(
+    name="LoadSource",
+    consumes=[SourceFile],
+    produces=[],
+)
+
+
 ParseSource = Function(
     name="ParseSource",
     consumes=[SourceFile],
@@ -69,7 +76,6 @@ WriteHTML = Function(
     produces=[],
 )
 
-pool = [InitialCommand]
 
 functions = [
     ProcessInitialCommand,
@@ -79,6 +85,7 @@ functions = [
     RenderArticle,
     WriteHTML,
 ]
+pool = functions[0].consumes  # Start with InitialCommand
 
 for func in functions:
     for req in func.consumes:
@@ -86,5 +93,6 @@ for func in functions:
             raise ValueError(f"Unsatisfied dependency: {req.name} for function {func.name}")
         else:
             pool.remove(req)
-    pool.append(func.produces)
+    pool.extend(func.produces)
     print(pool)
+    # exit()
