@@ -142,105 +142,168 @@ validate_architecture(my_initial_data, my_flow)
 
 import uuid
 from pyvis.network import Network
-import networkx as nx
+from typing import List
+from pydantic import BaseModel
 
-# --- 1. Enhanced Types to support "Instances" ---
-class Token:
-    """A specific instance of a Type in the pool at a specific time."""
+
+# --- 1. Base Classes ---
+class Type(BaseModel):
+    name: str
+    is_mutable: bool = True
+
+    def __hash__(self):
+        return hash((self.name, self.is_mutable))
+
+    def __eq__(self, other):
+        if not isinstance(other, Type):
+            return False
+        return self.name == other.name and self.is_mutable == other.is_mutable
+
+
+class Function(BaseModel):
+    name: str
+    consumes: List[Type]
+    produces: List[Type]
+
+
+class TokenInstance:
     def __init__(self, data_type):
-        self.id = str(uuid.uuid4())[:8]
-        self.data_type = data_type
+        self.id = f"node_{str(uuid.uuid4())[:8]}"
         self.name = data_type.name
         self.is_mutable = data_type.is_mutable
 
-# --- 2. The Logic-Aware Validator ---
-def validate_and_trace(initial_types, flow):
-    # The pool now contains unique Token objects
-    pool = [Token(t) for t in initial_types]
-    
-    # We record events for the graph
-    trace_events = [] # List of (function_name, consumed_tokens, produced_tokens)
+
+# --- 2. Architecture Trace Engine ---
+def validate_and_trace(initial_types: List[Type], flow: List[Function]):
+    pool = [TokenInstance(t) for t in initial_types]
+    trace_events = []
 
     for func in flow:
-        consumed = []
-        # Find the specific tokens in the pool
+        consumed_tokens = []
         for req_type in func.consumes:
-            # We look for a token matching this type name
             token = next((t for t in pool if t.name == req_type.name), None)
-            
             if not token:
-                raise ValueError(f"Missing {req_type.name} for {func.name}")
-            
-            consumed.append(token)
+                raise ValueError(f"❌ Missing '{req_type.name}' for '{func.name}'")
+
+            consumed_tokens.append(token)
             if token.is_mutable:
                 pool.remove(token)
 
-        # Produce new tokens
-        produced = []
+        produced_tokens = []
         for prod_type in func.produces:
-            # Engine Fix: Don't duplicate immutable state instances
             existing = next((t for t in pool if t.name == prod_type.name), None)
             if not prod_type.is_mutable and existing:
-                produced.append(existing)
+                produced_tokens.append(existing)
             else:
-                new_token = Token(prod_type)
-                pool.append(new_token)
-                produced.append(new_token)
-        
-        trace_events.append((func.name, consumed, produced))
-    
+                new_t = TokenInstance(prod_type)
+                pool.append(new_t)
+                produced_tokens.append(new_t)
+
+        trace_events.append((func.name, consumed_tokens, produced_tokens))
+
     return trace_events
 
-# --- 3. The Visualizer ---
-def generate_logic_graph(trace_events, filename="logic_trace.html"):
-    net = Network(height="800px", width="100%", bgcolor="#1a1a1a", font_color="white", directed=True)
-    
-    # Track which nodes we've already added
-    added_tokens = set()
+
+# --- 3. The "Loose" Visualizer ---
+def generate_loose_graph(trace_events, filename="architecture_loose.html"):
+    # We use a dark background to make the "constellation" pop
+    net = Network(
+        height="900px",
+        width="100%",
+        bgcolor="#121212",
+        font_color="white",
+        directed=True,
+    )
+    added_node_ids = set()
 
     for i, (func_name, consumed, produced) in enumerate(trace_events):
-        # Create a unique node for this specific function execution
-        func_node_id = f"{func_name}_{i}"
-        net.add_node(func_node_id, label=func_name, shape="diamond", color="#6fb1fc", size=20)
+        func_node_id = f"func_{i}"
 
-        # Connect consumed tokens to this function
+        # Functions are the "logic anchors" (Diamonds)
+        net.add_node(
+            func_node_id,
+            label=func_name,
+            shape="diamond",
+            color="#6fb1fc",
+            size=25,
+            mass=2,
+        )
+
+        # Data and Errors are the "resources" (Simple Dots)
+        for t in consumed + produced:
+            if t.id not in added_node_ids:
+                # Color code purely based on type (Error=Red, Immutable=Yellow, Mutable=Green)
+                color = "#8de3a1"  # Default Green
+                if "Error" in t.name:
+                    color = "#ff7575"
+                elif not t.is_mutable:
+                    color = "#fccb6f"
+
+                # Simplified: No shapes like square/star, no "START/FINAL" text
+                net.add_node(t.id, label=t.name, shape="dot", color=color, size=15)
+                added_node_ids.add(t.id)
+
+        # Create the springs
         for t in consumed:
-            if t.id not in added_tokens:
-                color = "#ff7575" if "Error" in t.name else "#8de3a1"
-                if not t.is_mutable: color = "#fccb6f"
-                
-                net.add_node(t.id, label=t.name, shape="dot", color=color, size=10)
-                added_tokens.add(t.id)
-            
-            net.add_edge(t.id, func_node_id, color="#555555")
-
-        # Connect function to produced tokens
+            net.add_edge(t.id, func_node_id, color="#444444", width=1)
         for t in produced:
-            if t.id not in added_tokens:
-                color = "#ff7575" if "Error" in t.name else "#8de3a1"
-                if not t.is_mutable: color = "#fccb6f"
+            net.add_edge(func_node_id, t.id, color="#00ffcc", width=2)
 
-                net.add_node(t.id, label=t.name, shape="dot", color=color, size=10)
-                added_tokens.add(t.id)
-            
-            net.add_edge(func_node_id, t.id, color="#00ffcc")
-
-    # Physics settings to make "related stuff" group together
+    # Use BarnesHut physics for a loose, organic grouping
     net.set_options("""
     var options = {
       "physics": {
-        "forceAtlas2Based": {
-          "gravitationalConstant": -50,
-          "centralGravity": 0.01,
-          "springLength": 100,
-          "springStrength": 0.08
+        "barnesHut": {
+          "gravitationalConstant": -10000,
+          "centralGravity": 0.2,
+          "springLength": 150,
+          "springStrength": 0.05,
+          "damping": 0.09,
+          "avoidOverlap": 0.5
         },
-        "solver": "forceAtlas2Based"
+        "minVelocity": 0.75
+      },
+      "edges": {
+        "smooth": {
+          "type": "continuous",
+          "forceDirection": "none"
+        }
       }
     }
     """)
-    net.show(filename, notebook=False)
 
-# --- 4. Run ---
+    net.show(filename, notebook=False)
+    print(f"Loose graph generated: {filename}")
+
+
+# --- 4. Setup & Run ---
+InitialCommand = Type(name="InitialCommand")
+PathToConfiguration = Type(name="PathToConfiguration")
+SourceFile = Type(name="SourceFile")
+Article = Type(name="Article")
+HTML = Type(name="HTML")
+Settings = Type(name="Settings", is_mutable=False)
+SiteTemplates = Type(name="SiteTemplates", is_mutable=False)
+FSError = Type(name="FileSystemError")
+
+my_flow = [
+    Function(
+        name="ProcessInitialCommand",
+        consumes=[InitialCommand],
+        produces=[Settings, PathToConfiguration],
+    ),
+    Function(
+        name="LoadConfiguration", consumes=[PathToConfiguration], produces=[Settings]
+    ),
+    Function(name="LoadTemplates", consumes=[Settings], produces=[SiteTemplates]),
+    Function(name="ParseSource", consumes=[SourceFile], produces=[Article, FSError]),
+    Function(
+        name="RenderArticle",
+        consumes=[Article, SiteTemplates, Settings],
+        produces=[HTML],
+    ),
+    Function(name="WriteHTML", consumes=[HTML], produces=[FSError]),
+]
+
 events = validate_and_trace([InitialCommand, SourceFile], my_flow)
-generate_logic_graph(events)
+generate_loose_graph(events)
