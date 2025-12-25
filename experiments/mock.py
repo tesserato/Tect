@@ -9,32 +9,32 @@ class Type(BaseModel):
     name: str
     is_mutable: bool = True
 
-    def __hash__(self):
-        return hash((self.name, self.is_mutable))
 
-    def __eq__(self, other):
-        return (
-            isinstance(other, Type)
-            and self.name == other.name
-            and self.is_mutable == other.is_mutable
-        )
+class Output(BaseModel):
+    """Wraps a Type with metadata about whether it's a collection."""
+
+    data_type: Type
+    is_collection: bool = False
 
 
 class Function(BaseModel):
     name: str
     consumes: List[Type]
-    produces: List[Type]
+    produces: List[Output]  # Now uses Output wrapper
 
 
 class TokenInstance:
-    def __init__(self, data_type: Type, is_input: bool = False):
+    def __init__(
+        self, data_type: Type, is_collection: bool = False, is_input: bool = False
+    ):
         self.id = f"node_{uuid.uuid4().hex[:8]}"
         self.name = data_type.name
         self.is_mutable = data_type.is_mutable
+        self.is_collection = is_collection
         self.is_input = is_input
 
 
-# --- 2. Original Definitions & Flow ---
+# --- 2. Definitions with Multiplicity ---
 InitialCommand = Type(name="InitialCommand")
 PathToConfiguration = Type(name="PathToConfiguration")
 SourceFile = Type(name="SourceFile")
@@ -47,24 +47,45 @@ FSError = Type(name="FileSystemError")
 ProcessInitialCommand = Function(
     name="ProcessInitialCommand",
     consumes=[InitialCommand],
-    produces=[Settings, PathToConfiguration],
+    produces=[Output(data_type=Settings), Output(data_type=PathToConfiguration)],
 )
+
 LoadConfiguration = Function(
-    name="LoadConfiguration", consumes=[PathToConfiguration], produces=[Settings]
+    name="LoadConfiguration",
+    consumes=[PathToConfiguration],
+    produces=[Output(data_type=Settings)],
 )
+
 LoadTemplates = Function(
-    name="LoadTemplates", consumes=[Settings], produces=[SiteTemplates]
+    name="LoadTemplates",
+    consumes=[Settings],
+    produces=[Output(data_type=SiteTemplates)],
 )
+
 FindSourceFiles = Function(
-    name="FindSourceFiles", consumes=[Settings], produces=[SourceFile, FSError]
+    name="FindSourceFiles",
+    consumes=[Settings],
+    produces=[
+        Output(data_type=SourceFile, is_collection=True),
+        Output(data_type=FSError),
+    ],
 )
+
 ParseSource = Function(
-    name="ParseSource", consumes=[SourceFile], produces=[Article, FSError]
+    name="ParseSource",
+    consumes=[SourceFile],
+    produces=[Output(data_type=Article), Output(data_type=FSError)],
 )
+
 RenderArticle = Function(
-    name="RenderArticle", consumes=[Article, SiteTemplates, Settings], produces=[HTML]
+    name="RenderArticle",
+    consumes=[Article, SiteTemplates, Settings],
+    produces=[Output(data_type=HTML)],
 )
-WriteHTML = Function(name="WriteHTML", consumes=[HTML], produces=[FSError])
+
+WriteHTML = Function(
+    name="WriteHTML", consumes=[HTML], produces=[Output(data_type=FSError)]
+)
 
 my_flow = [
     ProcessInitialCommand,
@@ -77,39 +98,39 @@ my_flow = [
 ]
 
 
-# --- 3. Logic Engine (Generates IR) ---
+# --- 3. Logic Engine with Propagation ---
 def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
-    """
-    Validates the flow and creates an Intermediate Representation.
-    The starting pool is derived automatically from the first function's requirements.
-    """
-    if not flow:
-        raise ValueError("Flow cannot be empty.")
-
     pool = [TokenInstance(t, is_input=True) for t in flow[0].consumes]
     ir = []
 
-    print(f"{'='*20} PROCESSING ARCHITECTURE {'='*20}")
-
     for i, func in enumerate(flow, 1):
         consumed = []
+        is_iterative_step = False  # Tracks if this function is running in a loop
+
         for req in func.consumes:
             token = next((t for t in pool if t.name == req.name), None)
             if not token:
-                raise ValueError(
-                    f"❌ Error at Step {i}: '{func.name}' requires '{req.name}'"
-                )
+                raise ValueError(f"Missing {req.name}")
+
+            # If any input is a collection, the function runs multiple times
+            if token.is_collection:
+                is_iterative_step = True
+
             consumed.append(token)
             if token.is_mutable:
                 pool.remove(token)
 
         produced = []
-        for prod in func.produces:
-            existing = next((t for t in pool if t.name == prod.name), None)
-            if not prod.is_mutable and existing:
+        for out in func.produces:
+            # Engine Fix for State
+            existing = next((t for t in pool if t.name == out.data_type.name), None)
+            if not out.data_type.is_mutable and existing:
                 produced.append(existing)
             else:
-                new_token = TokenInstance(prod)
+                # PROPAGATION: Output is a collection if the function explicitly says so
+                # OR if the function is currently iterating over a consumed collection.
+                is_coll = out.is_collection or is_iterative_step
+                new_token = TokenInstance(out.data_type, is_collection=is_coll)
                 pool.append(new_token)
                 produced.append(new_token)
 
@@ -119,15 +140,14 @@ def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
                 "function": func.name,
                 "consumed": consumed,
                 "produced": produced,
+                "is_iterative": is_iterative_step,
             }
         )
-        print(f"Validated: {func.name}")
-
     return ir
 
 
-# --- 4. Visualizer (Consumes IR) ---
-def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
+# --- 4. Visualizer (Multiplicity Styles) ---
+def generate_graph(ir: List[Dict[str, Any]], filename="architecture_multi.html"):
     net = Network(
         height="900px",
         width="100%",
@@ -139,10 +159,17 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
     added_tokens = set()
 
     for entry in ir:
-        f_name = entry["function"]
         f_id = f"f_{entry['step']}"
 
-        net.add_node(f_id, label=f_name, shape="diamond", color="#6fb1fc", size=25)
+        # Iterative functions get a thicker border (shadow)
+        net.add_node(
+            f_id,
+            label=entry["function"],
+            shape="diamond",
+            color="#6fb1fc",
+            size=25,
+            borderWidth=4 if entry["is_iterative"] else 1,
+        )
 
         for t in entry["consumed"] + entry["produced"]:
             if t.id not in added_tokens:
@@ -151,40 +178,46 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
                     if "Error" in t.name
                     else ("#fccb6f" if not t.is_mutable else "#8de3a1")
                 )
+
+                # STYLING: Array nodes get a massive border to look "stacked"
                 node_params = {
-                    "label": t.name,
+                    "label": f"{t.name}[]" if t.is_collection else t.name,
                     "shape": "dot",
                     "color": color,
-                    "size": 15,
+                    "size": 22 if t.is_collection else 15,
+                    "borderWidth": 7 if t.is_collection else 1,
+                    "color": {"border": "#ffffff", "background": color}
+                    if t.is_collection
+                    else color,
                 }
-                # if t.is_input:
-                    # node_params.update({"x": -600, "fixed": True})
-                    # node_params.update({"mass": 10})
+                if t.is_input:
+                    node_params.update({"x": -600, "fixed": True, "mass": 5})
                 net.add_node(t.id, **node_params)
                 added_tokens.add(t.id)
 
-        # Implementation: Only edges exiting from immutable data are gray
+        # STYLING: Multi-edges (====>) are thicker and dashed
         for t in entry["consumed"]:
-            # If data is immutable (is_mutable=False), use gray. Else, use green flow color.
-            edge_color = "#444444" if not t.is_mutable else "#8de3a1"
-            net.add_edge(t.id, f_id, color=edge_color)
+            edge_params = {"color": "#444444" if not t.is_mutable else "#8de3a1"}
+            if t.is_collection:
+                edge_params.update(
+                    {"width": 7, "dashes": [10, 2]}
+                )  # Double-arrow effect
+            net.add_edge(t.id, f_id, **edge_params)
 
-        # Edges exiting functions are always colored (aqua/green)
         for t in entry["produced"]:
-            net.add_edge(f_id, t.id, color="#00ffcc")
+            edge_params = {"color": "#00ffcc"}
+            if t.is_collection:
+                edge_params.update(
+                    {"width": 7, "dashes": [10, 2]}
+                )  # Double-arrow effect
+            net.add_edge(f_id, t.id, **edge_params)
 
-    net.set_options("""
-    var options = {
-      "physics": {
-        "barnesHut": { "gravitationalConstant": -9999, "springLength": 1,"avoidOverlap": 1 },
-        "minVelocity": 0.75
-      }
-    }
-    """)
+    net.set_options(
+        '{"physics": {"barnesHut": {"gravitationalConstant": -15000, "avoidOverlap": 1}}}'
+    )
     net.show(filename, notebook=False)
-    print(f"\nVisual graph generated: {filename}")
 
 
-# --- 5. Execution ---
+# --- 5. Run ---
 ir_data = process_flow(my_flow)
 generate_graph(ir_data)
