@@ -138,83 +138,109 @@ my_initial_data = my_flow[0].consumes
 validate_architecture(my_initial_data, my_flow)
 
 
-# Graph Visualization (Optional)
+# Graph Visualization
 
+import uuid
 from pyvis.network import Network
 import networkx as nx
 
+# --- 1. Enhanced Types to support "Instances" ---
+class Token:
+    """A specific instance of a Type in the pool at a specific time."""
+    def __init__(self, data_type):
+        self.id = str(uuid.uuid4())[:8]
+        self.data_type = data_type
+        self.name = data_type.name
+        self.is_mutable = data_type.is_mutable
 
-def generate_visual_graph(flow, filename="architecture_graph.html"):
-    # Create a NetworkX directed graph
-    G = nx.DiGraph()
+# --- 2. The Logic-Aware Validator ---
+def validate_and_trace(initial_types, flow):
+    # The pool now contains unique Token objects
+    pool = [Token(t) for t in initial_types]
+    
+    # We record events for the graph
+    trace_events = [] # List of (function_name, consumed_tokens, produced_tokens)
 
-    # Define visual styles for different categories
-    styles = {
-        "function": {"color": "#6fb1fc", "shape": "diamond", "size": 25},
-        "mutable_data": {"color": "#8de3a1", "shape": "dot", "size": 15},
-        "immutable_data": {"color": "#fccb6f", "shape": "triangle", "size": 15},
-        "error": {"color": "#ff7575", "shape": "star", "size": 20},
-    }
-
-    def get_type_style(t):
-        if "Error" in t.name:
-            return styles["error"]
-        return styles["mutable_data"] if t.is_mutable else styles["immutable_data"]
-
-    # Process each function in the flow
     for func in flow:
-        # Add Function Node
-        G.add_node(func.name, label=func.name, title="Function", **styles["function"])
+        consumed = []
+        # Find the specific tokens in the pool
+        for req_type in func.consumes:
+            # We look for a token matching this type name
+            token = next((t for t in pool if t.name == req_type.name), None)
+            
+            if not token:
+                raise ValueError(f"Missing {req_type.name} for {func.name}")
+            
+            consumed.append(token)
+            if token.is_mutable:
+                pool.remove(token)
 
-        # Add Consumption Edges (Type -> Function)
-        for t in func.consumes:
-            G.add_node(
-                t.name,
-                label=t.name,
-                title=f"Type ({'Mutable' if t.is_mutable else 'Const'})",
-                **get_type_style(t),
-            )
-            G.add_edge(t.name, func.name, weight=1, color="#aaaaaa")
+        # Produce new tokens
+        produced = []
+        for prod_type in func.produces:
+            # Engine Fix: Don't duplicate immutable state instances
+            existing = next((t for t in pool if t.name == prod_type.name), None)
+            if not prod_type.is_mutable and existing:
+                produced.append(existing)
+            else:
+                new_token = Token(prod_type)
+                pool.append(new_token)
+                produced.append(new_token)
+        
+        trace_events.append((func.name, consumed, produced))
+    
+    return trace_events
 
-        # Add Production Edges (Function -> Type)
-        for t in func.produces:
-            G.add_node(
-                t.name,
-                label=t.name,
-                title=f"Type ({'Mutable' if t.is_mutable else 'Const'})",
-                **get_type_style(t),
-            )
-            G.add_edge(func.name, t.name, weight=1, color="#555555")
+# --- 3. The Visualizer ---
+def generate_logic_graph(trace_events, filename="logic_trace.html"):
+    net = Network(height="800px", width="100%", bgcolor="#1a1a1a", font_color="white", directed=True)
+    
+    # Track which nodes we've already added
+    added_tokens = set()
 
-    # Convert to PyVis for the force-directed layout
-    net = Network(
-        height="750px",
-        width="100%",
-        bgcolor="#222222",
-        font_color="white",
-        directed=True,
-    )
-    net.from_nx(G)
+    for i, (func_name, consumed, produced) in enumerate(trace_events):
+        # Create a unique node for this specific function execution
+        func_node_id = f"{func_name}_{i}"
+        net.add_node(func_node_id, label=func_name, shape="diamond", color="#6fb1fc", size=20)
 
-    # Configure Physics for "Natural Grouping"
+        # Connect consumed tokens to this function
+        for t in consumed:
+            if t.id not in added_tokens:
+                color = "#ff7575" if "Error" in t.name else "#8de3a1"
+                if not t.is_mutable: color = "#fccb6f"
+                
+                net.add_node(t.id, label=t.name, shape="dot", color=color, size=10)
+                added_tokens.add(t.id)
+            
+            net.add_edge(t.id, func_node_id, color="#555555")
+
+        # Connect function to produced tokens
+        for t in produced:
+            if t.id not in added_tokens:
+                color = "#ff7575" if "Error" in t.name else "#8de3a1"
+                if not t.is_mutable: color = "#fccb6f"
+
+                net.add_node(t.id, label=t.name, shape="dot", color=color, size=10)
+                added_tokens.add(t.id)
+            
+            net.add_edge(func_node_id, t.id, color="#00ffcc")
+
+    # Physics settings to make "related stuff" group together
     net.set_options("""
     var options = {
       "physics": {
-        "barnesHut": {
-          "gravitationalConstant": -15000,
-          "centralGravity": 0.3,
-          "springLength": 150,
-          "springStrength": 0.05,
-          "damping": 0.09
+        "forceAtlas2Based": {
+          "gravitationalConstant": -50,
+          "centralGravity": 0.01,
+          "springLength": 100,
+          "springStrength": 0.08
         },
-        "minVelocity": 0.75
+        "solver": "forceAtlas2Based"
       }
     }
     """)
-
     net.show(filename, notebook=False)
-    print(f"Graph generated: {filename}")
 
-
-# Run it with your existing 'my_flow'
-generate_visual_graph(my_flow)
+# --- 4. Run ---
+events = validate_and_trace([InitialCommand, SourceFile], my_flow)
+generate_logic_graph(events)
