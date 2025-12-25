@@ -1,8 +1,39 @@
 digraph {
+    // subgraph "test" {
+    //     label="match initialCommand";
+    //     style="rounded,dashed";
+
+    //     "configuration" [
+    //         label="configuration";
+    //         color="green";
+    //     ];
+
+    //     "pathToConfiguration" [
+    //         label="path To Configuration";
+    //         color="green";
+    //     ];
+
+    //     "initialCommand" [
+    //         label="default";
+    //         color="green";
+    //     ];
+    // };
+    subgraph "clusterDefinitions" {
+        label="Definitions";
+        style="rounded,dashed";
+        
+        "dataConfiguration" [
+            label = "data Configuration\n(Type definition)";
+            color="green";
+        ];
+    };
+
     "configuration" [
         label = "configuration\nHolds the settings";
         color="green";
     ];
+
+    dataConfiguration -> configuration [dir=none];
 
     "pathToConfiguration" [
         label = "path To Configuration\nPath to a configuration file";
