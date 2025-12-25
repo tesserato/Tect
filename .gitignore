@@ -29,3 +29,4 @@ editors/vscode/out/extension.js
 *.png
 *.svg
 *.html
+experiments/lib
