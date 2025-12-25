@@ -31,7 +31,7 @@ class TokenInstance:
         self.id = f"node_{uuid.uuid4().hex[:8]}"
         self.name = data_type.name
         self.is_mutable = data_type.is_mutable
-        self.is_input = is_input  # Derived from the first function's requirements
+        self.is_input = is_input
 
 
 # --- 2. Original Definitions & Flow ---
@@ -86,7 +86,6 @@ def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
     if not flow:
         raise ValueError("Flow cannot be empty.")
 
-    # Rule: Input(s) to the graph MUST be the input(s) of its first function
     pool = [TokenInstance(t, is_input=True) for t in flow[0].consumes]
     ir = []
 
@@ -135,6 +134,7 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
         bgcolor="#121212",
         font_color="white",
         directed=True,
+        layout=True,
     )
     added_tokens = set()
 
@@ -142,10 +142,8 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
         f_name = entry["function"]
         f_id = f"f_{entry['step']}"
 
-        # Add Function Node
         net.add_node(f_id, label=f_name, shape="diamond", color="#6fb1fc", size=25)
 
-        # Add Data Nodes
         for t in entry["consumed"] + entry["produced"]:
             if t.id not in added_tokens:
                 color = (
@@ -153,30 +151,32 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
                     if "Error" in t.name
                     else ("#fccb6f" if not t.is_mutable else "#8de3a1")
                 )
-
-                # Rule: Only nodes flagged as is_input are constrained to the left
                 node_params = {
                     "label": t.name,
                     "shape": "dot",
                     "color": color,
                     "size": 15,
                 }
-                if t.is_input:
-                    node_params.update({"x": -600, "fixed": True})
-
+                # if t.is_input:
+                    # node_params.update({"x": -600, "fixed": True})
+                    # node_params.update({"mass": 10})
                 net.add_node(t.id, **node_params)
                 added_tokens.add(t.id)
 
-        # Add Connection Edges
+        # Implementation: Only edges exiting from immutable data are gray
         for t in entry["consumed"]:
-            net.add_edge(t.id, f_id, color="#444444")
+            # If data is immutable (is_mutable=False), use gray. Else, use green flow color.
+            edge_color = "#444444" if not t.is_mutable else "#8de3a1"
+            net.add_edge(t.id, f_id, color=edge_color)
+
+        # Edges exiting functions are always colored (aqua/green)
         for t in entry["produced"]:
             net.add_edge(f_id, t.id, color="#00ffcc")
 
     net.set_options("""
     var options = {
       "physics": {
-        "barnesHut": { "gravitationalConstant": -10000, "springLength": 150 },
+        "barnesHut": { "gravitationalConstant": -9999, "springLength": 1,"avoidOverlap": 1 },
         "minVelocity": 0.75
       }
     }
@@ -186,6 +186,5 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
 
 
 # --- 5. Execution ---
-# No ad-hoc input list; the engine inspects my_flow[0]
 ir_data = process_flow(my_flow)
 generate_graph(ir_data)
