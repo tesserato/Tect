@@ -9,10 +9,18 @@ class Type(BaseModel):
     name: str
     is_mutable: bool = True
 
+    def __hash__(self):
+        return hash((self.name, self.is_mutable))
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, Type)
+            and self.name == other.name
+            and self.is_mutable == other.is_mutable
+        )
+
 
 class Output(BaseModel):
-    """Wraps a Type with metadata about whether it's a collection."""
-
     data_type: Type
     is_collection: bool = False
 
@@ -20,7 +28,7 @@ class Output(BaseModel):
 class Function(BaseModel):
     name: str
     consumes: List[Type]
-    produces: List[Output]  # Now uses Output wrapper
+    produces: List[Output]
 
 
 class TokenInstance:
@@ -34,7 +42,7 @@ class TokenInstance:
         self.is_input = is_input
 
 
-# --- 2. Definitions with Multiplicity ---
+# --- 2. Definitions ---
 InitialCommand = Type(name="InitialCommand")
 PathToConfiguration = Type(name="PathToConfiguration")
 SourceFile = Type(name="SourceFile")
@@ -98,56 +106,46 @@ my_flow = [
 ]
 
 
-# --- 3. Logic Engine with Propagation ---
+# --- 3. Logic Engine ---
 def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
     pool = [TokenInstance(t, is_input=True) for t in flow[0].consumes]
     ir = []
-
     for i, func in enumerate(flow, 1):
-        consumed = []
-        is_iterative_step = False  # Tracks if this function is running in a loop
-
+        consumed, is_iterative = [], False
         for req in func.consumes:
             token = next((t for t in pool if t.name == req.name), None)
             if not token:
                 raise ValueError(f"Missing {req.name}")
-
-            # If any input is a collection, the function runs multiple times
             if token.is_collection:
-                is_iterative_step = True
-
+                is_iterative = True
             consumed.append(token)
             if token.is_mutable:
                 pool.remove(token)
-
         produced = []
         for out in func.produces:
-            # Engine Fix for State
             existing = next((t for t in pool if t.name == out.data_type.name), None)
             if not out.data_type.is_mutable and existing:
                 produced.append(existing)
             else:
-                # PROPAGATION: Output is a collection if the function explicitly says so
-                # OR if the function is currently iterating over a consumed collection.
-                is_coll = out.is_collection or is_iterative_step
-                new_token = TokenInstance(out.data_type, is_collection=is_coll)
-                pool.append(new_token)
-                produced.append(new_token)
-
+                new_t = TokenInstance(
+                    out.data_type, is_collection=out.is_collection or is_iterative
+                )
+                pool.append(new_t)
+                produced.append(new_t)
         ir.append(
             {
                 "step": i,
                 "function": func.name,
                 "consumed": consumed,
                 "produced": produced,
-                "is_iterative": is_iterative_step,
+                "is_iterative": is_iterative,
             }
         )
     return ir
 
 
-# --- 4. Visualizer (Multiplicity Styles) ---
-def generate_graph(ir: List[Dict[str, Any]], filename="architecture_multi.html"):
+# --- 4. Visualizer ---
+def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
     net = Network(
         height="900px",
         width="100%",
@@ -156,65 +154,76 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture_multi.html")
         directed=True,
         layout=True,
     )
+
+    # all_produced = {t.id for entry in ir for t in entry["produced"]}
+    # all_consumed = {t.id for entry in ir for t in entry["consumed"]}
+    # terminal_ids = all_produced - all_consumed
     added_tokens = set()
 
     for entry in ir:
         f_id = f"f_{entry['step']}"
-
-        # Iterative functions get a thicker border (shadow)
         net.add_node(
             f_id,
             label=entry["function"],
             shape="diamond",
             color="#6fb1fc",
-            size=25,
-            borderWidth=4 if entry["is_iterative"] else 1,
+            size=15,
+            borderWidth=2 if entry["is_iterative"] else 1,
         )
 
         for t in entry["consumed"] + entry["produced"]:
             if t.id not in added_tokens:
-                color = (
-                    "#ff7575"
-                    if "Error" in t.name
-                    else ("#fccb6f" if not t.is_mutable else "#8de3a1")
-                )
+                base_color = "#8de3a1"  # Green
+                if "Error" in t.name:
+                    base_color = "#ff7575"  # Red
+                elif not t.is_mutable:
+                    base_color = "#fccb6f"  # Yellow
 
-                # STYLING: Array nodes get a massive border to look "stacked"
                 node_params = {
                     "label": f"{t.name}[]" if t.is_collection else t.name,
                     "shape": "dot",
-                    "color": color,
-                    "size": 22 if t.is_collection else 15,
-                    "borderWidth": 7 if t.is_collection else 1,
-                    "color": {"border": "#ffffff", "background": color}
-                    if t.is_collection
-                    else color,
+                    "color": base_color,
+                    "size": 12,
+                    "mass": 1,
                 }
-                if t.is_input:
-                    node_params.update({"x": -600, "fixed": True, "mass": 5})
+
+                if t.is_collection:
+                    node_params.update(
+                        {
+                            "size": 15,
+                            "borderWidth": 3,
+                            "color": {"border": "#ffffff", "background": base_color},
+                        }
+                    )
+
+                # --- START/END NODES POSITIONING (COMMENTED OUT) ---
+                # if t.is_input:
+                #     node_params.update({"x": -600, "fixed": True, "mass": 2})
+                # if t.id in terminal_ids:
+                #     node_params.update({"x": 600, "fixed": True, "mass": 2})
+
                 net.add_node(t.id, **node_params)
                 added_tokens.add(t.id)
 
-        # STYLING: Multi-edges (====>) are thicker and dashed
         for t in entry["consumed"]:
-            edge_params = {"color": "#444444" if not t.is_mutable else "#8de3a1"}
-            if t.is_collection:
-                edge_params.update(
-                    {"width": 7, "dashes": [10, 2]}
-                )  # Double-arrow effect
-            net.add_edge(t.id, f_id, **edge_params)
+            e_color = "#444444" if not t.is_mutable else "#8de3a1"
+            width = 2.5 if t.is_collection else 1
+            dashes = [8, 4] if t.is_collection else False
+            net.add_edge(t.id, f_id, color=e_color, width=width, dashes=dashes)
 
         for t in entry["produced"]:
-            edge_params = {"color": "#00ffcc"}
-            if t.is_collection:
-                edge_params.update(
-                    {"width": 7, "dashes": [10, 2]}
-                )  # Double-arrow effect
-            net.add_edge(f_id, t.id, **edge_params)
+            width = 2.5 if t.is_collection else 1
+            dashes = [8, 4] if t.is_collection else False
+            net.add_edge(f_id, t.id, color="#00ffcc", width=width, dashes=dashes)
 
-    net.set_options(
-        '{"physics": {"barnesHut": {"gravitationalConstant": -15000, "avoidOverlap": 1}}}'
-    )
+    net.set_options("""
+    var options = {
+      "physics": {
+        "barnesHut": { "gravitationalConstant": -6000, "springLength": 120, "avoidOverlap": 1 },
+        "minVelocity": 0.75
+      }
+    }
+    """)
     net.show(filename, notebook=False)
 
 
