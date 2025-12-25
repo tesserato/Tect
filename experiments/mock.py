@@ -1,10 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Set
+from typing import List
 
 
 class Type(BaseModel):
     name: str
-    is_mutable: bool = True  # If False, it's accessed (Const), not consumed (Var)
+    is_mutable: bool = True  # True = Consumed (Var), False = Persistent (Const)
 
     def __hash__(self):
         return hash((self.name, self.is_mutable))
@@ -19,66 +19,76 @@ class Function(BaseModel):
     produces: List[Type]
 
 
-# --- 1. Define Data and Error Types ---
-# Mutable Data (Consumed)
+# --- 1. Define Your Data Types ---
+# Mutable (Resources that get transformed)
 InitialCommand = Type(name="InitialCommand")
+PathToConfiguration = Type(name="PathToConfiguration")
 SourceFile = Type(name="SourceFile")
 Article = Type(name="Article")
 HTML = Type(name="HTML")
 
-# Immutable Data (Accessed/Persistent)
-# Once loaded, Settings and Templates stay in the pool for everyone to read
+# Immutable (Configuration/Environment that stays available)
 Settings = Type(name="Settings", is_mutable=False)
 SiteTemplates = Type(name="SiteTemplates", is_mutable=False)
 
 # Errors
 FSError = Type(name="FileSystemError")
 
-# --- 2. Define Functions ---
+# --- 2. Define Your Functions ---
 ProcessInitialCommand = Function(
-    name="ProcessInitialCommand", consumes=[InitialCommand], produces=[Settings]
+    name="ProcessInitialCommand", consumes=[InitialCommand], produces=[Settings, PathToConfiguration]
+)
+
+LoadConfiguration = Function(
+    name="LoadConfiguration", consumes=[PathToConfiguration], produces=[Settings]
 )
 
 LoadTemplates = Function(
-    name="LoadTemplates",
-    consumes=[Settings],  # Accesses Settings (Const)
-    produces=[SiteTemplates],
+    name="LoadTemplates", consumes=[Settings], produces=[SiteTemplates]
+)
+
+FindSourceFiles = Function(
+    name="FindSourceFiles", consumes=[Settings], produces=[SourceFile, FSError]
 )
 
 ParseSource = Function(
-    name="ParseSource",
-    consumes=[SourceFile],
-    produces=[Article, FSError],  # Might fail
+    name="ParseSource", consumes=[SourceFile], produces=[Article, FSError]
 )
 
 RenderArticle = Function(
-    name="RenderArticle",
-    consumes=[
-        Article,
-        SiteTemplates,
-        Settings,
-    ],  # Consumes Article, Accesses Templates/Settings
-    produces=[HTML],
+    name="RenderArticle", consumes=[Article, SiteTemplates, Settings], produces=[HTML]
 )
 
-WriteHTML = Function(
-    name="WriteHTML",
-    consumes=[HTML],
-    produces=[FSError],  # Might fail
-)
+WriteHTML = Function(name="WriteHTML", consumes=[HTML], produces=[FSError])
 
-# A function to "Clean up" or handle the errors
-ErrorHandler = Function(name="ErrorHandler", consumes=[FSError], produces=[])
+# ErrorHandler = Function(name="ErrorHandler", consumes=[FSError], produces=[])
 
+
+# We define the sequence of functions
+my_flow = [
+    ProcessInitialCommand,
+    LoadConfiguration,
+    LoadTemplates,
+    FindSourceFiles,
+    ParseSource,
+    RenderArticle,
+    WriteHTML,
+    # ErrorHandler,  # Handles error from ParseSource
+    # ErrorHandler,  # Handles error from WriteHTML
+]
 
 # --- 3. The Validator Engine ---
 def validate_architecture(initial_pool: List[Type], flow: List[Function]):
     pool = initial_pool.copy()
 
-    print(f"🚀 Starting Flow with: {[t.name for t in pool]}")
+    print("-" * 60)
+    print(f"STARTING POOL: {[t.name for t in pool]}")
+    print("-" * 60)
 
-    for func in flow:
-        print(f"\nStep: {func.name}")
+    for i, func in enumerate(flow, 1):
+        print(f"\nSTEP {i}: {func.name}")
+
+        # 1. Check and Consume
         for req in func.consumes:
             if req not in pool:
                 raise ValueError(
@@ -89,33 +99,31 @@ def validate_architecture(initial_pool: List[Type], flow: List[Function]):
                 pool.remove(req)
                 print(f"  [-] Consumed: {req.name}")
             else:
-                print(f"  [∞] Accessed: {req.name} (remains in pool)")
+                print(f"  [∞] Accessed: {req.name} (Persists)")
 
+        # 2. Produce
         pool.extend(func.produces)
-        print(f"  [+] Produced: {[p.name for p in func.produces]}")
+        if func.produces:
+            print(f"  [+] Produced: {[p.name for p in func.produces]}")
 
-    # Final "Clean Pool" check
+        # 3. Print Complete Pool State
+        pool_names = [t.name for t in pool]
+        print(f"  >> CURRENT POOL: {pool_names}")
+
+    print("\n" + "-" * 60)
+    # Final Validation
     errors = [t for t in pool if "Error" in t.name]
     if errors:
-        print(
-            f"\n⚠️  CRITICAL FAILURE: Flow ended with unhandled errors: {[e.name for e in errors]}"
-        )
+        print(f"⚠️  CRITICAL FAILURE: Unhandled errors: {[e.name for e in errors]}")
     else:
-        print("\n✅ SUCCESS: Flow completed. All data consumed and errors handled.")
+        print("✅ SUCCESS: Flow complete. No unhandled errors.")
+    print("-" * 60)
 
 
-# --- 4. Testing the Architecture ---
+# --- 4. Run Example ---
+# We start with the command and a source file to process
 
-# Scenario: A valid flow
-validate_architecture(
-    initial_pool=[InitialCommand, SourceFile],
-    flow=[
-        ProcessInitialCommand,
-        LoadTemplates,
-        ParseSource,
-        RenderArticle,
-        WriteHTML,
-        ErrorHandler,  # If you comment this out, it will flag a Critical Failure
-        ErrorHandler,  # Handles the second potential FSError
-    ],
-)
+
+my_initial_data = my_flow[0].consumes
+
+validate_architecture(my_initial_data, my_flow)
