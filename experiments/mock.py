@@ -10,6 +10,8 @@ class Type(BaseModel):
         return hash((self.name, self.is_mutable))
 
     def __eq__(self, other):
+        if not isinstance(other, Type):
+            return False
         return self.name == other.name and self.is_mutable == other.is_mutable
 
 
@@ -19,24 +21,25 @@ class Function(BaseModel):
     produces: List[Type]
 
 
-# --- 1. Define Your Data Types ---
-# Mutable (Resources that get transformed)
+# --- 1. Define Data Types ---
 InitialCommand = Type(name="InitialCommand")
 PathToConfiguration = Type(name="PathToConfiguration")
 SourceFile = Type(name="SourceFile")
 Article = Type(name="Article")
 HTML = Type(name="HTML")
 
-# Immutable (Configuration/Environment that stays available)
+# Immutable (Persistent State)
 Settings = Type(name="Settings", is_mutable=False)
 SiteTemplates = Type(name="SiteTemplates", is_mutable=False)
 
-# Errors
+# Errors (Mutable - we want to track every single error that happens)
 FSError = Type(name="FileSystemError")
 
-# --- 2. Define Your Functions ---
+# --- 2. Define Functions ---
 ProcessInitialCommand = Function(
-    name="ProcessInitialCommand", consumes=[InitialCommand], produces=[Settings, PathToConfiguration]
+    name="ProcessInitialCommand",
+    consumes=[InitialCommand],
+    produces=[Settings, PathToConfiguration],
 )
 
 LoadConfiguration = Function(
@@ -77,7 +80,8 @@ my_flow = [
     # ErrorHandler,  # Handles error from WriteHTML
 ]
 
-# --- 3. The Validator Engine ---
+
+# --- 3. The Updated Validator Engine ---
 def validate_architecture(initial_pool: List[Type], flow: List[Function]):
     pool = initial_pool.copy()
 
@@ -88,7 +92,7 @@ def validate_architecture(initial_pool: List[Type], flow: List[Function]):
     for i, func in enumerate(flow, 1):
         print(f"\nSTEP {i}: {func.name}")
 
-        # 1. Check and Consume
+        # 1. Consumption Logic
         for req in func.consumes:
             if req not in pool:
                 raise ValueError(
@@ -101,27 +105,32 @@ def validate_architecture(initial_pool: List[Type], flow: List[Function]):
             else:
                 print(f"  [∞] Accessed: {req.name} (Persists)")
 
-        # 2. Produce
-        pool.extend(func.produces)
-        if func.produces:
-            print(f"  [+] Produced: {[p.name for p in func.produces]}")
+        # 2. Idempotent Production Logic
+        for p in func.produces:
+            if not p.is_mutable and p in pool:
+                # If it's immutable and we already have it, don't duplicate
+                print(f"  [~] Persistent: {p.name} is already in the pool (no change)")
+            else:
+                # If it's mutable (like an error or data) OR a new immutable, add it
+                pool.append(p)
+                print(f"  [+] Produced: {p.name}")
 
-        # 3. Print Complete Pool State
-        pool_names = [t.name for t in pool]
-        print(f"  >> CURRENT POOL: {pool_names}")
+        # 3. State Output
+        print(f"  >> CURRENT POOL: {[t.name for t in pool]}")
 
     print("\n" + "-" * 60)
     # Final Validation
-    errors = [t for t in pool if "Error" in t.name]
-    if errors:
-        print(f"⚠️  CRITICAL FAILURE: Unhandled errors: {[e.name for e in errors]}")
+    unhandled_errors = [t for t in pool if "Error" in t.name]
+    if unhandled_errors:
+        print(
+            f"⚠️  CRITICAL FAILURE: {len(unhandled_errors)} unhandled errors remain: {[e.name for e in unhandled_errors]}"
+        )
     else:
         print("✅ SUCCESS: Flow complete. No unhandled errors.")
     print("-" * 60)
 
 
-# --- 4. Run Example ---
-# We start with the command and a source file to process
+# --- 4. Execution ---
 
 
 my_initial_data = my_flow[0].consumes
