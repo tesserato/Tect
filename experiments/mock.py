@@ -1,10 +1,10 @@
 import uuid
-from typing import List, Tuple
+from typing import List, Dict, Any
 from pydantic import BaseModel
 from pyvis.network import Network
 
 
-# --- 1. Unified Models ---
+# --- 1. Models ---
 class Type(BaseModel):
     name: str
     is_mutable: bool = True
@@ -27,140 +27,165 @@ class Function(BaseModel):
 
 
 class TokenInstance:
-    """Represents a unique instance of a Type for tracing."""
-
-    def __init__(self, data_type: Type):
+    def __init__(self, data_type: Type, is_input: bool = False):
         self.id = f"node_{uuid.uuid4().hex[:8]}"
         self.name = data_type.name
         self.is_mutable = data_type.is_mutable
+        self.is_input = is_input  # Derived from the first function's requirements
 
 
-# --- 2. The Consolidated Engine ---
-def process_flow(initial_types: List[Type], flow: List[Function]) -> List[Tuple]:
-    """Validates logic, prints status, and returns trace events for the graph."""
-    pool = [TokenInstance(t) for t in initial_types]
-    trace_events = []
+# --- 2. Original Definitions & Flow ---
+InitialCommand = Type(name="InitialCommand")
+PathToConfiguration = Type(name="PathToConfiguration")
+SourceFile = Type(name="SourceFile")
+Article = Type(name="Article")
+HTML = Type(name="HTML")
+Settings = Type(name="Settings", is_mutable=False)
+SiteTemplates = Type(name="SiteTemplates", is_mutable=False)
+FSError = Type(name="FileSystemError")
 
-    print(f"{'='*20} STARTING FLOW {'='*20}")
-    print(f"Initial Pool: {[t.name for t in pool]}\n")
+ProcessInitialCommand = Function(
+    name="ProcessInitialCommand",
+    consumes=[InitialCommand],
+    produces=[Settings, PathToConfiguration],
+)
+LoadConfiguration = Function(
+    name="LoadConfiguration", consumes=[PathToConfiguration], produces=[Settings]
+)
+LoadTemplates = Function(
+    name="LoadTemplates", consumes=[Settings], produces=[SiteTemplates]
+)
+FindSourceFiles = Function(
+    name="FindSourceFiles", consumes=[Settings], produces=[SourceFile, FSError]
+)
+ParseSource = Function(
+    name="ParseSource", consumes=[SourceFile], produces=[Article, FSError]
+)
+RenderArticle = Function(
+    name="RenderArticle", consumes=[Article, SiteTemplates, Settings], produces=[HTML]
+)
+WriteHTML = Function(name="WriteHTML", consumes=[HTML], produces=[FSError])
+
+my_flow = [
+    ProcessInitialCommand,
+    LoadConfiguration,
+    LoadTemplates,
+    FindSourceFiles,
+    ParseSource,
+    RenderArticle,
+    WriteHTML,
+]
+
+
+# --- 3. Logic Engine (Generates IR) ---
+def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
+    """
+    Validates the flow and creates an Intermediate Representation.
+    The starting pool is derived automatically from the first function's requirements.
+    """
+    if not flow:
+        raise ValueError("Flow cannot be empty.")
+
+    # Rule: Input(s) to the graph MUST be the input(s) of its first function
+    pool = [TokenInstance(t, is_input=True) for t in flow[0].consumes]
+    ir = []
+
+    print(f"{'='*20} PROCESSING ARCHITECTURE {'='*20}")
 
     for i, func in enumerate(flow, 1):
-        consumed_tokens = []
+        consumed = []
         for req in func.consumes:
-            # Find matching token in pool
             token = next((t for t in pool if t.name == req.name), None)
             if not token:
                 raise ValueError(
-                    f"❌ STEP {i}: '{func.name}' missing requirement '{req.name}'"
+                    f"❌ Error at Step {i}: '{func.name}' requires '{req.name}'"
                 )
-
-            consumed_tokens.append(token)
+            consumed.append(token)
             if token.is_mutable:
                 pool.remove(token)
 
-        produced_tokens = []
+        produced = []
         for prod in func.produces:
             existing = next((t for t in pool if t.name == prod.name), None)
             if not prod.is_mutable and existing:
-                produced_tokens.append(existing)
+                produced.append(existing)
             else:
                 new_token = TokenInstance(prod)
                 pool.append(new_token)
-                produced_tokens.append(new_token)
+                produced.append(new_token)
 
-        trace_events.append((func.name, consumed_tokens, produced_tokens))
-
-        # Console Output
-        print(f"STEP {i}: {func.name}")
-        print(
-            f"  [-] Consumed: {[t.name for t in consumed_tokens if t.is_mutable] or 'None'}"
+        ir.append(
+            {
+                "step": i,
+                "function": func.name,
+                "consumed": consumed,
+                "produced": produced,
+            }
         )
-        print(f"  [+] Produced: {[t.name for t in produced_tokens]}")
-        print(f"  >> POOL: {[t.name for t in pool]}\n")
+        print(f"Validated: {func.name}")
 
-    # Final error check
-    unhandled = [t.name for t in pool if "Error" in t.name]
-    if unhandled:
-        print(f"⚠️  CRITICAL FAILURE: Unhandled errors: {unhandled}")
-    else:
-        print("✅ SUCCESS: Flow completed safely.")
-
-    return trace_events
+    return ir
 
 
-# --- 3. The Visualizer ---
-def generate_graph(trace_events: List[Tuple], filename="architecture.html"):
+# --- 4. Visualizer (Consumes IR) ---
+def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
     net = Network(
         height="900px",
         width="100%",
         bgcolor="#121212",
         font_color="white",
         directed=True,
-        layout=True,
     )
     added_tokens = set()
 
-    for i, (f_name, consumed, produced) in enumerate(trace_events):
-        f_id = f"func_{i}"
-        net.add_node(
-            f_id, label=f_name, shape="diamond", color="#6fb1fc", size=25, mass=2
-        )
+    for entry in ir:
+        f_name = entry["function"]
+        f_id = f"f_{entry['step']}"
 
-        for t in consumed + produced:
+        # Add Function Node
+        net.add_node(f_id, label=f_name, shape="diamond", color="#6fb1fc", size=25)
+
+        # Add Data Nodes
+        for t in entry["consumed"] + entry["produced"]:
             if t.id not in added_tokens:
                 color = (
                     "#ff7575"
                     if "Error" in t.name
                     else ("#fccb6f" if not t.is_mutable else "#8de3a1")
                 )
-                net.add_node(t.id, label=t.name, shape="dot", color=color, size=15)
+
+                # Rule: Only nodes flagged as is_input are constrained to the left
+                node_params = {
+                    "label": t.name,
+                    "shape": "dot",
+                    "color": color,
+                    "size": 15,
+                }
+                if t.is_input:
+                    node_params.update({"x": -600, "fixed": True})
+
+                net.add_node(t.id, **node_params)
                 added_tokens.add(t.id)
 
-        for t in consumed:
+        # Add Connection Edges
+        for t in entry["consumed"]:
             net.add_edge(t.id, f_id, color="#444444")
-        for t in produced:
+        for t in entry["produced"]:
             net.add_edge(f_id, t.id, color="#00ffcc")
 
-    net.set_options(
-        '{"physics": {"barnesHut": {"gravitationalConstant": -10000, "springLength": 150}}}'
-    )
+    net.set_options("""
+    var options = {
+      "physics": {
+        "barnesHut": { "gravitationalConstant": -10000, "springLength": 150 },
+        "minVelocity": 0.75
+      }
+    }
+    """)
     net.show(filename, notebook=False)
+    print(f"\nVisual graph generated: {filename}")
 
 
-# --- 4. Data Setup & Execution ---
-# Define Types
-T = {
-    "cmd": Type(name="InitialCommand"),
-    "path": Type(name="PathToConfiguration"),
-    "src": Type(name="SourceFile"),
-    "art": Type(name="Article"),
-    "html": Type(name="HTML"),
-    "set": Type(name="Settings", is_mutable=False),
-    "tmp": Type(name="SiteTemplates", is_mutable=False),
-    "err": Type(name="FileSystemError"),
-}
-
-# Define Flow
-my_flow = [
-    Function(
-        name="ProcessInitialCommand",
-        consumes=[T["cmd"]],
-        produces=[T["set"], T["path"]],
-    ),
-    Function(name="LoadConfiguration", consumes=[T["path"]], produces=[T["set"]]),
-    Function(name="LoadTemplates", consumes=[T["set"]], produces=[T["tmp"]]),
-    Function(
-        name="FindSourceFiles", consumes=[T["set"]], produces=[T["src"], T["err"]]
-    ),
-    Function(name="ParseSource", consumes=[T["src"]], produces=[T["art"], T["err"]]),
-    Function(
-        name="RenderArticle",
-        consumes=[T["art"], T["tmp"], T["set"]],
-        produces=[T["html"]],
-    ),
-    Function(name="WriteHTML", consumes=[T["html"]], produces=[T["err"]]),
-]
-
-# Run
-trace = process_flow([T["cmd"]], my_flow)
-generate_graph(trace)
+# --- 5. Execution ---
+# No ad-hoc input list; the engine inspects my_flow[0]
+ir_data = process_flow(my_flow)
+generate_graph(ir_data)
