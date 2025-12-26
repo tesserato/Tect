@@ -1,7 +1,10 @@
-import uuid
-from typing import List, Dict, Any
-from pydantic import BaseModel
+import itertools
+from typing import List
+from pydantic import BaseModel, Field
 from pyvis.network import Network
+
+# Counters for automatic ID generation
+_func_id_counter = itertools.count(1)
 
 
 # --- 1. Models ---
@@ -9,11 +12,11 @@ class Type(BaseModel):
     name: str
     is_mutable: bool = True
     is_collection: bool = False
-    origin_uid: int
+    origin_uid: int | None = None
     destination_uid: int | None = None
 
     def __hash__(self):
-        return hash((self.name, self.is_mutable))
+        return hash((self.name, self.is_mutable, self.is_collection))
 
     def __eq__(self, other):
         return (
@@ -34,16 +37,18 @@ class Error(Type):
 
 class Function(BaseModel):
     name: str
-    uid: int
-    consumes: List[Type]
-    produces: List[Type]
+    uid: int = Field(default_factory=lambda: next(_func_id_counter))
+    consumes: List[Type] = []
+    produces: List[Type] = []
+    is_start: bool = False
+    is_end: bool = False
 
 
 # --- 2. Definitions ---
 InitialCommand = Data(name="InitialCommand")
 PathToConfiguration = Data(name="PathToConfiguration")
 SourceFile = Data(name="SourceFile", is_mutable=False, is_collection=True)
-SourceFiles = Data(name="SourceFiles", is_mutable=False)
+# SourceFiles = Data(name="SourceFiles", is_mutable=False)
 Article = Data(name="Article")
 Html = Data(name="HTML")
 Settings = Data(name="Settings", is_mutable=False)
@@ -68,7 +73,7 @@ LoadTemplates = Function(
 FindSourceFiles = Function(
     name="FindSourceFiles",
     consumes=[Settings],
-    produces=[SourceFiles, FSError],
+    produces=[SourceFile, FSError],
 )
 ParseSource = Function(
     name="ParseSource",
@@ -93,48 +98,44 @@ my_flow = [
 ]
 
 
-# Pool now stores dictionaries instead of TokenInstance objects
-def create_token(t, is_coll=False, is_in=False):
-    return {
-        "id": f"node_{uuid.uuid4().hex[:8]}",
-        "data_type": t,
-        "name": t.name,
-        "is_mutable": t.is_mutable,
-        "is_collection": is_coll,
-        "is_input": is_in,
-    }
-
-
-class Node(BaseModel):
-    name: str
-    is_start: bool = False
-    is_end: bool = False
-
-
 # --- 3. Logic Engine ---
-def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
-    start_node = Node(name="Start", is_start=True)
-    end_node = Node(name="End", is_end=True)
+def process_flow(flow: List[Function]) -> tuple[List[Function], List[Type]]:
+    start_node = Function(name="Start", is_start=True)
+    end_node = Function(name="End", is_end=True)
     nodes = [start_node]
+    edges = []
 
     pool = flow[0].consumes
+    for node in pool:
+        node.origin_uid = start_node.uid
 
-    for i, func in enumerate(flow, 1):
+    for func in flow:
+        nodes.append(func)
         for type_in in func.consumes:
+            type_in.destination_uid = func.uid
+            edges.append(type_in)
             if type_in.is_mutable:
                 pool.remove(type_in)
-
+                
         for type_out in func.produces:
+            type_out.origin_uid = func.uid
             if type_out.is_mutable or type_out not in pool:
                 pool.append(type_out)
-        print(f"{func.name}\n{[t.name for t in pool]}\n")
+        print(f"{func.name}\n{pool}\n")
 
+    for node in pool:
+        node.destination_uid = end_node.uid
+        edges.append(node)
     nodes.append(end_node)
-    return nodes
+    for edge in edges:
+        print(edge)
+    return nodes, edges
 
 
 # --- 4. Visualizer ---
-def generate_graph(flow: List[Function], filename="architecture.html"):
+def generate_graph(
+    nodes: List[Function], edges: List[Type], filename="architecture.html"
+):
     net = Network(
         height="900px",
         width="100%",
@@ -144,77 +145,29 @@ def generate_graph(flow: List[Function], filename="architecture.html"):
     )
     # added_tokens = set()
 
-    for i, entry in enumerate(flow, 1):
+    for node in nodes:
         net.add_node(
-            i,
-            label=entry.name,
+            node.uid,
+            label=node.name,
             shape="box",
-            color="#2921FF"
-            if "start" == entry.name.lower() or "end" == entry.name.lower()
-            else "#FF5722",
+            color="#2921FF" if node.is_start or node.is_end else "#FF5722",
             size=15,
             # borderWidth=2 if entry["is_iterative"] else 1,
         )
 
-        # net.add_edge()
+    for e in edges:
+        net.add_edge(
+            e.origin_uid,
+            e.destination_uid,
+            label=e.name + ("[]" if e.is_collection else ""),
+            color="#00ffcc" if e.is_mutable else "#444444",
+            width=2.5 if e.is_collection else 1,
+            dashes=[8, 4] if e.is_collection else False,
+        )
 
-        # for t in entry["consumed"] + entry["produced"]:
-        #     if t["id"] not in added_tokens:
-        #         # Color logic based on Class types
-        #         if isinstance(t["data_type"], Error):
-        #             base_color = "#ff7575"
-        #         elif not t["is_mutable"]:
-        #             base_color = "#fccb6f"
-        #         else:
-        #             base_color = "#8de3a1"
-
-        #         node_params = {
-        #             "label": f"{t['name']}[]" if t["is_collection"] else t["name"],
-        #             "shape": "dot",
-        #             "color": base_color,
-        #             "size": 12,
-        #             "mass": 1,
-        #         }
-        #         if t["is_collection"]:
-        #             node_params.update(
-        #                 {
-        #                     "size": 15,
-        #                     "borderWidth": 3,
-        #                     "color": {"border": "#ffffff", "background": base_color},
-        #                 }
-        #             )
-
-        #         # --- START/END NODES POSITIONING (COMMENTED OUT) ---
-        #         # if t["is_input"]: node_params.update({"x": -600, "fixed": True, "mass": 2})
-
-        #         net.add_node(t["id"], **node_params)
-        #         added_tokens.add(t["id"])
-
-        # for t in entry["consumed"]:
-        #     e_color = "#444444" if not t["is_mutable"] else "#8de3a1"
-        #     net.add_edge(
-        #         t["id"],
-        #         f_id,
-        #         color=e_color,
-        #         width=2.5 if t["is_collection"] else 1,
-        #         dashes=[8, 4] if t["is_collection"] else False,
-        #     )
-
-        # for t in entry["produced"]:
-        #     net.add_edge(
-        #         f_id,
-        #         t["id"],
-        #         color="#00ffcc",
-        #         width=2.5 if t["is_collection"] else 1,
-        #         dashes=[8, 4] if t["is_collection"] else False,
-        #     )
-
-    net.set_options(
-        '{"physics": {"barnesHut": {"gravitationalConstant": -6000, "springLength": 80, "avoidOverlap": 1}}}'
-    )
     net.show(filename, notebook=False)
 
 
 # --- 5. Run ---
-ir_data = process_flow(my_flow)
-generate_graph(my_flow)
+nodes, edges = process_flow(my_flow)
+generate_graph(nodes, edges)
