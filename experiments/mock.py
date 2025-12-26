@@ -1,5 +1,5 @@
 import itertools
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from pyvis.network import Network
 
@@ -12,8 +12,6 @@ class Type(BaseModel):
     name: str
     is_mutable: bool = True
     is_collection: bool = False
-    origin_uid: int | None = None
-    destination_uid: int | None = None
 
     def __hash__(self):
         return hash((self.name, self.is_mutable, self.is_collection))
@@ -24,6 +22,21 @@ class Type(BaseModel):
             and self.name == other.name
             and self.is_mutable == other.is_mutable
             and self.is_collection == other.is_collection
+        )
+
+
+class TypeInstance(Type):
+    origin_function_uid: int | None = None
+    destination_function_uid: int | None = None
+
+    @classmethod
+    def from_type(
+        cls, t: Type, origin: Optional[int] = None, destination: Optional[int] = None
+    ):
+        return cls(
+            **t.model_dump(),
+            origin_function_uid=origin,
+            destination_function_uid=destination,
         )
 
 
@@ -99,42 +112,47 @@ my_flow = [
 
 
 # --- 3. Logic Engine ---
-def process_flow(flow: List[Function]) -> tuple[List[Function], List[Type]]:
+def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstance]]:
     start_node = Function(name="Start", is_start=True)
     end_node = Function(name="End", is_end=True)
     nodes = [start_node]
     edges = []
 
-    pool = flow[0].consumes
-    for node in pool:
-        node.origin_uid = start_node.uid
+    pool = [TypeInstance.from_type(n, origin=start_node.uid) for n in flow[0].consumes]
+
+    print(pool)
 
     for func in flow:
         nodes.append(func)
-        for type_in in func.consumes:
-            type_in.destination_uid = func.uid
-            edges.append(type_in)
-            if type_in.is_mutable:
-                pool.remove(type_in)
-                
-        for type_out in func.produces:
-            type_out.origin_uid = func.uid
-            if type_out.is_mutable or type_out not in pool:
-                pool.append(type_out)
-        print(f"{func.name}\n{pool}\n")
+        for t in func.consumes:
+            type_instance = TypeInstance.from_type(t, destination=func.uid)
+            if type_instance.is_mutable:
+                pool.remove(type_instance)
+            edges.append(type_instance)
 
-    for node in pool:
-        node.destination_uid = end_node.uid
-        edges.append(node)
+        for type_out in func.produces:
+            type_instance = TypeInstance.from_type(type_out, origin=func.uid)
+            if type_instance.is_mutable or type_instance not in pool:
+                pool.append(type_instance)
+        print(func.name)
+        # }\n{[t.name for t in pool]}\n"
+        for p in pool:
+            print("  ", p)
+        print()
+
+    for t in pool:
+        t.destination_function_uid = end_node.uid
+        edges.append(t)
     nodes.append(end_node)
     for edge in edges:
         print(edge)
+    exit()
     return nodes, edges
 
 
 # --- 4. Visualizer ---
 def generate_graph(
-    nodes: List[Function], edges: List[Type], filename="architecture.html"
+    nodes: List[Function], edges: List[TypeInstance], filename="architecture.html"
 ):
     net = Network(
         height="900px",
@@ -157,8 +175,8 @@ def generate_graph(
 
     for e in edges:
         net.add_edge(
-            e.origin_uid,
-            e.destination_uid,
+            e.origin_function_uid,
+            e.destination_function_uid,
             label=e.name + ("[]" if e.is_collection else ""),
             color="#00ffcc" if e.is_mutable else "#444444",
             width=2.5 if e.is_collection else 1,
