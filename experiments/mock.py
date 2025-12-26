@@ -125,19 +125,21 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstanc
     for func in flow:
         nodes.append(func)
         for t in func.consumes:
-            type_instance = TypeInstance.from_type(t, destination=func.uid)
-            if type_instance.is_mutable:
-                pool.remove(type_instance)
-            edges.append(type_instance)
+            for o in pool:
+                if o == t:
+                    o.destination_function_uid = func.uid
+                    edges.append(o)
+                    if o.is_mutable:
+                        pool.remove(o)
+                    break
 
         for type_out in func.produces:
             type_instance = TypeInstance.from_type(type_out, origin=func.uid)
-            if type_instance.is_mutable or type_instance not in pool:
-                pool.append(type_instance)
+            pool.append(type_instance)
         print(func.name)
-        # }\n{[t.name for t in pool]}\n"
-        for p in pool:
-            print("  ", p)
+        print([t.name for t in pool])
+        # for p in pool:
+        # print("  ", p)
         print()
 
     for t in pool:
@@ -145,8 +147,7 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstanc
         edges.append(t)
     nodes.append(end_node)
     for edge in edges:
-        print(edge)
-    exit()
+        print(edge.origin_function_uid, "->", edge.destination_function_uid, ":", edge.name)
     return nodes, edges
 
 
