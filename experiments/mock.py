@@ -1,3 +1,4 @@
+from enum import Enum
 import itertools
 from typing import List
 from pydantic import BaseModel, Field
@@ -10,35 +11,39 @@ _func_id_counter = itertools.count(1)
 class Type(BaseModel):
     name: str
     is_mutable: bool = True
-    is_collection: bool = False
 
     def __hash__(self):
-        return hash((self.name, self.is_mutable, self.is_collection))
+        return hash((self.name, self.is_mutable))
 
     def __eq__(self, other):
         return (
             isinstance(other, Type)
             and self.name == other.name
             and self.is_mutable == other.is_mutable
-            and self.is_collection == other.is_collection
         )
 
 
-class TokenEdge(BaseModel):
+class Token(BaseModel):
     """Represents a data flow edge between functions"""
 
     name: str
     is_mutable: bool = True
     is_collection: bool = False
-    origin_function_uid: int
-    destination_function_uid: int
+    origin_function_uid: int | None
+    destination_function_uid: int | None
 
     @classmethod
-    def from_type(cls, t: Type, origin: int, destination: int):
+    def from_type(
+        cls,
+        t: Type,
+        origin: int | None = None,
+        destination: int | None = None,
+        is_collection: bool = False,
+    ):
         return cls(
             name=t.name,
             is_mutable=t.is_mutable,
-            is_collection=t.is_collection,
+            is_collection=is_collection,
             origin_function_uid=origin,
             destination_function_uid=destination,
         )
@@ -54,21 +59,52 @@ class Error(Type):
 
 class Function(BaseModel):
     name: str
-    uid: int = Field(default_factory=lambda: next(_func_id_counter))
-    consumes: List[Type] = []
-    produces: List[Type] = []
-    is_start: bool = False
-    is_end: bool = False
-    is_error: bool = False
+    uid: int
+    consumes: List[Token]
+    produces: List[Token]
+    is_start: bool
+    is_end: bool
 
     def __hash__(self):
         return hash(self.uid)
 
 
+class Cardinality(Enum):
+    ONE = "1"
+    MANY = "*"
+
+
+def generate_function(
+    name: str,
+    consumes: List[tuple[Type, Cardinality]] = [],
+    produces: List[tuple[Type, Cardinality]] = [],
+    is_start: bool = False,
+    is_end: bool = False,
+) -> Function:
+    consumes_as_tokens = []
+    for t, card in consumes:
+        is_collection = card == Cardinality.MANY
+        consumes_as_tokens.append(Token.from_type(t, is_collection=is_collection))
+
+    produces_as_tokens = []
+    for t, card in produces:
+        is_collection = card == Cardinality.MANY
+        produces_as_tokens.append(Token.from_type(t, is_collection=is_collection))
+
+    return Function(
+        name=name,
+        uid=next(_func_id_counter),
+        consumes=consumes_as_tokens,
+        produces=produces_as_tokens,
+        is_start=is_start,
+        is_end=is_end,
+    )
+
+
 # --- 2. Definitions ---
 InitialCommand = Data(name="InitialCommand")
 PathToConfiguration = Data(name="PathToConfiguration")
-SourceFile = Data(name="SourceFile", is_mutable=False, is_collection=True)
+SourceFile = Data(name="SourceFile", is_mutable=False)
 Article = Data(name="Article")
 Html = Data(name="HTML")
 Settings = Data(name="Settings", is_mutable=False)
@@ -76,38 +112,53 @@ SiteTemplates = Data(name="SiteTemplates", is_mutable=False)
 FSError = Error(name="FileSystemError")
 Okay = Data(name="Okay", is_mutable=False)
 
-ProcessInitialCommand = Function(
+ProcessInitialCommand = generate_function(
     name="ProcessInitialCommand",
-    consumes=[InitialCommand],
-    produces=[Settings, PathToConfiguration],
+    consumes=[(InitialCommand, Cardinality.ONE)],
+    produces=[(Settings, Cardinality.ONE), (PathToConfiguration, Cardinality.ONE)],
 )
-LoadConfiguration = Function(
-    name="LoadConfiguration",
-    consumes=[PathToConfiguration],
-    produces=[Settings],
-)
-LoadTemplates = Function(
-    name="LoadTemplates",
-    consumes=[Settings],
-    produces=[SiteTemplates],
-)
-FindSourceFiles = Function(
-    name="FindSourceFiles",
-    consumes=[Settings],
-    produces=[SourceFile, FSError],
-)
-ParseSource = Function(
-    name="ParseSource",
-    consumes=[SourceFile],
-    produces=[Article, FSError],
-)
-RenderArticle = Function(
-    name="RenderArticle",
-    consumes=[Article, SiteTemplates, Settings],
-    produces=[Html],
-)
-WriteHTML = Function(name="WriteHTML", consumes=[Html], produces=[Okay, FSError])
 
+LoadConfiguration = generate_function(
+    name="LoadConfiguration",
+    consumes=[(PathToConfiguration, Cardinality.ONE)],
+    produces=[(Settings, Cardinality.ONE)],
+)
+
+LoadTemplates = generate_function(
+    name="LoadTemplates",
+    consumes=[(Settings, Cardinality.ONE)],
+    produces=[(SiteTemplates, Cardinality.ONE)],
+)
+
+FindSourceFiles = generate_function(
+    name="FindSourceFiles",
+    consumes=[(Settings, Cardinality.ONE)],
+    produces=[(SourceFile, Cardinality.MANY), (FSError, Cardinality.MANY)],
+)
+
+ParseSource = generate_function(
+    name="ParseSource",
+    consumes=[(SourceFile, Cardinality.ONE)],
+    produces=[(Article, Cardinality.ONE), (FSError, Cardinality.ONE)],
+)
+
+RenderArticle = generate_function(
+    name="RenderArticle",
+    consumes=[
+        (Article, Cardinality.ONE),
+        (SiteTemplates, Cardinality.ONE),
+        (Settings, Cardinality.ONE),
+    ],
+    produces=[(Html, Cardinality.ONE)],
+)
+
+WriteHTML = generate_function(
+    name="WriteHTML",
+    consumes=[(Html, Cardinality.ONE)],
+    produces=[(Okay, Cardinality.ONE), (FSError, Cardinality.MANY)],
+)
+
+# Define the flow
 my_flow = [
     ProcessInitialCommand,
     LoadConfiguration,
@@ -135,7 +186,7 @@ class TokenPool:
                 self.immutable_tokens[token_type] = []
             self.immutable_tokens[token_type].append(origin_uid)
 
-    def consume(self, token_type: Type, consumer_uid: int) -> List[TokenEdge]:
+    def consume(self, token_type: Type, consumer_uid: int) -> List[Token]:
         """
         Consume a token from the pool.
         - Mutable tokens: single edge, removed after consumption
@@ -146,7 +197,7 @@ class TokenPool:
         if token_type.is_mutable:
             for i, (t, origin_uid) in enumerate(self.mutable_tokens):
                 if t == token_type:
-                    edge = TokenEdge.from_type(t, origin_uid, consumer_uid)
+                    edge = Token.from_type(t, origin_uid, consumer_uid)
                     edges.append(edge)
                     # Mark as consumed and remove from pool
                     self.consumed_origins.add((t, origin_uid))
@@ -155,7 +206,7 @@ class TokenPool:
         else:
             if token_type in self.immutable_tokens:
                 for origin_uid in self.immutable_tokens[token_type]:
-                    edge = TokenEdge.from_type(token_type, origin_uid, consumer_uid)
+                    edge = Token.from_type(token_type, origin_uid, consumer_uid)
                     edges.append(edge)
                     # Mark this specific production of the immutable token as used
                     self.consumed_origins.add((token_type, origin_uid))
@@ -190,10 +241,10 @@ class TokenPool:
         return f"TokenPool(mutable={mutable}, immutable={immutable})"
 
 
-def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]:
+def process_flow(flow: List[Function]) -> tuple[List[Function], List[Token]]:
     """Process a flow and generate nodes and edges for visualization"""
-    start_node = Function(name="Start", is_start=True)
-    end_node = Function(name="End", is_end=True)
+    start_node = generate_function(name="Start", is_start=True)
+    end_node = generate_function(name="End", is_end=True)
 
     nodes = [start_node]
     edges = []
@@ -245,13 +296,11 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]
                 nodes.append(error_node)
 
             # Connect to specific error node
-            edge = TokenEdge.from_type(
-                token_type, origin_uid, error_nodes[token_type].uid
-            )
+            edge = Token.from_type(token_type, origin_uid, error_nodes[token_type].uid)
             edges.append(edge)
         else:
             # Connect data tokens to the main end node
-            edge = TokenEdge.from_type(token_type, origin_uid, end_node.uid)
+            edge = Token.from_type(token_type, origin_uid, end_node.uid)
             edges.append(edge)
 
     nodes.append(end_node)
@@ -271,7 +320,7 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]
 
 # --- 4. Visualizer ---
 def generate_graph(
-    nodes: List[Function], edges: List[TokenEdge], filename="architecture.html"
+    nodes: List[Function], edges: List[Token], filename="architecture.html"
 ):
     net = Network(
         height="900px",
