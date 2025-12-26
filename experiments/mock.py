@@ -9,6 +9,8 @@ class Type(BaseModel):
     name: str
     is_mutable: bool = True
     is_collection: bool = False
+    origin_uid: int
+    destination_uid: int | None = None
 
     def __hash__(self):
         return hash((self.name, self.is_mutable))
@@ -32,6 +34,7 @@ class Error(Type):
 
 class Function(BaseModel):
     name: str
+    uid: int
     consumes: List[Type]
     produces: List[Type]
 
@@ -104,19 +107,19 @@ def create_token(t, is_coll=False, is_in=False):
 
 class Node(BaseModel):
     name: str
+    is_start: bool = False
+    is_end: bool = False
 
 
 # --- 3. Logic Engine ---
 def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
-    start_node = Node(name="Start")
-    end_node = Node(name="End")
+    start_node = Node(name="Start", is_start=True)
+    end_node = Node(name="End", is_end=True)
     nodes = [start_node]
 
     pool = flow[0].consumes
-    ir = []
 
     for i, func in enumerate(flow, 1):
-        nodes.append(func)
         for type_in in func.consumes:
             if type_in.is_mutable:
                 pool.remove(type_in)
@@ -131,7 +134,7 @@ def process_flow(flow: List[Function]) -> List[Dict[str, Any]]:
 
 
 # --- 4. Visualizer ---
-def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
+def generate_graph(flow: List[Function], filename="architecture.html"):
     net = Network(
         height="900px",
         width="100%",
@@ -141,15 +144,19 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
     )
     # added_tokens = set()
 
-    for i, entry in enumerate(ir, 1):
+    for i, entry in enumerate(flow, 1):
         net.add_node(
             i,
             label=entry.name,
             shape="box",
-            color="#2921FF" if "start" == entry.name.lower() or "end" == entry.name.lower() else "#FF5722",
+            color="#2921FF"
+            if "start" == entry.name.lower() or "end" == entry.name.lower()
+            else "#FF5722",
             size=15,
             # borderWidth=2 if entry["is_iterative"] else 1,
         )
+
+        # net.add_edge()
 
         # for t in entry["consumed"] + entry["produced"]:
         #     if t["id"] not in added_tokens:
@@ -210,4 +217,4 @@ def generate_graph(ir: List[Dict[str, Any]], filename="architecture.html"):
 
 # --- 5. Run ---
 ir_data = process_flow(my_flow)
-generate_graph(ir_data)
+generate_graph(my_flow)
