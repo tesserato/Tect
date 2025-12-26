@@ -98,16 +98,27 @@ fn process_flow(flow: Vec<Function>) -> (Vec<Function>, Vec<TypeInstance>) {
     for func in flow {
         nodes.push(func.clone());
 
-        for t_req in &func.consumes {
-            if let Some(pos) = pool.iter().position(|instance| instance.inner == *t_req) {
-                let mut edge = pool[pos].clone();
+        // 1. Consumption: Grab ALL matching instances from the pool
+        let mut i = 0;
+        while i < pool.len() {
+            // Check if the current pool item's type is one of the types the function consumes
+            let is_accepted = func.consumes.iter().any(|req| *req == pool[i].inner);
+
+            if is_accepted {
+                // Create the edge snapshot
+                let mut edge = pool[i].clone();
                 edge.destination_uid = Some(func.uid);
                 edges.push(edge);
 
-                if t_req.is_mutable {
-                    pool.remove(pos);
+                // If mutable, remove it from the pool.
+                // If immutable (like Settings), leave it for others to consume.
+                if pool[i].inner.is_mutable {
+                    pool.remove(i);
+                    // Don't increment i; the next item shifted into the current index
+                    continue;
                 }
             }
+            i += 1;
         }
 
         for t_prod in &func.produces {

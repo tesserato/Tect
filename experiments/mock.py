@@ -25,9 +25,20 @@ class Type(BaseModel):
         )
 
 
-class TypeInstance(Type):
+class TokenEdge(Type):
     origin_function_uid: int | None = None
     destination_function_uid: int | None = None
+
+    def __hash__(self):
+        return hash((self.name, self.is_mutable, self.is_collection))
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, Type)
+            and self.name == other.name
+            and self.is_mutable == other.is_mutable
+            and self.is_collection == other.is_collection
+        )
 
     @classmethod
     def from_type(
@@ -55,6 +66,9 @@ class Function(BaseModel):
     produces: List[Type] = []
     is_start: bool = False
     is_end: bool = False
+
+    def __hash__(self):
+        return hash((self.uid))
 
 
 # --- 2. Definitions ---
@@ -112,13 +126,12 @@ my_flow = [
 
 
 # --- 3. Logic Engine ---
-def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstance]]:
+def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]:
     start_node = Function(name="Start", is_start=True)
-    end_node = Function(name="End", is_end=True)
     nodes = [start_node]
     edges = []
 
-    pool = [TypeInstance.from_type(n, origin=start_node.uid) for n in flow[0].consumes]
+    pool = [TokenEdge.from_type(n, origin=start_node.uid) for n in flow[0].consumes]
 
     print(pool)
 
@@ -126,15 +139,14 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstanc
         nodes.append(func)
         for t in func.consumes:
             for o in pool:
-                if o == t:
+                if o.name == t.name:
                     o.destination_function_uid = func.uid
                     edges.append(o)
                     if o.is_mutable:
                         pool.remove(o)
-                    break
 
         for type_out in func.produces:
-            type_instance = TypeInstance.from_type(type_out, origin=func.uid)
+            type_instance = TokenEdge.from_type(type_out, origin=func.uid)
             pool.append(type_instance)
         print(func.name)
         print([t.name for t in pool])
@@ -142,18 +154,25 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TypeInstanc
         # print("  ", p)
         print()
 
-    for t in pool:
-        t.destination_function_uid = end_node.uid
-        edges.append(t)
-    nodes.append(end_node)
+    # end_node = Function(name="End", is_end=True)
+    # for t in pool:
+    #     t.destination_function_uid = end_node.uid
+    #     edges.append(t)
+    # nodes.append(end_node)
     for edge in edges:
-        print(edge.origin_function_uid, "->", edge.destination_function_uid, ":", edge.name)
+        print(
+            edge.origin_function_uid,
+            "->",
+            edge.destination_function_uid,
+            ":",
+            edge.name,
+        )
     return nodes, edges
 
 
 # --- 4. Visualizer ---
 def generate_graph(
-    nodes: List[Function], edges: List[TypeInstance], filename="architecture.html"
+    nodes: List[Function], edges: List[TokenEdge], filename="architecture.html"
 ):
     net = Network(
         height="900px",

@@ -39,6 +39,25 @@ function loadTable(pathString) > Table | FileNotFound
 function saveTable(Table, pathString) > ok | panic
 
 
+The program maintains a pool of types (multiset).
+
+Each function:
+
+consumes some types from the pool (its inputs)
+
+adds some types to the pool (its outcomes)
+
+Execution proceeds step by step.
+
+At the end of the flow:
+
+the pool must be empty
+
+except for errors
+
+Any unconsumed error is fatal.
+
+
 
 # Example login
 what about this:
@@ -71,14 +90,29 @@ FetchProfile {
 
 # Example DSBG
 
+data PathToConfiguration
+data InitialCommand
 data Settings
 data SourceFile
 data Article
 data SiteTemplates
 
+error InitialCommandMalformedError
+error FileNotFoundError
+error ConfigurationMalformedError
 error FileSystemError
 error MetadataError
 error TemplateError
+
+function ProcessInitialCommand(InitialCommand)
+    > Configuration
+    | PathToConfiguration
+    | InitialCommandMalformedError
+
+function ReadConfiguration(PathToConfiguration)
+    > Configuration
+    | FileNotFoundError
+    | ConfigurationMalformedError
 
 function PrepareOutput(Settings)
     > Settings
@@ -103,6 +137,11 @@ function RenderPage(Article)
 function FinalizeSite(Settings)
     > String
     | TemplateError
+
+# InitialCommand > Configuration | PathToConfiguration | InitialCommandMalformedError
+ProcessInitialCommand
+# PathToConfiguration > Configuration | FileNotFoundError | ConfigurationMalformedError
+ReadConfiguration
 
 
 PrepareOutput # Settings > Settings | FileSystemError
