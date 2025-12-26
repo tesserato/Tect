@@ -1,14 +1,32 @@
-from enum import Enum
 import itertools
-from typing import List
-from pydantic import BaseModel, Field
+from enum import Enum
+from typing import List, Optional, Tuple, Dict
+
+from pydantic import BaseModel
 from pyvis.network import Network
 
+# --- Global Configuration & Counters ---
+# Used to ensure every function/node in the graph has a unique identifier
 _func_id_counter = itertools.count(1)
 
 
-# --- 1. Models ---
+# --- 1. Enumerations & Base Types ---
+
+
+class Cardinality(Enum):
+    """Defines whether a function handles a single item or a collection."""
+
+    ONE = "1"
+    MANY = "*"
+
+
 class Type(BaseModel):
+    """
+    Represents the 'Schema' of data.
+    Immutable types can be consumed by multiple functions (e.g., Configuration).
+    Mutable types are consumed once and removed from the flow (e.g., a File Handle).
+    """
+
     name: str
     is_mutable: bool = True
 
@@ -23,23 +41,42 @@ class Type(BaseModel):
         )
 
 
+class Data(Type):
+    """Specific Type subclass for standard data payloads."""
+
+    pass
+
+
+class Error(Type):
+    """Specific Type subclass for error/exception payloads."""
+
+    pass
+
+
+# --- 2. Data Flow Models ---
+
+
 class Token(BaseModel):
-    """Represents a data flow edge between functions"""
+    """
+    The 'Edge' in the graph. Represents a piece of data moving between functions.
+    Contains metadata about the data type, collection status, and flow connectivity.
+    """
 
     name: str
     is_mutable: bool = True
     is_collection: bool = False
-    origin_function_uid: int | None
-    destination_function_uid: int | None
+    origin_function_uid: Optional[int] = None
+    destination_function_uid: Optional[int] = None
 
     @classmethod
     def from_type(
         cls,
         t: Type,
-        origin: int | None = None,
-        destination: int | None = None,
+        origin: Optional[int] = None,
+        destination: Optional[int] = None,
         is_collection: bool = False,
     ):
+        """Helper to create a Token from a Type definition."""
         return cls(
             name=t.name,
             is_mutable=t.is_mutable,
@@ -49,47 +86,45 @@ class Token(BaseModel):
         )
 
 
-class Data(Type):
-    pass
-
-
-class Error(Type):
-    pass
-
-
 class Function(BaseModel):
+    """
+    The 'Node' in the graph. Represents a processing unit.
+    Functions declare what they consume from the environment and what they produce.
+    """
+
     name: str
     uid: int
     consumes: List[Token]
     produces: List[Token]
-    is_start: bool
-    is_end: bool
+    is_start: bool = False
+    is_end: bool = False
+    is_error: bool = False
 
     def __hash__(self):
         return hash(self.uid)
 
 
-class Cardinality(Enum):
-    ONE = "1"
-    MANY = "*"
+# --- 3. Component Factory ---
 
 
 def generate_function(
     name: str,
-    consumes: List[tuple[Type, Cardinality]] = [],
-    produces: List[tuple[Type, Cardinality]] = [],
+    consumes: List[Tuple[Type, Cardinality]] = [],
+    produces: List[Tuple[Type, Cardinality]] = [],
     is_start: bool = False,
     is_end: bool = False,
+    is_error: bool = False,
 ) -> Function:
-    consumes_as_tokens = []
-    for t, card in consumes:
-        is_collection = card == Cardinality.MANY
-        consumes_as_tokens.append(Token.from_type(t, is_collection=is_collection))
-
-    produces_as_tokens = []
-    for t, card in produces:
-        is_collection = card == Cardinality.MANY
-        produces_as_tokens.append(Token.from_type(t, is_collection=is_collection))
+    """
+    Factory function to streamline the creation of Functions.
+    Converts Type/Cardinality tuples into Token objects and assigns unique UIDs.
+    """
+    consumes_as_tokens = [
+        Token.from_type(t, is_collection=(c == Cardinality.MANY)) for t, c in consumes
+    ]
+    produces_as_tokens = [
+        Token.from_type(t, is_collection=(c == Cardinality.MANY)) for t, c in produces
+    ]
 
     return Function(
         name=name,
@@ -98,230 +133,120 @@ def generate_function(
         produces=produces_as_tokens,
         is_start=is_start,
         is_end=is_end,
+        is_error=is_error,
     )
 
 
-# --- 2. Definitions ---
-InitialCommand = Data(name="InitialCommand")
-PathToConfiguration = Data(name="PathToConfiguration")
-SourceFile = Data(name="SourceFile", is_mutable=False)
-Article = Data(name="Article")
-Html = Data(name="HTML")
-Settings = Data(name="Settings", is_mutable=False)
-SiteTemplates = Data(name="SiteTemplates", is_mutable=False)
-FSError = Error(name="FileSystemError")
-Okay = Data(name="Okay", is_mutable=False)
-
-ProcessInitialCommand = generate_function(
-    name="ProcessInitialCommand",
-    consumes=[(InitialCommand, Cardinality.ONE)],
-    produces=[(Settings, Cardinality.ONE), (PathToConfiguration, Cardinality.ONE)],
-)
-
-LoadConfiguration = generate_function(
-    name="LoadConfiguration",
-    consumes=[(PathToConfiguration, Cardinality.ONE)],
-    produces=[(Settings, Cardinality.ONE)],
-)
-
-LoadTemplates = generate_function(
-    name="LoadTemplates",
-    consumes=[(Settings, Cardinality.ONE)],
-    produces=[(SiteTemplates, Cardinality.ONE)],
-)
-
-FindSourceFiles = generate_function(
-    name="FindSourceFiles",
-    consumes=[(Settings, Cardinality.ONE)],
-    produces=[(SourceFile, Cardinality.MANY), (FSError, Cardinality.MANY)],
-)
-
-ParseSource = generate_function(
-    name="ParseSource",
-    consumes=[(SourceFile, Cardinality.ONE)],
-    produces=[(Article, Cardinality.ONE), (FSError, Cardinality.ONE)],
-)
-
-RenderArticle = generate_function(
-    name="RenderArticle",
-    consumes=[
-        (Article, Cardinality.ONE),
-        (SiteTemplates, Cardinality.ONE),
-        (Settings, Cardinality.ONE),
-    ],
-    produces=[(Html, Cardinality.ONE)],
-)
-
-WriteHTML = generate_function(
-    name="WriteHTML",
-    consumes=[(Html, Cardinality.ONE)],
-    produces=[(Okay, Cardinality.ONE), (FSError, Cardinality.MANY)],
-)
-
-# Define the flow
-my_flow = [
-    ProcessInitialCommand,
-    LoadConfiguration,
-    LoadTemplates,
-    FindSourceFiles,
-    ParseSource,
-    RenderArticle,
-    WriteHTML,
-]
+# --- 4. Logic Engine (Simulation) ---
 
 
-# --- 3. Logic Engine ---
 class TokenPool:
+    """
+    Simulates the 'State' of the application during runtime.
+    Manages available tokens and handles the logic for mutable vs. immutable consumption.
+    """
+
     def __init__(self):
-        self.mutable_tokens: List[tuple[Type, int]] = []
-        self.immutable_tokens: dict[Type, List[int]] = {}
-        # Track which tokens (Type + OriginID) have been used at least once
-        self.consumed_origins: set[tuple[Type, int]] = set()
+        self.available_tokens: List[Token] = []
+        self.consumed_tokens: List[Token] = []
 
-    def add(self, token_type: Type, origin_uid: int):
-        if token_type.is_mutable:
-            self.mutable_tokens.append((token_type, origin_uid))
-        else:
-            if token_type not in self.immutable_tokens:
-                self.immutable_tokens[token_type] = []
-            self.immutable_tokens[token_type].append(origin_uid)
+    def add(self, token: Token, origin_uid: int):
+        """Registers a produced token into the environment."""
+        new_token = token.model_copy()
+        new_token.origin_function_uid = origin_uid
+        self.available_tokens.append(new_token)
 
-    def consume(self, token_type: Type, consumer_uid: int) -> List[Token]:
+    def consume(self, requirement: Token, consumer_uid: int) -> List[Token]:
         """
-        Consume a token from the pool.
-        - Mutable tokens: single edge, removed after consumption
-        - Immutable tokens: multiple edges (one per producer), remain available
+        Attempts to satisfy a function's requirement from the pool.
+        - Immutable tokens: Create an edge but remain in pool for others.
+        - Mutable tokens: Create an edge and are removed from pool.
         """
         edges = []
+        # Find matches based on token name
+        matches = [t for t in self.available_tokens if t.name == requirement.name]
 
-        if token_type.is_mutable:
-            for i, (t, origin_uid) in enumerate(self.mutable_tokens):
-                if t == token_type:
-                    edge = Token.from_type(t, origin_uid, consumer_uid)
-                    edges.append(edge)
-                    # Mark as consumed and remove from pool
-                    self.consumed_origins.add((t, origin_uid))
-                    self.mutable_tokens.pop(i)
-                    break
-        else:
-            if token_type in self.immutable_tokens:
-                for origin_uid in self.immutable_tokens[token_type]:
-                    edge = Token.from_type(token_type, origin_uid, consumer_uid)
-                    edges.append(edge)
-                    # Mark this specific production of the immutable token as used
-                    self.consumed_origins.add((token_type, origin_uid))
+        for match in matches:
+            # Create a specific flow edge for the graph
+            edge = match.model_copy()
+            edge.destination_function_uid = consumer_uid
+            edges.append(edge)
+
+            self.consumed_tokens.append(match)
+
+            if match.is_mutable:
+                self.available_tokens.remove(match)
+                break  # Mutable requirements are satisfied by the first available match
 
         return edges
 
-    def get_unconsumed(self) -> List[tuple[Type, int]]:
-        """
-        Returns tokens that were produced but NEVER used by any function.
-        Useful for identifying unhandled errors or unused configuration.
-        """
-        unconsumed = []
-
-        # Check remaining mutables
-        for t, origin_uid in self.mutable_tokens:
-            if (t, origin_uid) not in self.consumed_origins:
-                unconsumed.append((t, origin_uid))
-
-        # Check immutables
-        for t, origins in self.immutable_tokens.items():
-            for origin_uid in origins:
-                if (t, origin_uid) not in self.consumed_origins:
-                    unconsumed.append((t, origin_uid))
-
-        return unconsumed
-
-    def __repr__(self):
-        mutable = [t.name for t, _ in self.mutable_tokens]
-        immutable = [
-            f"{t.name}(x{len(origins)})" for t, origins in self.immutable_tokens.items()
-        ]
-        return f"TokenPool(mutable={mutable}, immutable={immutable})"
+    def get_unconsumed(self) -> List[Token]:
+        """Returns tokens that were produced but never used by another function."""
+        return [t for t in self.available_tokens if t not in self.consumed_tokens]
 
 
-def process_flow(flow: List[Function]) -> tuple[List[Function], List[Token]]:
-    """Process a flow and generate nodes and edges for visualization"""
+def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
+    """
+    The orchestrator. It simulates the flow of data through a sequence of functions,
+    connecting producers to consumers and handling terminal (Start/End/Error) nodes.
+    """
     start_node = generate_function(name="Start", is_start=True)
     end_node = generate_function(name="End", is_end=True)
 
     nodes = [start_node]
-    edges = []
+    all_edges = []
     pool = TokenPool()
 
-    # Track error nodes by error type
-    error_nodes = {}  # error_type -> error_node
+    # Seed the initial pool with requirements for the first function, sourced from Start
+    if flow:
+        for req in flow[0].consumes:
+            pool.add(req, start_node.uid)
 
-    # Initialize pool with first function's inputs from start node
-    for token_type in flow[0].consumes:
-        pool.add(token_type, start_node.uid)
-
-    print(f"Initial pool: {pool}\n")
-
-    # Process each function
+    # Main Simulation Loop
     for func in flow:
         nodes.append(func)
 
-        # Consume required inputs
-        for consumed_type in func.consumes:
-            consumed_edges = pool.consume(consumed_type, func.uid)
-            if consumed_edges:
-                edges.extend(consumed_edges)
-                if not consumed_type.is_mutable:
-                    print(
-                        f"  ✓ {func.name} receives {consumed_type.name} from {len(consumed_edges)} producer(s)"
-                    )
-            else:
-                print(
-                    f"  ⚠️  Warning: {func.name} needs {consumed_type.name} but it's not available"
+        # 1. Satisfy consumption requirements
+        for req in func.consumes:
+            new_edges = pool.consume(req, func.uid)
+            all_edges.extend(new_edges)
+
+        # 2. Add produced outputs to the pool
+        for prod in func.produces:
+            pool.add(prod, func.uid)
+
+    # Finalization: Handle unconsumed data and errors
+    error_nodes: Dict[str, Function] = {}
+    for leftover in pool.get_unconsumed():
+        # Heuristic: If it's a Type/subclass named 'Error' or explicitly an Error class
+        if "Error" in leftover.name:
+            if leftover.name not in error_nodes:
+                err_node = generate_function(
+                    name=leftover.name, is_end=True, is_error=True
                 )
+                error_nodes[leftover.name] = err_node
+                nodes.append(err_node)
 
-        # Produce outputs
-        for produced_type in func.produces:
-            pool.add(produced_type, func.uid)
-
-        print(f"{func.name}")
-        print(f"  Pool after: {pool}\n")
-
-    # Connect unconsumed tokens to appropriate end nodes
-    for token_type, origin_uid in pool.get_unconsumed():
-        if isinstance(token_type, Error):
-            # Create or get error node for this error type
-            if token_type not in error_nodes:
-                error_node = Function(
-                    name=f"Error: {token_type.name}", is_end=True, is_error=True
-                )
-                error_nodes[token_type] = error_node
-                nodes.append(error_node)
-
-            # Connect to specific error node
-            edge = Token.from_type(token_type, origin_uid, error_nodes[token_type].uid)
-            edges.append(edge)
+            edge = leftover.model_copy()
+            edge.destination_function_uid = error_nodes[leftover.name].uid
+            all_edges.append(edge)
         else:
-            # Connect data tokens to the main end node
-            edge = Token.from_type(token_type, origin_uid, end_node.uid)
-            edges.append(edge)
+            # Standard unconsumed data flows to the 'End' terminal
+            edge = leftover.model_copy()
+            edge.destination_function_uid = end_node.uid
+            all_edges.append(edge)
 
     nodes.append(end_node)
-
-    # Print edge summary
-    print("\n=== Edges ===")
-    for edge in edges:
-        origin_name = next(n.name for n in nodes if n.uid == edge.origin_function_uid)
-        dest_name = next(
-            n.name for n in nodes if n.uid == edge.destination_function_uid
-        )
-        mutability = "immutable" if not edge.is_mutable else "mutable"
-        print(f"{origin_name} -> {dest_name}: {edge.name} ({mutability})")
-
-    return nodes, edges
+    return nodes, all_edges
 
 
-# --- 4. Visualizer ---
+# --- 5. Visualization Engine ---
+
+
 def generate_graph(
     nodes: List[Function], edges: List[Token], filename="architecture.html"
 ):
+    """Generates an interactive HTML visualization of the architecture."""
     net = Network(
         height="900px",
         width="100%",
@@ -330,61 +255,104 @@ def generate_graph(
         directed=True,
     )
 
-    # Configure physics for longer edges
-    # net.set_options("""
-    # {
-    #   "physics": {
-    #     "enabled": true,
-    #     "barnesHut": {
-    #       "gravitationalConstant": -8000,
-    #       "centralGravity": 0.3,
-    #       "springLength": 200,
-    #       "springConstant": 0.04,
-    #       "damping": 0.09,
-    #       "avoidOverlap": 0.5
-    #     },
-    #     "minVelocity": 0.75,
-    #     "solver": "barnesHut"
-    #   }
-    # }
-    # """)
-
+    # 1. Create Nodes
     for node in nodes:
+        color = "#2921FF"  # Default Function color
         if node.is_error:
-            color = "#FF0000"  # Red for error nodes
+            color = "#FF4444"
         elif node.is_start or node.is_end:
-            color = "#BDBBFF"  # Blue for start/end
-        else:
-            color = "#2921FF"  # Orange for regular functions
+            color = "#00CCFF"
 
         net.add_node(
             node.uid,
             label=node.name,
             shape="dot",
             color=color,
-            size=15,
+            size=20 if node.is_start else 15,
         )
 
+    # 2. Create Edges
     for edge in edges:
-        label = edge.name + ("[]" if edge.is_collection else "")
-        color = "#00ffcc" if edge.is_mutable else "#888888"
-        width = 10.0 if edge.is_collection else 1.5
-        dashes = [8, 4] if edge.is_collection else False
+        # Validate that both ends of the edge exist
+        if (
+            edge.origin_function_uid is not None
+            and edge.destination_function_uid is not None
+        ):
+            label = edge.name + ("[]" if edge.is_collection else "")
+            color = "#00ffcc" if edge.is_mutable else "#888888"
 
-        net.add_edge(
-            edge.origin_function_uid,
-            edge.destination_function_uid,
-            label=label,
-            color=color,
-            width=width,
-            dashes=dashes,
-        )
+            net.add_edge(
+                edge.origin_function_uid,
+                edge.destination_function_uid,
+                label=label,
+                color=color,
+                width=4 if edge.is_collection else 1.5,
+                dashes=edge.is_collection,
+                font={"size": 10, "color": "#ffffff"},
+            )
 
-    net.show_buttons(filter_=True)
+    net.show_buttons(filter_=["physics"])
     net.show(filename, notebook=False)
+    print(f"Graph generated successfully: {filename}")
 
 
-# --- 5. Run ---
+# --- 6. Execution (Example Static Site Generator) ---
+
 if __name__ == "__main__":
-    nodes, edges = process_flow(my_flow)
+    # Define Domain Types
+    InitialCommand = Data(name="InitialCommand")
+    PathToConfig = Data(name="PathToConfig")
+    SourceFile = Data(name="SourceFile", is_mutable=False)
+    Article = Data(name="Article")
+    Html = Data(name="HTML")
+    Settings = Data(name="Settings", is_mutable=False)
+    Templates = Data(name="Templates", is_mutable=False)
+    FSError = Error(name="FileSystemError")
+    Success = Data(name="SuccessReport", is_mutable=False)
+
+    # Define the Processing Pipeline
+    pipeline = [
+        generate_function(
+            "ProcessCLI",
+            consumes=[(InitialCommand, Cardinality.ONE)],
+            produces=[(Settings, Cardinality.ONE), (PathToConfig, Cardinality.ONE)],
+        ),
+        generate_function(
+            "LoadConfig",
+            consumes=[(PathToConfig, Cardinality.ONE)],
+            produces=[(Settings, Cardinality.ONE)],
+        ),
+        generate_function(
+            "LoadTemplates",
+            consumes=[(Settings, Cardinality.ONE)],
+            produces=[(Templates, Cardinality.ONE)],
+        ),
+        generate_function(
+            "ScanFS",
+            consumes=[(Settings, Cardinality.ONE)],
+            produces=[(SourceFile, Cardinality.MANY), (FSError, Cardinality.MANY)],
+        ),
+        generate_function(
+            "ParseMarkdown",
+            consumes=[(SourceFile, Cardinality.ONE)],
+            produces=[(Article, Cardinality.ONE), (FSError, Cardinality.ONE)],
+        ),
+        generate_function(
+            "RenderHTML",
+            consumes=[
+                (Article, Cardinality.ONE),
+                (Templates, Cardinality.ONE),
+                (Settings, Cardinality.ONE),
+            ],
+            produces=[(Html, Cardinality.ONE)],
+        ),
+        generate_function(
+            "WriteToDisk",
+            consumes=[(Html, Cardinality.ONE)],
+            produces=[(Success, Cardinality.ONE), (FSError, Cardinality.ONE)],
+        ),
+    ]
+
+    # Process and Visualize
+    nodes, edges = process_flow(pipeline)
     generate_graph(nodes, edges)
