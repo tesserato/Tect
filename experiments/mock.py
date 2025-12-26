@@ -32,7 +32,6 @@ class TokenEdge(BaseModel):
     is_collection: bool = False
     origin_function_uid: int
     destination_function_uid: int
-    consumed: bool = False
 
     @classmethod
     def from_type(cls, t: Type, origin: int, destination: int):
@@ -75,6 +74,7 @@ Html = Data(name="HTML")
 Settings = Data(name="Settings", is_mutable=False)
 SiteTemplates = Data(name="SiteTemplates", is_mutable=False)
 FSError = Error(name="FileSystemError")
+Okay = Data(name="Okay", is_mutable=False)
 
 ProcessInitialCommand = Function(
     name="ProcessInitialCommand",
@@ -106,7 +106,7 @@ RenderArticle = Function(
     consumes=[Article, SiteTemplates, Settings],
     produces=[Html],
 )
-WriteHTML = Function(name="WriteHTML", consumes=[Html], produces=[FSError])
+WriteHTML = Function(name="WriteHTML", consumes=[Html], produces=[Okay, FSError])
 
 my_flow = [
     ProcessInitialCommand,
@@ -121,16 +121,13 @@ my_flow = [
 
 # --- 3. Logic Engine ---
 class TokenPool:
-    """Manages available tokens with proper consumption semantics"""
-
     def __init__(self):
-        # For mutable tokens: single (type, origin_uid)
-        # For immutable tokens: list of all (type, origin_uid) producers
         self.mutable_tokens: List[tuple[Type, int]] = []
-        self.immutable_tokens: dict[Type, List[int]] = {}  # type -> list of origin_uids
+        self.immutable_tokens: dict[Type, List[int]] = {}
+        # Track which tokens (Type + OriginID) have been used at least once
+        self.consumed_origins: set[tuple[Type, int]] = set()
 
     def add(self, token_type: Type, origin_uid: int):
-        """Add a new token to the pool"""
         if token_type.is_mutable:
             self.mutable_tokens.append((token_type, origin_uid))
         else:
@@ -147,28 +144,42 @@ class TokenPool:
         edges = []
 
         if token_type.is_mutable:
-            # Find and remove the mutable token
             for i, (t, origin_uid) in enumerate(self.mutable_tokens):
                 if t == token_type:
                     edge = TokenEdge.from_type(t, origin_uid, consumer_uid)
                     edges.append(edge)
+                    # Mark as consumed and remove from pool
+                    self.consumed_origins.add((t, origin_uid))
                     self.mutable_tokens.pop(i)
                     break
         else:
-            # Create edges from ALL producers of this immutable token
             if token_type in self.immutable_tokens:
                 for origin_uid in self.immutable_tokens[token_type]:
                     edge = TokenEdge.from_type(token_type, origin_uid, consumer_uid)
                     edges.append(edge)
+                    # Mark this specific production of the immutable token as used
+                    self.consumed_origins.add((token_type, origin_uid))
 
         return edges
 
     def get_unconsumed(self) -> List[tuple[Type, int]]:
-        """Return all unconsumed tokens (mutable only and all immutable)"""
-        unconsumed = self.mutable_tokens.copy()
-        for token_type, origin_uids in self.immutable_tokens.items():
-            for origin_uid in origin_uids:
-                unconsumed.append((token_type, origin_uid))
+        """
+        Returns tokens that were produced but NEVER used by any function.
+        Useful for identifying unhandled errors or unused configuration.
+        """
+        unconsumed = []
+
+        # Check remaining mutables
+        for t, origin_uid in self.mutable_tokens:
+            if (t, origin_uid) not in self.consumed_origins:
+                unconsumed.append((t, origin_uid))
+
+        # Check immutables
+        for t, origins in self.immutable_tokens.items():
+            for origin_uid in origins:
+                if (t, origin_uid) not in self.consumed_origins:
+                    unconsumed.append((t, origin_uid))
+
         return unconsumed
 
     def __repr__(self):
@@ -238,10 +249,10 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]
                 token_type, origin_uid, error_nodes[token_type].uid
             )
             edges.append(edge)
-        # else:
-        #     # Connect data tokens to the main end node
-        #     edge = TokenEdge.from_type(token_type, origin_uid, end_node.uid)
-        #     edges.append(edge)
+        else:
+            # Connect data tokens to the main end node
+            edge = TokenEdge.from_type(token_type, origin_uid, end_node.uid)
+            edges.append(edge)
 
     nodes.append(end_node)
 
