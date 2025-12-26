@@ -32,6 +32,7 @@ class TokenEdge(BaseModel):
     is_collection: bool = False
     origin_function_uid: int
     destination_function_uid: int
+    consumed: bool = False
 
     @classmethod
     def from_type(cls, t: Type, origin: int, destination: int):
@@ -59,6 +60,7 @@ class Function(BaseModel):
     produces: List[Type] = []
     is_start: bool = False
     is_end: bool = False
+    is_error: bool = False
 
     def __hash__(self):
         return hash(self.uid)
@@ -186,6 +188,9 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]
     edges = []
     pool = TokenPool()
 
+    # Track error nodes by error type
+    error_nodes = {}  # error_type -> error_node
+
     # Initialize pool with first function's inputs from start node
     for token_type in flow[0].consumes:
         pool.add(token_type, start_node.uid)
@@ -217,10 +222,26 @@ def process_flow(flow: List[Function]) -> tuple[List[Function], List[TokenEdge]]
         print(f"{func.name}")
         print(f"  Pool after: {pool}\n")
 
-    # Connect unconsumed tokens to end node
+    # Connect unconsumed tokens to appropriate end nodes
     for token_type, origin_uid in pool.get_unconsumed():
-        edge = TokenEdge.from_type(token_type, origin_uid, end_node.uid)
-        edges.append(edge)
+        if isinstance(token_type, Error):
+            # Create or get error node for this error type
+            if token_type not in error_nodes:
+                error_node = Function(
+                    name=f"Error: {token_type.name}", is_end=True, is_error=True
+                )
+                error_nodes[token_type] = error_node
+                nodes.append(error_node)
+
+            # Connect to specific error node
+            edge = TokenEdge.from_type(
+                token_type, origin_uid, error_nodes[token_type].uid
+            )
+            edges.append(edge)
+        # else:
+        #     # Connect data tokens to the main end node
+        #     edge = TokenEdge.from_type(token_type, origin_uid, end_node.uid)
+        #     edges.append(edge)
 
     nodes.append(end_node)
 
@@ -250,26 +271,32 @@ def generate_graph(
     )
 
     # Configure physics for longer edges
-    net.set_options("""
-    {
-      "physics": {
-        "enabled": true,
-        "barnesHut": {
-          "gravitationalConstant": -8000,
-          "centralGravity": 0.3,
-          "springLength": 200,
-          "springConstant": 0.04,
-          "damping": 0.09,
-          "avoidOverlap": 0.5
-        },
-        "minVelocity": 0.75,
-        "solver": "barnesHut"
-      }
-    }
-    """)
+    # net.set_options("""
+    # {
+    #   "physics": {
+    #     "enabled": true,
+    #     "barnesHut": {
+    #       "gravitationalConstant": -8000,
+    #       "centralGravity": 0.3,
+    #       "springLength": 200,
+    #       "springConstant": 0.04,
+    #       "damping": 0.09,
+    #       "avoidOverlap": 0.5
+    #     },
+    #     "minVelocity": 0.75,
+    #     "solver": "barnesHut"
+    #   }
+    # }
+    # """)
 
     for node in nodes:
-        color = "#8784DA" if node.is_start or node.is_end else "#1347B8"
+        if node.is_error:
+            color = "#FF0000"  # Red for error nodes
+        elif node.is_start or node.is_end:
+            color = "#BDBBFF"  # Blue for start/end
+        else:
+            color = "#2921FF"  # Orange for regular functions
+
         net.add_node(
             node.uid,
             label=node.name,
@@ -293,6 +320,7 @@ def generate_graph(
             dashes=dashes,
         )
 
+    net.show_buttons(filter_=True)
     net.show(filename, notebook=False)
 
 
