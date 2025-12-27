@@ -298,8 +298,14 @@ fn main() -> std::io::Result<()> {
         ),
     ];
 
+    // Serialization with 4-space indentation
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut buf = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
     let (nodes, edges) = engine.process_flow(pipeline);
-    let json_data = serde_json::to_string_pretty(&GraphExport { nodes, edges }).unwrap();
+
+    (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
+    let json_data = String::from_utf8(buf).unwrap();
     let mut file = File::create("../experiments/architecture.json")?;
     file.write_all(json_data.as_bytes())?;
     Ok(())
