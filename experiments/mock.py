@@ -77,9 +77,9 @@ class Function(BaseModel):
     uid: int
     consumes: List[Token]
     produces: List[Token]
-    is_start: bool = False
-    is_end: bool = False
-    is_error: bool = False
+    is_artificial_graph_start: bool = False
+    is_artificial_graph_end: bool = False
+    is_artificial_error_termination: bool = False
 
 
 # --- Factory ---
@@ -104,9 +104,9 @@ def generate_function(
         uid=next(_func_id_counter),
         consumes=c_tokens,
         produces=p_tokens,
-        is_start=is_start,
-        is_end=is_end,
-        is_error=is_error,
+        is_artificial_graph_start=is_start,
+        is_artificial_graph_end=is_end,
+        is_artificial_error_termination=is_error,
     )
 
 
@@ -224,7 +224,7 @@ def generate_graph(
         height="900px",
         width="100%",
         bgcolor="#0b0e14",
-        font_color="#e0e0e0",
+        font_color="#e0e0e0",  # type: ignore
         directed=True,
     )
 
@@ -259,16 +259,16 @@ def generate_graph(
 
     for n in nodes:
         color = "#1d4ed8"
-        if n.is_error:
+        if n.is_artificial_error_termination:
             color = "#dc2626"
-        elif n.is_start or n.is_end:
+        elif n.is_artificial_graph_start or n.is_artificial_graph_end:
             color = "#059669"
 
         net.add_node(
             n.uid,
             label=f" {n.name} ",
             shape="box",
-            color={"background": color, "border": "#ffffff"},
+            color={"background": color, "border": "#ffffff"},  # type: ignore
             borderWidth=1,
             margin=10,
         )
@@ -291,6 +291,21 @@ def generate_graph(
     net.set_options(json.dumps(options))
     net.show(filename, notebook=False)
     print(f"Graph generated: {filename}")
+
+
+def save_to_json(
+    nodes: List[Function], edges: List[Token], filename: str = "architecture.json"
+):
+    """Serializes the processed graph nodes and edges to a JSON file."""
+    export_data = {
+        "nodes": [n.model_dump() for n in nodes],
+        "edges": [e.model_dump() for e in edges],
+    }
+
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(export_data, f, indent=4)
+
+    print(f"Architecture exported to {filename}")
 
 
 # --- Execution ---
@@ -355,4 +370,5 @@ if __name__ == "__main__":
     ]
 
     nodes, edges = process_flow(pipeline)
+    save_to_json(nodes, edges)
     generate_graph(nodes, edges)
