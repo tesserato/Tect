@@ -23,8 +23,8 @@ class Cardinality(Enum):
 class Type(BaseModel):
     """
     Represents the 'Schema' of data.
-    Immutable types can be consumed by multiple functions (e.g., Configuration).
-    Mutable types are consumed once and removed from the flow (e.g., a File Handle).
+    Immutable types can be consumed by multiple functions.
+    Mutable types are consumed once and removed from the flow.
     """
 
     name: str
@@ -43,7 +43,7 @@ class Error(Type):
     pass
 
 
-# --- Core Models ---
+# --- 2. Core Models ---
 
 
 class Token(BaseModel):
@@ -70,7 +70,6 @@ class Token(BaseModel):
 class Function(BaseModel):
     """
     The 'Node' in the graph. Represents a processing unit.
-    Functions declare what they consume from the environment and what they produce.
     """
 
     name: str
@@ -82,7 +81,7 @@ class Function(BaseModel):
     is_artificial_error_termination: bool = False
 
 
-# --- Factory ---
+# --- 3. Factory ---
 
 
 def generate_function(
@@ -110,13 +109,12 @@ def generate_function(
     )
 
 
-# --- Logic Engine ---
+# --- 4. Logic Engine ---
 
 
 class TokenPool:
     """
-    Simulates the 'State' of the application during runtime.
-    Manages available tokens and handles logic for mutable vs. immutable consumption.
+    Manages available tokens. Handles logic for mutable vs. immutable consumption.
     """
 
     def __init__(self):
@@ -124,7 +122,6 @@ class TokenPool:
         self.consumed: List[Token] = []
 
     def add(self, token: Token, origin_uid: int, force_collection: bool = False):
-        """Adds a produced token to the pool, optionally forcing it to be a collection."""
         t = token.model_copy()
         t.origin_function_uid = origin_uid
         if force_collection:
@@ -134,24 +131,16 @@ class TokenPool:
     def consume_requirement(
         self, req: Token, consumer_uid: int
     ) -> Tuple[List[Token], bool]:
-        """
-        Attempts to satisfy a function requirement.
-        Returns (satisfied_edges, triggered_expansion).
-        'triggered_expansion' is true if we consumed a MANY as a ONE (Fan-out).
-        """
+        """Returns (satisfied_edges, triggered_expansion)."""
         edges = []
         triggered_expansion = False
-
-        # Find matches for this type
         matches = [t for t in self.available if t.name == req.name]
 
         for match in matches:
             edge = match.model_copy()
             edge.destination_function_uid = consumer_uid
 
-            # --- FAN-OUT LOGIC ---
-            # If the source is a collection, but the consumer wants ONE,
-            # this function is now operating in an "expanded" context.
+            # Expansion Logic: Collection consumed as a Single item
             if match.is_collection and not req.is_collection:
                 triggered_expansion = True
 
@@ -160,7 +149,7 @@ class TokenPool:
 
             if match.is_mutable:
                 self.available.remove(match)
-                break  # Consumed the resource
+                break
 
         return edges, triggered_expansion
 
@@ -177,22 +166,18 @@ def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
 
     for func in flow:
         nodes.append(func)
-
-        # Per-function expansion state
         func_is_expanded = False
 
-        # 1. Consume inputs
         for req in func.consumes:
             edges, expanded = pool.consume_requirement(req, func.uid)
             all_edges.extend(edges)
             if expanded:
                 func_is_expanded = True
 
-        # 2. Produce outputs (inherit expansion state)
         for prod in func.produces:
             pool.add(prod, func.uid, force_collection=func_is_expanded)
 
-    # Route leftovers to terminal nodes
+    # Handle Terminal/Error Routing
     error_nodes = {}
     for leftover in pool.available:
         if leftover in pool.consumed:
@@ -214,12 +199,29 @@ def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
     return nodes, all_edges
 
 
-# --- Visualizer ---
+# --- 5. Visualizer & Persistence ---
 
 
-def generate_graph(
-    nodes: List[Function], edges: List[Token], filename="architecture.html"
+def save_to_json(
+    nodes: List[Function], edges: List[Token], filename: str = "architecture.json"
 ):
+    """Serializes the graph to JSON."""
+    export_data = {
+        "nodes": [n.model_dump() for n in nodes],
+        "edges": [e.model_dump() for e in edges],
+    }
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(export_data, f, indent=4)
+    print(f"Architecture exported to {filename}")
+
+
+def generate_graph(json_input_file: str, html_output_file: str = "architecture.html"):
+    """
+    Loads JSON and generates a color-coded Pyvis visualization.
+    """
+    with open(json_input_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
     net = Network(
         height="900px",
         width="100%",
@@ -228,8 +230,41 @@ def generate_graph(
         directed=True,
     )
 
+    # Add Nodes
+    for n in data.get("nodes", []):
+        # FIX: Align dictionary keys with model field names
+        if n.get("is_artificial_error_termination"):
+            color = "#dc2626"  # Red
+        elif n.get("is_artificial_graph_start") or n.get("is_artificial_graph_end"):
+            color = "#059669"  # Emerald
+        else:
+            color = "#1d4ed8"  # Blue
+
+        net.add_node(
+            n["uid"],
+            label=f" {n['name']} ",
+            shape="box",
+            color={"background": color, "border": "#ffffff"},
+            borderWidth=1,
+            margin=10,
+        )
+
+    # Add Edges
+    for e in data.get("edges", []):
+        u, v = e.get("origin_function_uid"), e.get("destination_function_uid")
+        if u is not None and v is not None:
+            is_many = e.get("is_collection", False)
+            net.add_edge(
+                u,
+                v,
+                label=e["name"] + ("[]" if is_many else ""),
+                color="#818cf8" if is_many else "#94a3b8",
+                width=4 if is_many else 1.5,
+                dashes=[12, 4] if is_many else False,
+            )
+
     options = {
-        "physics": {
+"physics": {
             "forceAtlas2Based": {
                 "theta": 0.1,
                 "gravitationalConstant": -105,
@@ -241,77 +276,17 @@ def generate_graph(
             "solver": "forceAtlas2Based",
             "timestep": 0.01,
         },
-        # "edges": {
-        #     "smooth": {
-        #         "type": "cubicBezier",
-        #         "forceDirection": "vertical",
-        #         "roundness": 0.4,
-        #     },
-        #     "font": {
-        #         "strokeWidth": 0,
-        #         "size": 11,
-        #         "color": "#ffffff",
-        #         "align": "middle",
-        #     },
-        # },
-        # "nodes": {"font": {"face": "Tahoma", "size": 16}},
     }
-
-    for n in nodes:
-        color = "#1d4ed8"
-        if n.is_artificial_error_termination:
-            color = "#dc2626"
-        elif n.is_artificial_graph_start or n.is_artificial_graph_end:
-            color = "#059669"
-
-        net.add_node(
-            n.uid,
-            label=f" {n.name} ",
-            shape="box",
-            color={"background": color, "border": "#ffffff"},  # type: ignore
-            borderWidth=1,
-            margin=10,
-        )
-
-    for e in edges:
-        if e.origin_function_uid is not None and e.destination_function_uid is not None:
-            is_many = e.is_collection
-            label = e.name + ("[]" if is_many else "")
-
-            net.add_edge(
-                e.origin_function_uid,
-                e.destination_function_uid,
-                label=label,
-                color="#818cf8" if is_many else "#94a3b8",
-                width=4 if is_many else 1.5,
-                dashes=[12, 4] if is_many else False,
-                arrowStrikethrough=False,
-            )
-
     net.set_options(json.dumps(options))
-    net.show(filename, notebook=False)
-    print(f"Graph generated: {filename}")
+    net.show(html_output_file, notebook=False)
+    print(f"Graph generated: {html_output_file}")
 
 
-def save_to_json(
-    nodes: List[Function], edges: List[Token], filename: str = "architecture.json"
-):
-    """Serializes the processed graph nodes and edges to a JSON file."""
-    export_data = {
-        "nodes": [n.model_dump() for n in nodes],
-        "edges": [e.model_dump() for e in edges],
-    }
+# --- 6. Execution ---
 
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(export_data, f, indent=4)
-
-    print(f"Architecture exported to {filename}")
-
-
-# --- Execution ---
 
 if __name__ == "__main__":
-    # Define Domain Types
+    # Define Types
     InitialCommand = Data(name="InitialCommand")
     PathToConfig = Data(name="PathToConfig")
     SourceFile = Data(name="SourceFile", is_mutable=False)
@@ -322,7 +297,7 @@ if __name__ == "__main__":
     FSError = Error(name="FileSystemError")
     Success = Data(name="SuccessReport", is_mutable=False)
 
-    # Define the Pipeline
+    # Define Pipeline
     pipeline = [
         generate_function(
             "ProcessCLI",
@@ -339,19 +314,16 @@ if __name__ == "__main__":
             [(Settings, Cardinality.ONE)],
             [(Templates, Cardinality.ONE)],
         ),
-        # 1. FAN-OUT: Produces MANY SourceFiles
         generate_function(
             "ScanFS",
             [(Settings, Cardinality.ONE)],
             [(SourceFile, Cardinality.MANY), (FSError, Cardinality.MANY)],
         ),
-        # 2. PROPAGATION: Receives MANY (as ONE) -> Article becomes MANY automatically
         generate_function(
             "ParseMarkdown",
             [(SourceFile, Cardinality.ONE)],
             [(Article, Cardinality.ONE), (FSError, Cardinality.ONE)],
         ),
-        # 3. PROPAGATION: HTML remains MANY
         generate_function(
             "RenderHTML",
             [
@@ -361,7 +333,6 @@ if __name__ == "__main__":
             ],
             [(Html, Cardinality.ONE)],
         ),
-        # 4. FAN-IN: Consumes MANY HTML -> SuccessReport returns to ONE
         generate_function(
             "WriteToDisk",
             [(Html, Cardinality.MANY)],
@@ -370,5 +341,5 @@ if __name__ == "__main__":
     ]
 
     nodes, edges = process_flow(pipeline)
-    save_to_json(nodes, edges)
-    generate_graph(nodes, edges)
+    save_to_json(nodes, edges, "architecture.json")
+    generate_graph("architecture.json", "architecture.html")
