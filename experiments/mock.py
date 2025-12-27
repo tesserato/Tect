@@ -244,7 +244,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
             n["uid"],
             label=f" {n['name']} ",
             shape="box",
-            color={"background": color, "border": "#ffffff"},
+            color={"background": color, "border": "#ffffff"}, # type: ignore
             borderWidth=1,
             margin=10,
         )
@@ -340,6 +340,6 @@ if __name__ == "__main__":
         ),
     ]
 
-    nodes, edges = process_flow(pipeline)
-    save_to_json(nodes, edges, "architecture.json")
+    # nodes, edges = process_flow(pipeline)
+    # save_to_json(nodes, edges, "architecture.json")
     generate_graph("architecture.json", "architecture.html")
