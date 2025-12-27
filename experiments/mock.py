@@ -1,9 +1,9 @@
 import itertools
 import json
 from enum import Enum
-from typing import List, Optional, Tuple, Dict, Set
+from typing import List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pyvis.network import Network
 
 # --- Global Configuration ---
@@ -29,12 +29,6 @@ class Type(BaseModel):
 
     name: str
     is_mutable: bool = True
-
-    def __hash__(self):
-        return hash((self.name, self.is_mutable))
-
-    def __eq__(self, other):
-        return isinstance(other, Type) and self.name == other.name
 
 
 class Data(Type):
@@ -116,31 +110,38 @@ def generate_function(
     )
 
 
-# --- Logic Engine with Propagation ---
+# --- Logic Engine ---
 
 
 class TokenPool:
     """
     Simulates the 'State' of the application during runtime.
-    Manages available tokens and handles the logic for mutable vs. immutable consumption.
+    Manages available tokens and handles logic for mutable vs. immutable consumption.
     """
 
     def __init__(self):
         self.available: List[Token] = []
         self.consumed: List[Token] = []
-        # Tracks if the flow is currently "expanded" into a collection
-        self.is_fanned_out: bool = False
 
-    def add(self, token: Token, origin_uid: int):
+    def add(self, token: Token, origin_uid: int, force_collection: bool = False):
+        """Adds a produced token to the pool, optionally forcing it to be a collection."""
         t = token.model_copy()
         t.origin_function_uid = origin_uid
-        # If the context is currently fanned out, all new products become collections
-        if self.is_fanned_out:
+        if force_collection:
             t.is_collection = True
         self.available.append(t)
 
-    def consume_requirement(self, req: Token, consumer_uid: int) -> List[Token]:
+    def consume_requirement(
+        self, req: Token, consumer_uid: int
+    ) -> Tuple[List[Token], bool]:
+        """
+        Attempts to satisfy a function requirement.
+        Returns (satisfied_edges, triggered_expansion).
+        'triggered_expansion' is true if we consumed a MANY as a ONE (Fan-out).
+        """
         edges = []
+        triggered_expansion = False
+
         # Find matches for this type
         matches = [t for t in self.available if t.name == req.name]
 
@@ -148,21 +149,20 @@ class TokenPool:
             edge = match.model_copy()
             edge.destination_function_uid = consumer_uid
 
-            # --- FAN-OUT / FAN-IN LOGIC ---
-            # 1. Start Fan-out: match is a collection, but function only handles ONE
+            # --- FAN-OUT LOGIC ---
+            # If the source is a collection, but the consumer wants ONE,
+            # this function is now operating in an "expanded" context.
             if match.is_collection and not req.is_collection:
-                self.is_fanned_out = True
-
-            # 2. Fan-in: function explicitly requests the collection (MANY)
-            if req.is_collection:
-                self.is_fanned_out = False
+                triggered_expansion = True
 
             edges.append(edge)
             self.consumed.append(match)
+
             if match.is_mutable:
                 self.available.remove(match)
-                break
-        return edges
+                break  # Consumed the resource
+
+        return edges, triggered_expansion
 
 
 def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
@@ -177,13 +177,20 @@ def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
 
     for func in flow:
         nodes.append(func)
-        # 1. Consume inputs (this may trigger fan-out/in state change)
-        for req in func.consumes:
-            all_edges.extend(pool.consume_requirement(req, func.uid))
 
-        # 2. Produce outputs (products inherit collection status if fanned out)
+        # Per-function expansion state
+        func_is_expanded = False
+
+        # 1. Consume inputs
+        for req in func.consumes:
+            edges, expanded = pool.consume_requirement(req, func.uid)
+            all_edges.extend(edges)
+            if expanded:
+                func_is_expanded = True
+
+        # 2. Produce outputs (inherit expansion state)
         for prod in func.produces:
-            pool.add(prod, func.uid)
+            pool.add(prod, func.uid, force_collection=func_is_expanded)
 
     # Route leftovers to terminal nodes
     error_nodes = {}
@@ -207,7 +214,7 @@ def process_flow(flow: List[Function]) -> Tuple[List[Function], List[Token]]:
     return nodes, all_edges
 
 
-# --- Professional Visualizer ---
+# --- Visualizer ---
 
 
 def generate_graph(
@@ -217,21 +224,11 @@ def generate_graph(
         height="900px",
         width="100%",
         bgcolor="#0b0e14",
-        font_color="#e0e0e0",  # type: ignore
+        font_color="#e0e0e0",
         directed=True,
     )
 
-    # Professional Hierarchical Layout Options
     options = {
-        # "layout": {
-        #     "hierarchical": {
-        #         "enabled": True,
-        #         "direction": "UD",
-        #         "sortMethod": "directed",
-        #         "nodeSpacing": 200,
-        #         "levelSeparation": 150,
-        #     }
-        # },
         "physics": {
             "forceAtlas2Based": {
                 "theta": 0.1,
@@ -261,7 +258,6 @@ def generate_graph(
     }
 
     for n in nodes:
-        # Theme: Emerald for terminals, Blue for logic, Red for errors
         color = "#1d4ed8"
         if n.is_error:
             color = "#dc2626"
@@ -282,7 +278,6 @@ def generate_graph(
             is_many = e.is_collection
             label = e.name + ("[]" if is_many else "")
 
-            # Collections are Indigo/Dashed; Single items are Slate/Solid
             net.add_edge(
                 e.origin_function_uid,
                 e.destination_function_uid,
@@ -293,8 +288,6 @@ def generate_graph(
                 arrowStrikethrough=False,
             )
 
-    # Use json.dumps to avoid the JSONDecodeError
-    # net.show_buttons(filter_=["physics"])
     net.set_options(json.dumps(options))
     net.show(filename, notebook=False)
     print(f"Graph generated: {filename}")
@@ -331,19 +324,19 @@ if __name__ == "__main__":
             [(Settings, Cardinality.ONE)],
             [(Templates, Cardinality.ONE)],
         ),
-        # FAN-OUT: Produces MANY SourceFiles
+        # 1. FAN-OUT: Produces MANY SourceFiles
         generate_function(
             "ScanFS",
             [(Settings, Cardinality.ONE)],
             [(SourceFile, Cardinality.MANY), (FSError, Cardinality.MANY)],
         ),
-        # PROPAGATION: Receives collection, processes ONE -> Article becomes MANY
+        # 2. PROPAGATION: Receives MANY (as ONE) -> Article becomes MANY automatically
         generate_function(
             "ParseMarkdown",
             [(SourceFile, Cardinality.ONE)],
             [(Article, Cardinality.ONE), (FSError, Cardinality.ONE)],
         ),
-        # PROPAGATION: HTML becomes MANY
+        # 3. PROPAGATION: HTML remains MANY
         generate_function(
             "RenderHTML",
             [
@@ -353,7 +346,7 @@ if __name__ == "__main__":
             ],
             [(Html, Cardinality.ONE)],
         ),
-        # FAN-IN: Consumes MANY HTML -> Returns to ONE SuccessReport
+        # 4. FAN-IN: Consumes MANY HTML -> SuccessReport returns to ONE
         generate_function(
             "WriteToDisk",
             [(Html, Cardinality.MANY)],
