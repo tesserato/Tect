@@ -13,7 +13,7 @@ mod lsp;
 mod models;
 mod tests;
 mod test_parse;
-mod test_new;
+mod test_graph;
 
 /// The primary entry point for the Tect toolset.
 #[derive(ClapParser, Debug)]
