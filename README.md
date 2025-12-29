@@ -90,19 +90,27 @@ FetchProfile {
 
 # Example DSBG
 
-data PathToConfiguration
-data InitialCommand
-data Settings
-data SourceFile
-data Article
-data SiteTemplates
+mut data InitialCommand 
+mut data PathToConfig 
+data SourceFile 
+mut data Article 
+mut data Html 
+data Settings 
+data Templates 
+data Success
 
+error FSError
 error InitialCommandMalformedError
 error FileNotFoundError
 error ConfigurationMalformedError
 error FileSystemError
 error MetadataError
 error TemplateError
+
+function ScanFS(Settings)
+    > [SourceFile]
+    | [FSError]
+
 
 function ProcessInitialCommand(InitialCommand)
     > Configuration
@@ -138,19 +146,17 @@ function FinalizeSite(Settings)
     > String
     | TemplateError
 
-# InitialCommand > Configuration | PathToConfiguration | InitialCommandMalformedError
 ProcessInitialCommand
-# PathToConfiguration > Configuration | FileNotFoundError | ConfigurationMalformedError
 ReadConfiguration
 
 
-PrepareOutput # Settings > Settings | FileSystemError
+PrepareOutput
 DeployStaticAssets
 
-finite loop {
-  ExtractMetadata
-  ResolveResources
-  RenderPage
-}
+
+ExtractMetadata
+ResolveResources
+RenderPage
+
 
 FinalizeSite
