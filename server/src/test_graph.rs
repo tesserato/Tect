@@ -1,74 +1,112 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum Cardinality {
     Unitary,
     Collection,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Kind {
-    Variable(String),
-    Constant(String),
-    Error(String),
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// pub struct Type {
+//     pub name: String,
+//     pub documentation: Option<String>,
+//     pub detail: Kind,
+// }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub enum Type {
+    Variable {
+        name: String,
+        documentation: Option<String>,
+    },
+    Constant {
+        name: String,
+        documentation: Option<String>,
+    },
+    Error {
+        name: String,
+        documentation: Option<String>,
+    },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// Tokens double as edges in the graph
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Token {
-    pub kind: Kind,
+    pub r#type: Type,
     pub cardinality: Cardinality,
-    pub origin_function_uid: Option<u32>,
-    pub destination_function_uid: Option<u32>,
+    pub origin_function: Function,
+    pub destination_function: Option<Function>,
 }
 
 impl Token {
-    pub fn new(name: &str, is_mutable: bool) -> Self {
+    pub fn new(r#type: Type, cardinality: Cardinality, origin_function: Function) -> Self {
         Self {
-            name: name.to_string(),
-            is_mutable,
-            is_collection: false,
-            origin_function_uid: None,
-            destination_function_uid: None,
+            r#type,
+            cardinality,
+            origin_function,
+            destination_function: None,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Functions double as nodes in the graph
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Function {
     pub name: String,
-    pub uid: u32,
+    pub documentation: Option<String>,
+    // pub uid: u32,
     pub consumes: Vec<Token>,
-    pub produces: Vec<Token>,
-    pub is_artificial_graph_start: bool,
-    pub is_artificial_graph_end: bool,
-    pub is_artificial_error_termination: bool,
+    pub produces: Vec<Vec<Token>>,
+    // pub is_artificial_graph_start: bool,
+    // pub is_artificial_graph_end: bool,
+    // pub is_artificial_error_termination: bool,
 }
 
 pub struct TokenPool {
-    pub available: Vec<Token>,
-    pub consumed: Vec<Token>,
+    pub variables: Vec<Token>,
+    pub errors: Vec<Token>,
+    pub constants: HashSet<Token>,
+    // pub consumed: Vec<Token>,
 }
 
 impl TokenPool {
-    pub fn new() -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
+        let mut variables = Vec::new();
+        let mut errors = Vec::new();
+        let mut constants = HashSet::new();
+
+        for token in tokens {
+            match token.r#type {
+                Type::Variable { .. } => variables.push(token),
+                Type::Error { .. } => errors.push(token),
+                Type::Constant { .. } => {
+                    constants.insert(token);
+                }
+            }
+        }
         Self {
-            available: Vec::new(),
-            consumed: Vec::new(),
+            variables,
+            errors,
+            constants,
         }
     }
 
-    pub fn add(&mut self, mut token: Token, origin_uid: u32, force_collection: bool) {
-        token.origin_function_uid = Some(origin_uid);
-        if force_collection {
-            token.is_collection = true;
+    pub fn add(&mut self, tokens: Vec<Token>) {
+        for token in tokens {
+            match token.r#type {
+                Type::Variable { .. } => self.variables.push(token),
+                Type::Error { .. } => self.errors.push(token),
+                Type::Constant { .. } => {
+                    self.constants.insert(token);
+                }
+            }
         }
-        self.available.push(token);
     }
 
-    pub fn consume_requirement(&mut self, req: &Token, consumer_uid: u32) -> (Vec<Token>, bool) {
+    pub fn consume(&mut self, tokens: Vec<Token>) -> bool {
         let mut edges = Vec::new();
         let mut triggered_expansion = false;
 
@@ -218,17 +256,63 @@ struct GraphExport {
 
 #[test]
 fn main() -> std::io::Result<()> {
-    let mut engine = FlowProcessor::new();
 
-    let initial_command = Token::new("InitialCommand", true);
-    let path_to_config = Token::new("PathToConfig", true);
-    let settings = Token::new("Settings", false);
-    let templates = Token::new("Templates", false);
-    let source_file = Token::new("SourceFile", false);
-    let article = Token::new("Article", true);
-    let html = Token::new("HTML", true);
-    let fs_error = Token::new("FileSystemError", true);
-    let success = Token::new("SuccessReport", false);
+    // Define types (constants, variables, errors)
+    let initial_command = Type::Variable {
+        name: "InitialCommand".to_string(),
+        documentation: Some("The initial command input from the CLI".to_string()),
+    };
+    let path_to_config = Type::Variable {
+        name: "PathToConfig".to_string(),
+        documentation: Some("The path to the configuration file".to_string()),
+    };
+
+    let settings = Type::Constant {
+        name: "Settings".to_string(),
+        documentation: Some("The loaded settings from the config file".to_string()),
+    };
+
+let templates = Type::Constant {
+        name: "Templates".to_string(),
+        documentation: Some("The registry of HTML templates used for rendering".to_string()),
+    };
+
+    let source_file = Type::Constant {
+        name: "SourceFile".to_string(),
+        documentation: Some("A raw input file found in the source directory".to_string()),
+    };
+
+    let article = Type::Variable {
+        name: "Article".to_string(),
+        documentation: Some("The processed data structure containing markdown content and metadata".to_string()),
+    };
+
+    let html = Type::Variable {
+        name: "HTML".to_string(),
+        documentation: Some("The final rendered HTML string ready to be written to disk".to_string()),
+    };
+
+    let fs_error = Type::Error {
+        name: "FileSystemError".to_string(),
+        documentation: Some("Triggered when a file cannot be read from or written to the disk".to_string()),
+    };
+
+    let success = Type::Variable {
+        name: "SuccessReport".to_string(),
+        documentation: Some("A final summary of the operations performed during the run".to_string()),
+    };
+
+    // define functions
+
+    let process_cli = Function {
+        name: "ProcessCLI".to_string(),
+        documentation: Some("Processes command-line input".to_string()),
+        consumes: vec![Token::new(initial_command.clone(), Cardinality::Unitary, /* origin_function */)],
+        produces: vec![
+            vec![Token::new(settings.clone(), Cardinality::Unitary, /* origin_function */)],
+            vec![Token::new(path_to_config.clone(), Cardinality::Unitary, /* origin_function */)],
+        ],
+    };
 
     let pipeline = vec![
         engine.generate_function(
@@ -295,7 +379,10 @@ fn main() -> std::io::Result<()> {
         engine.generate_function(
             "WriteToDisk",
             vec![(html, Cardinality::Collection)],
-            vec![(success, Cardinality::Unitary), (fs_error, Cardinality::Collection)],
+            vec![
+                (success, Cardinality::Unitary),
+                (fs_error, Cardinality::Collection),
+            ],
             false,
             false,
             false,
