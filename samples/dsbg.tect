@@ -1,27 +1,19 @@
 # # DSBG: Dead Simple Blog Generator - Clustered Architecture
 # This module demonstrates logical grouping of parsing, IO, and generation stages.
 
-group domain {
-    # **CLI Settings**
-    data Settings
-    # **Source Payload**
-    data SourceFile
-    # **Processed Article**
-    data Article
-    # **Template Registry**
-    data SiteTemplates
-    
-    error FileSystemError
-    error MetadataError
-    error TemplateError
-}
+mut data InitialCommand 
+mut data PathToConfig 
+data SourceFile 
+mut data Article 
+mut data Html 
+data Settings 
+data Templates 
+error FSError
+data Success
 
-group initialization {
-    # Validates paths and ensures the output directory is ready.
-    function PrepareOutput(Settings) -> Settings | FileSystemError
-    # Copies CSS, JS, and Favicons.
-    function DeployStaticAssets(Settings) -> Settings | FileSystemError
-}
+
+function ProcessCLI(InitialCommand) -> Settings | PathToConfig
+
 
 group parsing {
     # Parses Frontmatter (Markdown) or Meta Tags (HTML).
