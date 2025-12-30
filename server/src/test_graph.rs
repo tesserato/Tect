@@ -5,17 +5,21 @@ use std::io::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Cardinality {
-    #[serde(rename = "1")]
-    One,
-    #[serde(rename = "*")]
-    Many,
+    Unitary,
+    Collection,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Kind {
+    Variable(String),
+    Constant(String),
+    Error(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Token {
-    pub name: String,
-    pub is_mutable: bool,
-    pub is_collection: bool,
+    pub kind: Kind,
+    pub cardinality: Cardinality,
     pub origin_function_uid: Option<u32>,
     pub destination_function_uid: Option<u32>,
 }
@@ -125,14 +129,14 @@ impl FlowProcessor {
             consumes: consumes
                 .into_iter()
                 .map(|(mut t, c)| {
-                    t.is_collection = c == Cardinality::Many;
+                    t.is_collection = c == Cardinality::Collection;
                     t
                 })
                 .collect(),
             produces: produces
                 .into_iter()
                 .map(|(mut t, c)| {
-                    t.is_collection = c == Cardinality::Many;
+                    t.is_collection = c == Cardinality::Collection;
                     t
                 })
                 .collect(),
@@ -229,10 +233,10 @@ fn main() -> std::io::Result<()> {
     let pipeline = vec![
         engine.generate_function(
             "ProcessCLI",
-            vec![(initial_command, Cardinality::One)],
+            vec![(initial_command, Cardinality::Unitary)],
             vec![
-                (settings.clone(), Cardinality::One),
-                (path_to_config.clone(), Cardinality::One),
+                (settings.clone(), Cardinality::Unitary),
+                (path_to_config.clone(), Cardinality::Unitary),
             ],
             false,
             false,
@@ -240,26 +244,26 @@ fn main() -> std::io::Result<()> {
         ),
         engine.generate_function(
             "LoadConfig",
-            vec![(path_to_config, Cardinality::One)],
-            vec![(settings.clone(), Cardinality::One)],
+            vec![(path_to_config, Cardinality::Unitary)],
+            vec![(settings.clone(), Cardinality::Unitary)],
             false,
             false,
             false,
         ),
         engine.generate_function(
             "LoadTemplates",
-            vec![(settings.clone(), Cardinality::One)],
-            vec![(templates.clone(), Cardinality::One)],
+            vec![(settings.clone(), Cardinality::Unitary)],
+            vec![(templates.clone(), Cardinality::Unitary)],
             false,
             false,
             false,
         ),
         engine.generate_function(
             "ScanFS",
-            vec![(settings.clone(), Cardinality::One)],
+            vec![(settings.clone(), Cardinality::Unitary)],
             vec![
-                (source_file.clone(), Cardinality::Many),
-                (fs_error.clone(), Cardinality::Many),
+                (source_file.clone(), Cardinality::Collection),
+                (fs_error.clone(), Cardinality::Collection),
             ],
             false,
             false,
@@ -267,10 +271,10 @@ fn main() -> std::io::Result<()> {
         ),
         engine.generate_function(
             "ParseMarkdown",
-            vec![(source_file, Cardinality::One)],
+            vec![(source_file, Cardinality::Unitary)],
             vec![
-                (article.clone(), Cardinality::One),
-                (fs_error.clone(), Cardinality::One),
+                (article.clone(), Cardinality::Unitary),
+                (fs_error.clone(), Cardinality::Unitary),
             ],
             false,
             false,
@@ -279,19 +283,19 @@ fn main() -> std::io::Result<()> {
         engine.generate_function(
             "RenderHTML",
             vec![
-                (article, Cardinality::One),
-                (templates, Cardinality::One),
-                (settings, Cardinality::One),
+                (article, Cardinality::Unitary),
+                (templates, Cardinality::Unitary),
+                (settings, Cardinality::Unitary),
             ],
-            vec![(html.clone(), Cardinality::One)],
+            vec![(html.clone(), Cardinality::Unitary)],
             false,
             false,
             false,
         ),
         engine.generate_function(
             "WriteToDisk",
-            vec![(html, Cardinality::Many)],
-            vec![(success, Cardinality::One), (fs_error, Cardinality::Many)],
+            vec![(html, Cardinality::Collection)],
+            vec![(success, Cardinality::Unitary), (fs_error, Cardinality::Collection)],
             false,
             false,
             false,
