@@ -173,13 +173,18 @@ impl TokenPool {
                     None => {}
                 },
                 Type::Constant { .. } => {
-                    if self.constants.contains(&token) {
-                        if let Some(node) = self.token_to_initial_node.get(&token) {
-                            edges.push(Edge {
-                                origin_function: node.function.clone(),
-                                destination_function: destination_function.clone(),
-                                token: token.clone(),
-                            });
+                    // Iterate through every available constant in the state
+                    for constant_token in &self.constants {
+                        // Test the incoming token against the current constant token
+                        if constant_token.compare(&token) {
+                            // If a match is found, attempt to find the initial node for the matching constant
+                            if let Some(node) = self.token_to_initial_node.get(constant_token) {
+                                edges.push(Edge {
+                                    origin_function: node.function.clone(),
+                                    destination_function: destination_function.clone(),
+                                    token: constant_token.clone(),
+                                });
+                            }
                         }
                     }
                 }
@@ -191,8 +196,23 @@ impl TokenPool {
 
 pub struct Flow {
     uid_counter: u32,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub pools: Vec<TokenPool>,
 }
 
+impl Flow {
+    pub fn new(functions: Vec<Function>) -> Self {
+        Self {
+            uid_counter: 0,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            pools: Vec::new(),
+        }
+    }
+
+
+}
 
 #[derive(Serialize)]
 struct GraphExport {
