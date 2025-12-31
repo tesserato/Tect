@@ -30,9 +30,9 @@ pub struct Error {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub enum Kind {
-    Variable(Variable),
-    Constant(Constant),
-    Error(Error),
+    Variable(Arc<Variable>),
+    Constant(Arc<Constant>),
+    Error(Arc<Error>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
@@ -78,7 +78,7 @@ impl Token {
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Node {
     pub uid: u32,
-    pub function: &Function,
+    pub function: Arc<Function>,
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
@@ -86,8 +86,8 @@ pub struct Node {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Edge {
-    pub origin_function: &Function,
-    pub destination_function: &Function,
+    pub origin_function: Arc<Function>,
+    pub destination_function: Arc<Function>,
     pub token: Token,
 }
 
@@ -107,7 +107,7 @@ impl TokenPool {
 
         for token in tokens {
             token_to_initial_node.insert(token.clone(), initial_node.clone());
-            match token.kind {
+            match *token.kind {
                 Kind::Variable { .. } => variables.push(token),
                 Kind::Error { .. } => errors.push(token),
                 Kind::Constant { .. } => {
@@ -127,7 +127,7 @@ impl TokenPool {
         for token in tokens {
             self.token_to_initial_node
                 .insert(token.clone(), initial_node.clone());
-            match token.kind {
+            match *token.kind {
                 Kind::Variable { .. } => self.variables.push(token),
                 Kind::Error { .. } => self.errors.push(token),
                 Kind::Constant { .. } => {
@@ -137,11 +137,11 @@ impl TokenPool {
         }
     }
 
-    pub fn consume(&mut self, tokens: Vec<Token>, destination_function: Function) -> Vec<Edge> {
+    pub fn consume(&mut self, tokens: Vec<Token>, destination_node: Node) -> Vec<Edge> {
         let mut edges = Vec::new();
 
         for token in tokens {
-            match token.kind {
+            match *token.kind {
                 Kind::Variable { .. } => {
                     match self.variables.iter().position(|t| t.compare(&token)) {
                         Some(index) => {
@@ -149,7 +149,7 @@ impl TokenPool {
                             if let Some(node) = self.token_to_initial_node.get(&token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
-                                    destination_function: destination_function.clone(),
+                                    destination_function: destination_node.function.clone(),
                                     token: consumed_variable,
                                 });
                             }
@@ -163,7 +163,7 @@ impl TokenPool {
                         if let Some(node) = self.token_to_initial_node.get(&token) {
                             edges.push(Edge {
                                 origin_function: node.function.clone(),
-                                destination_function: destination_function.clone(),
+                                destination_function: destination_node.function.clone(),
                                 token: consumed_error,
                             });
                         }
@@ -179,7 +179,7 @@ impl TokenPool {
                             if let Some(node) = self.token_to_initial_node.get(constant_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
-                                    destination_function: destination_function.clone(),
+                                    destination_function: destination_node.function.clone(),
                                     token: constant_token.clone(),
                                 });
                             }
@@ -239,57 +239,57 @@ struct GraphExport {
 #[test]
 fn main() -> std::io::Result<()> {
     // Define types (constants, variables, errors)
-    let initial_command = Variable {
+    let initial_command = Arc::new(Variable {
         name: "InitialCommand".to_string(),
         documentation: Some("The initial command input from the CLI".to_string()),
-    };
-    let path_to_config = Variable {
+    });
+    let path_to_config = Arc::new(Variable {
         name: "PathToConfig".to_string(),
         documentation: Some("The path to the configuration file".to_string()),
-    };
+    });
 
-    let settings = Constant {
+    let settings = Arc::new(Constant {
         name: "Settings".to_string(),
         documentation: Some("The loaded settings from the config file".to_string()),
-    };
+    });
 
-    let templates = Constant {
+    let templates = Arc::new(Constant {
         name: "Templates".to_string(),
         documentation: Some("The registry of HTML templates used for rendering".to_string()),
-    };
+    });
 
-    let source_file = Constant {
+    let source_file = Arc::new(Constant {
         name: "SourceFile".to_string(),
         documentation: Some("A raw input file found in the source directory".to_string()),
-    };
+    });
 
-    let article = Variable {
+    let article = Arc::new(Variable {
         name: "Article".to_string(),
         documentation: Some(
             "The processed data structure containing markdown content and metadata".to_string(),
         ),
-    };
+    });
 
-    let html = Variable {
+    let html = Arc::new(Variable {
         name: "HTML".to_string(),
         documentation: Some(
             "The final rendered HTML string ready to be written to disk".to_string(),
         ),
-    };
+    });
 
-    let fs_error = Error {
+    let fs_error = Arc::new(Error {
         name: "FileSystemError".to_string(),
         documentation: Some(
             "Triggered when a file cannot be read from or written to the disk".to_string(),
         ),
-    };
+    });
 
-    let success = Variable {
+    let success = Arc::new(Variable {
         name: "SuccessReport".to_string(),
         documentation: Some(
             "A final summary of the operations performed during the run".to_string(),
         ),
-    };
+    });
 
     // define functions
 
@@ -297,17 +297,20 @@ fn main() -> std::io::Result<()> {
         name: "ProcessCLI".to_string(),
         documentation: Some("Processes command-line input".to_string()),
         consumes: vec![Token::new(
-            Kind::Variable(initial_command.clone()),
+            Arc::new(Kind::Variable(initial_command.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![
             vec![Token::new(
-                Kind::Constant(settings.clone()),
+                Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
+                None,
             )],
             vec![Token::new(
-                Kind::Variable(path_to_config.clone()),
+                Arc::new(Kind::Variable(path_to_config.clone())),
                 Cardinality::Unitary,
+                None,
             )],
         ],
     };
@@ -316,41 +319,48 @@ fn main() -> std::io::Result<()> {
         name: "LoadConfig".to_string(),
         documentation: Some("Loads configuration from a file".to_string()),
         consumes: vec![Token::new(
-            Kind::Variable(path_to_config.clone()),
+            Arc::new(Kind::Variable(path_to_config.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![vec![Token::new(
-            Kind::Constant(settings.clone()),
+            Arc::new(Kind::Constant(settings.clone())),
             Cardinality::Unitary,
+            None,
         )]],
     };
     let load_templates = Function {
         name: "LoadTemplates".to_string(),
         documentation: Some("Loads HTML templates based on settings".to_string()),
         consumes: vec![Token::new(
-            Kind::Constant(settings.clone()),
+            Arc::new(Kind::Constant(settings.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![vec![Token::new(
-            Kind::Constant(templates.clone()),
+            Arc::new(Kind::Constant(templates.clone())),
             Cardinality::Unitary,
+            None,
         )]],
     };
     let scan_fs = Function {
         name: "ScanFS".to_string(),
         documentation: Some("Scans the filesystem for source files".to_string()),
         consumes: vec![Token::new(
-            Kind::Constant(settings.clone()),
+            Arc::new(Kind::Constant(settings.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![
             vec![Token::new(
-                Kind::Constant(source_file.clone()),
+                Arc::new(Kind::Constant(source_file.clone())),
                 Cardinality::Collection,
+                None,
             )],
             vec![Token::new(
-                Kind::Error(fs_error.clone()),
+                Arc::new(Kind::Error(fs_error.clone())),
                 Cardinality::Collection,
+                None,
             )],
         ],
     };
@@ -359,17 +369,20 @@ fn main() -> std::io::Result<()> {
         name: "ParseMarkdown".to_string(),
         documentation: Some("Parses markdown files into article structures".to_string()),
         consumes: vec![Token::new(
-            Kind::Constant(source_file.clone()),
+            Arc::new(Kind::Constant(source_file.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![
             vec![Token::new(
-                Kind::Variable(article.clone()),
+                Arc::new(Kind::Variable(article.clone())),
                 Cardinality::Unitary,
+                None,
             )],
             vec![Token::new(
-                Kind::Error(fs_error.clone()),
+                Arc::new(Kind::Error(fs_error.clone())),
                 Cardinality::Unitary,
+                None,
             )],
         ],
     };
@@ -377,30 +390,46 @@ fn main() -> std::io::Result<()> {
         name: "RenderHTML".to_string(),
         documentation: Some("Renders articles into HTML using templates".to_string()),
         consumes: vec![
-            Token::new(Kind::Variable(article.clone()), Cardinality::Unitary),
-            Token::new(Kind::Constant(templates.clone()), Cardinality::Unitary),
-            Token::new(Kind::Constant(settings.clone()), Cardinality::Unitary),
+            Token::new(
+                Arc::new(Kind::Variable(article.clone())),
+                Cardinality::Unitary,
+                None,
+            ),
+            Token::new(
+                Arc::new(Kind::Constant(templates.clone())),
+                Cardinality::Unitary,
+                None,
+            ),
+            Token::new(
+                Arc::new(Kind::Constant(settings.clone())),
+                Cardinality::Unitary,
+                None,
+            ),
         ],
         produces: vec![vec![Token::new(
-            Kind::Variable(html.clone()),
+            Arc::new(Kind::Variable(html.clone())),
             Cardinality::Unitary,
+            None,
         )]],
     };
     let write_to_disk = Function {
         name: "WriteToDisk".to_string(),
         documentation: Some("Writes HTML files to disk".to_string()),
         consumes: vec![Token::new(
-            Kind::Variable(html.clone()),
+            Arc::new(Kind::Variable(html.clone())),
             Cardinality::Unitary,
+            None,
         )],
         produces: vec![
             vec![Token::new(
-                Kind::Variable(success.clone()),
+                Arc::new(Kind::Variable(success.clone())),
                 Cardinality::Unitary,
+                None,
             )],
             vec![Token::new(
-                Kind::Error(fs_error.clone()),
+                Arc::new(Kind::Error(fs_error.clone())),
                 Cardinality::Unitary,
+                None,
             )],
         ],
     };
@@ -416,14 +445,14 @@ fn main() -> std::io::Result<()> {
     ];
 
     // Serialization with 4-space indentation
-    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-    let mut buf = Vec::new();
-    let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-    let (nodes, edges) = engine.process_flow(pipeline);
+    // let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    // let mut buf = Vec::new();
+    // let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+    // let (nodes, edges) = engine.process_flow(pipeline);
 
-    (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
-    let json_data = String::from_utf8(buf).unwrap();
-    let mut file = File::create("../experiments/architecture.json")?;
-    file.write_all(json_data.as_bytes())?;
+    // (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
+    // let json_data = String::from_utf8(buf).unwrap();
+    // let mut file = File::create("../experiments/architecture.json")?;
+    // file.write_all(json_data.as_bytes())?;
     Ok(())
 }
