@@ -17,39 +17,28 @@ pub enum Cardinality {
 // }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
-pub enum Type {
-    Variable {
-        name: String,
-        documentation: Option<String>,
-    },
-    Constant {
-        name: String,
-        documentation: Option<String>,
-    },
-    Error {
-        name: String,
-        documentation: Option<String>,
-    },
+pub struct Variable {
+    name: String,
+    documentation: Option<String>,
 }
 
-// Tokens double as edges in the graph
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
-pub struct Token {
-    pub r#type: Type,
-    pub cardinality: Cardinality,
-    pub origin_function: Function,
-    pub destination_function: Option<Function>,
+pub struct Constant {
+    name: String,
+    documentation: Option<String>,
 }
 
-impl Token {
-    pub fn new(r#type: Type, cardinality: Cardinality, origin_function: Function) -> Self {
-        Self {
-            r#type,
-            cardinality,
-            origin_function,
-            destination_function: None,
-        }
-    }
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub struct Error {
+    name: String,
+    documentation: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub enum Type {
+    Variable(Variable),
+    Constant(Constant),
+    Error(Error),
 }
 
 // Functions double as nodes in the graph
@@ -60,25 +49,66 @@ pub struct Function {
     // pub uid: u32,
     pub consumes: Vec<Token>,
     pub produces: Vec<Vec<Token>>,
-    // pub is_artificial_graph_start: bool,
-    // pub is_artificial_graph_end: bool,
-    // pub is_artificial_error_termination: bool,
+}
+
+// Tokens double as edges in the graph
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub struct Token {
+    pub r#type: Type,
+    pub cardinality: Cardinality,
+    // pub origin_function: Function,
+    // pub destination_function: Option<Function>,
+}
+
+impl Token {
+    pub fn new(r#type: Type, cardinality: Cardinality) -> Self {
+        Self {
+            r#type,
+            cardinality,
+            // origin_function,
+            // destination_function: None,
+        }
+    }
+    pub fn compare(&self, other: &Self) -> bool {
+        if self.r#type == other.r#type {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub struct Node {
+    pub function: Function,
+    pub is_artificial_graph_start: bool,
+    pub is_artificial_graph_end: bool,
+    pub is_artificial_error_termination: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+pub struct Edge {
+    pub origin_function: Function,
+    pub destination_function: Function,
+    pub token: Token,
 }
 
 pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
     pub constants: HashSet<Token>,
-    // pub consumed: Vec<Token>,
+    pub token_to_initial_node: HashMap<Token, Node>,
 }
 
 impl TokenPool {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>, initial_node: Node) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
         let mut constants = HashSet::new();
+        let mut token_to_initial_node = HashMap::new();
 
         for token in tokens {
+            token_to_initial_node.insert(token.clone(), initial_node.clone());
             match token.r#type {
                 Type::Variable { .. } => variables.push(token),
                 Type::Error { .. } => errors.push(token),
@@ -91,11 +121,14 @@ impl TokenPool {
             variables,
             errors,
             constants,
+            token_to_initial_node,
         }
     }
 
-    pub fn add(&mut self, tokens: Vec<Token>) {
+    pub fn add(&mut self, tokens: Vec<Token>, initial_node: Node) {
         for token in tokens {
+            self.token_to_initial_node
+                .insert(token.clone(), initial_node.clone());
             match token.r#type {
                 Type::Variable { .. } => self.variables.push(token),
                 Type::Error { .. } => self.errors.push(token),
@@ -106,147 +139,60 @@ impl TokenPool {
         }
     }
 
-    pub fn consume(&mut self, tokens: Vec<Token>) -> bool {
+    pub fn consume(&mut self, tokens: Vec<Token>, destination_function: Function) -> Vec<Edge> {
         let mut edges = Vec::new();
-        let mut triggered_expansion = false;
 
-        // Python parity: Find ALL matches to create multiple edges if multiple origins exist
-        let matching_indices: Vec<usize> = self
-            .available
-            .iter()
-            .enumerate()
-            .filter(|(_, t)| t.name == req.name)
-            .map(|(i, _)| i)
-            .collect();
-
-        for &idx in &matching_indices {
-            let matched = self.available[idx].clone();
-            if matched.is_collection && !req.is_collection {
-                triggered_expansion = true;
-            }
-
-            let mut edge = matched.clone();
-            edge.destination_function_uid = Some(consumer_uid);
-            edges.push(edge);
-
-            self.consumed.push(matched.clone());
-
-            // If mutable, we stop after the first removal to match Python's break
-            if matched.is_mutable {
-                self.available.remove(idx);
-                break;
+        for token in tokens {
+            match token.r#type {
+                Type::Variable { .. } => {
+                    match self.variables.iter().position(|t| t.compare(&token)) {
+                        Some(index) => {
+                            let consumed_variable = self.variables.remove(index);
+                            if let Some(node) = self.token_to_initial_node.get(&token) {
+                                edges.push(Edge {
+                                    origin_function: node.function.clone(),
+                                    destination_function: destination_function.clone(),
+                                    token: consumed_variable,
+                                });
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                Type::Error { .. } => match self.errors.iter().position(|t| t.compare(&token)) {
+                    Some(index) => {
+                        let consumed_error = self.errors.remove(index);
+                        if let Some(node) = self.token_to_initial_node.get(&token) {
+                            edges.push(Edge {
+                                origin_function: node.function.clone(),
+                                destination_function: destination_function.clone(),
+                                token: consumed_error,
+                            });
+                        }
+                    }
+                    None => {}
+                },
+                Type::Constant { .. } => {
+                    if self.constants.contains(&token) {
+                        if let Some(node) = self.token_to_initial_node.get(&token) {
+                            edges.push(Edge {
+                                origin_function: node.function.clone(),
+                                destination_function: destination_function.clone(),
+                                token: token.clone(),
+                            });
+                        }
+                    }
+                }
             }
         }
-        (edges, triggered_expansion)
+        edges
     }
 }
 
-pub struct FlowProcessor {
+pub struct Flow {
     uid_counter: u32,
 }
 
-impl FlowProcessor {
-    pub fn new() -> Self {
-        Self { uid_counter: 1 }
-    }
-
-    pub fn generate_function(
-        &mut self,
-        name: &str,
-        consumes: Vec<(Token, Cardinality)>,
-        produces: Vec<(Token, Cardinality)>,
-        is_start: bool,
-        is_end: bool,
-        is_error: bool,
-    ) -> Function {
-        let uid = self.uid_counter;
-        self.uid_counter += 1;
-        Function {
-            name: name.to_string(),
-            uid,
-            consumes: consumes
-                .into_iter()
-                .map(|(mut t, c)| {
-                    t.is_collection = c == Cardinality::Collection;
-                    t
-                })
-                .collect(),
-            produces: produces
-                .into_iter()
-                .map(|(mut t, c)| {
-                    t.is_collection = c == Cardinality::Collection;
-                    t
-                })
-                .collect(),
-            is_artificial_graph_start: is_start,
-            is_artificial_graph_end: is_end,
-            is_artificial_error_termination: is_error,
-        }
-    }
-
-    pub fn process_flow(&mut self, pipeline: Vec<Function>) -> (Vec<Function>, Vec<Token>) {
-        let mut pool = TokenPool::new();
-        let mut nodes = Vec::new();
-        let mut all_edges = Vec::new();
-
-        let start_node = self.generate_function("Start", vec![], vec![], true, false, false);
-        let end_node = self.generate_function("End", vec![], vec![], false, true, false);
-
-        if let Some(first) = pipeline.first() {
-            for req in &first.consumes {
-                pool.add(req.clone(), start_node.uid, false);
-            }
-        }
-        nodes.push(start_node);
-
-        for mut func in pipeline {
-            let mut func_is_expanded = false;
-            for req in &func.consumes {
-                let (edges, expanded) = pool.consume_requirement(req, func.uid);
-                all_edges.extend(edges);
-                if expanded {
-                    func_is_expanded = true;
-                }
-            }
-            let products = func.produces.clone();
-            for prod in products {
-                pool.add(prod, func.uid, func_is_expanded);
-            }
-            nodes.push(func);
-        }
-
-        let mut error_nodes: HashMap<String, Function> = HashMap::new();
-        let leftovers: Vec<Token> = pool.available.drain(..).collect();
-
-        for mut leftover in leftovers {
-            // Skips terminal edge if this specific token was already used elsewhere
-            if pool.consumed.contains(&leftover) {
-                continue;
-            }
-
-            let target_uid = if leftover.name.contains("Error") {
-                let name = leftover.name.clone();
-                error_nodes
-                    .entry(name.clone())
-                    .or_insert_with(|| {
-                        self.generate_function(&name, vec![], vec![], false, true, true)
-                    })
-                    .uid
-            } else {
-                end_node.uid
-            };
-
-            leftover.destination_function_uid = Some(target_uid);
-            all_edges.push(leftover);
-        }
-
-        for (_, err_node) in error_nodes {
-            nodes.push(err_node);
-        }
-        nodes.push(end_node);
-        (nodes, all_edges)
-    }
-}
 
 #[derive(Serialize)]
 struct GraphExport {
@@ -256,50 +202,57 @@ struct GraphExport {
 
 #[test]
 fn main() -> std::io::Result<()> {
-
     // Define types (constants, variables, errors)
-    let initial_command = Type::Variable {
+    let initial_command = Variable {
         name: "InitialCommand".to_string(),
         documentation: Some("The initial command input from the CLI".to_string()),
     };
-    let path_to_config = Type::Variable {
+    let path_to_config = Variable {
         name: "PathToConfig".to_string(),
         documentation: Some("The path to the configuration file".to_string()),
     };
 
-    let settings = Type::Constant {
+    let settings = Constant {
         name: "Settings".to_string(),
         documentation: Some("The loaded settings from the config file".to_string()),
     };
 
-let templates = Type::Constant {
+    let templates = Constant {
         name: "Templates".to_string(),
         documentation: Some("The registry of HTML templates used for rendering".to_string()),
     };
 
-    let source_file = Type::Constant {
+    let source_file = Constant {
         name: "SourceFile".to_string(),
         documentation: Some("A raw input file found in the source directory".to_string()),
     };
 
-    let article = Type::Variable {
+    let article = Variable {
         name: "Article".to_string(),
-        documentation: Some("The processed data structure containing markdown content and metadata".to_string()),
+        documentation: Some(
+            "The processed data structure containing markdown content and metadata".to_string(),
+        ),
     };
 
-    let html = Type::Variable {
+    let html = Variable {
         name: "HTML".to_string(),
-        documentation: Some("The final rendered HTML string ready to be written to disk".to_string()),
+        documentation: Some(
+            "The final rendered HTML string ready to be written to disk".to_string(),
+        ),
     };
 
-    let fs_error = Type::Error {
+    let fs_error = Error {
         name: "FileSystemError".to_string(),
-        documentation: Some("Triggered when a file cannot be read from or written to the disk".to_string()),
+        documentation: Some(
+            "Triggered when a file cannot be read from or written to the disk".to_string(),
+        ),
     };
 
-    let success = Type::Variable {
+    let success = Variable {
         name: "SuccessReport".to_string(),
-        documentation: Some("A final summary of the operations performed during the run".to_string()),
+        documentation: Some(
+            "A final summary of the operations performed during the run".to_string(),
+        ),
     };
 
     // define functions
@@ -307,86 +260,123 @@ let templates = Type::Constant {
     let process_cli = Function {
         name: "ProcessCLI".to_string(),
         documentation: Some("Processes command-line input".to_string()),
-        consumes: vec![Token::new(initial_command.clone(), Cardinality::Unitary, /* origin_function */)],
+        consumes: vec![Token::new(
+            Type::Variable(initial_command.clone()),
+            Cardinality::Unitary,
+        )],
         produces: vec![
-            vec![Token::new(settings.clone(), Cardinality::Unitary, /* origin_function */)],
-            vec![Token::new(path_to_config.clone(), Cardinality::Unitary, /* origin_function */)],
+            vec![Token::new(
+                Type::Constant(settings.clone()),
+                Cardinality::Unitary,
+            )],
+            vec![Token::new(
+                Type::Variable(path_to_config.clone()),
+                Cardinality::Unitary,
+            )],
+        ],
+    };
+
+    let load_config = Function {
+        name: "LoadConfig".to_string(),
+        documentation: Some("Loads configuration from a file".to_string()),
+        consumes: vec![Token::new(
+            Type::Variable(path_to_config.clone()),
+            Cardinality::Unitary,
+        )],
+        produces: vec![vec![Token::new(
+            Type::Constant(settings.clone()),
+            Cardinality::Unitary,
+        )]],
+    };
+    let load_templates = Function {
+        name: "LoadTemplates".to_string(),
+        documentation: Some("Loads HTML templates based on settings".to_string()),
+        consumes: vec![Token::new(
+            Type::Constant(settings.clone()),
+            Cardinality::Unitary,
+        )],
+        produces: vec![vec![Token::new(
+            Type::Constant(templates.clone()),
+            Cardinality::Unitary,
+        )]],
+    };
+    let scan_fs = Function {
+        name: "ScanFS".to_string(),
+        documentation: Some("Scans the filesystem for source files".to_string()),
+        consumes: vec![Token::new(
+            Type::Constant(settings.clone()),
+            Cardinality::Unitary,
+        )],
+        produces: vec![
+            vec![Token::new(
+                Type::Constant(source_file.clone()),
+                Cardinality::Collection,
+            )],
+            vec![Token::new(
+                Type::Error(fs_error.clone()),
+                Cardinality::Collection,
+            )],
+        ],
+    };
+
+    let parse_markdown = Function {
+        name: "ParseMarkdown".to_string(),
+        documentation: Some("Parses markdown files into article structures".to_string()),
+        consumes: vec![Token::new(
+            Type::Constant(source_file.clone()),
+            Cardinality::Unitary,
+        )],
+        produces: vec![
+            vec![Token::new(
+                Type::Variable(article.clone()),
+                Cardinality::Unitary,
+            )],
+            vec![Token::new(
+                Type::Error(fs_error.clone()),
+                Cardinality::Unitary,
+            )],
+        ],
+    };
+    let render_html = Function {
+        name: "RenderHTML".to_string(),
+        documentation: Some("Renders articles into HTML using templates".to_string()),
+        consumes: vec![
+            Token::new(Type::Variable(article.clone()), Cardinality::Unitary),
+            Token::new(Type::Constant(templates.clone()), Cardinality::Unitary),
+            Token::new(Type::Constant(settings.clone()), Cardinality::Unitary),
+        ],
+        produces: vec![vec![Token::new(
+            Type::Variable(html.clone()),
+            Cardinality::Unitary,
+        )]],
+    };
+    let write_to_disk = Function {
+        name: "WriteToDisk".to_string(),
+        documentation: Some("Writes HTML files to disk".to_string()),
+        consumes: vec![Token::new(
+            Type::Variable(html.clone()),
+            Cardinality::Unitary,
+        )],
+        produces: vec![
+            vec![Token::new(
+                Type::Variable(success.clone()),
+                Cardinality::Unitary,
+            )],
+            vec![Token::new(
+                Type::Error(fs_error.clone()),
+                Cardinality::Unitary,
+            )],
         ],
     };
 
     let pipeline = vec![
-        engine.generate_function(
-            "ProcessCLI",
-            vec![(initial_command, Cardinality::Unitary)],
-            vec![
-                (settings.clone(), Cardinality::Unitary),
-                (path_to_config.clone(), Cardinality::Unitary),
-            ],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "LoadConfig",
-            vec![(path_to_config, Cardinality::Unitary)],
-            vec![(settings.clone(), Cardinality::Unitary)],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "LoadTemplates",
-            vec![(settings.clone(), Cardinality::Unitary)],
-            vec![(templates.clone(), Cardinality::Unitary)],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "ScanFS",
-            vec![(settings.clone(), Cardinality::Unitary)],
-            vec![
-                (source_file.clone(), Cardinality::Collection),
-                (fs_error.clone(), Cardinality::Collection),
-            ],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "ParseMarkdown",
-            vec![(source_file, Cardinality::Unitary)],
-            vec![
-                (article.clone(), Cardinality::Unitary),
-                (fs_error.clone(), Cardinality::Unitary),
-            ],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "RenderHTML",
-            vec![
-                (article, Cardinality::Unitary),
-                (templates, Cardinality::Unitary),
-                (settings, Cardinality::Unitary),
-            ],
-            vec![(html.clone(), Cardinality::Unitary)],
-            false,
-            false,
-            false,
-        ),
-        engine.generate_function(
-            "WriteToDisk",
-            vec![(html, Cardinality::Collection)],
-            vec![
-                (success, Cardinality::Unitary),
-                (fs_error, Cardinality::Collection),
-            ],
-            false,
-            false,
-            false,
-        ),
+        process_cli,
+        load_config,
+        load_templates,
+        scan_fs,
+        parse_markdown,
+        render_html,
+        write_to_disk,
     ];
 
     // Serialization with 4-space indentation
