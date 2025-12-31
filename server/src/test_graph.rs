@@ -145,7 +145,7 @@ impl TokenPool {
                 Kind::Variable(..) => match self.variables.iter().position(|t| t.compare(&token)) {
                     Some(index) => {
                         let consumed_variable = self.variables.remove(index);
-                        if let Some(node) = self.token_to_initial_node.get(&token) {
+                        if let Some(node) = self.token_to_initial_node.get(&consumed_variable) {
                             edges.push(Edge {
                                 origin_function: node.function.clone(),
                                 destination_function: destination_node.function.clone(),
@@ -158,7 +158,7 @@ impl TokenPool {
                 Kind::Error(..) => match self.errors.iter().position(|t| t.compare(&token)) {
                     Some(index) => {
                         let consumed_error = self.errors.remove(index);
-                        if let Some(node) = self.token_to_initial_node.get(&token) {
+                        if let Some(node) = self.token_to_initial_node.get(&consumed_error) {
                             edges.push(Edge {
                                 origin_function: node.function.clone(),
                                 destination_function: destination_node.function.clone(),
