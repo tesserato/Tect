@@ -99,6 +99,45 @@ pub struct TokenPool {
 }
 
 impl TokenPool {
+    pub fn log_contents(&self) {
+        println!("\n=== CURRENT TOKEN POOL STATE ===");
+
+        self.log_sub_pool("Variables", &self.variables);
+        self.log_sub_pool("Constants", &self.constants);
+        self.log_sub_pool("Errors", &self.errors);
+
+        println!("=================================\n");
+    }
+
+    fn log_sub_pool(&self, label: &str, tokens: &[Token]) {
+        println!(" {}:", label);
+        if tokens.is_empty() {
+            println!("   (empty)");
+            return;
+        }
+
+        for token in tokens {
+            // Get the producer node name from the hashmap
+            let producer_name = self
+                .token_to_initial_node
+                .get(token)
+                .map(|node| node.function.name.as_str())
+                .unwrap_or("Unknown Source");
+
+            // Extract the specific name from the Kind enum
+            let kind_name = match &*token.kind {
+                Kind::Variable(v) => &v.name,
+                Kind::Constant(c) => &c.name,
+                Kind::Error(e) => &e.name,
+            };
+
+            println!(
+                "   - [{:?}] {} (from: {})",
+                token.cardinality, kind_name, producer_name
+            );
+        }
+    }
+
     pub fn new(tokens: Vec<Token>, initial_node: Arc<Node>) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
@@ -144,12 +183,12 @@ impl TokenPool {
             match &*token.kind {
                 Kind::Variable(..) => {
                     for variable_token in &self.variables {
-                        println!(
-                            "Comparing {:?} WITH {:?} => {}",
-                            variable_token.kind,
-                            token.kind,
-                            variable_token.compare(&token)
-                        );
+                        // println!(
+                        //     "Comparing {:?} WITH {:?} => {}",
+                        //     variable_token.kind,
+                        //     token.kind,
+                        //     variable_token.compare(&token)
+                        // );
                         if variable_token.compare(&token) {
                             if let Some(node) = self.token_to_initial_node.get(variable_token) {
                                 edges.push(Edge {
@@ -243,6 +282,7 @@ impl Flow {
             initial_node.clone(),
         ));
 
+        self.pools.first_mut().unwrap().log_contents();
         for function in functions {
             self.uid_counter += 1;
             let node = Arc::new(Node {
@@ -262,6 +302,7 @@ impl Flow {
                     pool.produce(produced_tokens.clone(), node.clone());
                 }
             }
+            self.pools.first_mut().unwrap().log_contents();
         }
 
         (self.nodes.clone(), self.edges.clone())
