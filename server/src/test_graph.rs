@@ -94,7 +94,7 @@ pub struct Edge {
 pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
-    pub constants: HashSet<Token>,
+    pub constants: Vec<Token>,
     pub token_to_initial_node: HashMap<Token, Arc<Node>>,
 }
 
@@ -102,7 +102,7 @@ impl TokenPool {
     pub fn new(tokens: Vec<Token>, initial_node: Arc<Node>) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
-        let mut constants = HashSet::new();
+        let mut constants = Vec::new();
         let mut token_to_initial_node = HashMap::new();
 
         for token in tokens {
@@ -111,7 +111,7 @@ impl TokenPool {
                 Kind::Variable(..) => variables.push(token),
                 Kind::Error(..) => errors.push(token),
                 Kind::Constant(..) => {
-                    constants.insert(token);
+                    constants.push(token);
                 }
             }
         }
@@ -131,7 +131,7 @@ impl TokenPool {
                 Kind::Variable(..) => self.variables.push(token),
                 Kind::Error(..) => self.errors.push(token),
                 Kind::Constant(..) => {
-                    self.constants.insert(token);
+                    self.constants.push(token);
                 }
             }
         }
