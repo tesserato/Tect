@@ -142,19 +142,39 @@ impl TokenPool {
 
         for token in tokens {
             match &*token.kind {
-                Kind::Variable(..) => match self.variables.iter().position(|t| t.compare(&token)) {
-                    Some(index) => {
-                        let consumed_variable = self.variables.remove(index);
-                        if let Some(node) = self.token_to_initial_node.get(&consumed_variable) {
-                            edges.push(Edge {
-                                origin_function: node.function.clone(),
-                                destination_function: destination_node.function.clone(),
-                                token: consumed_variable,
-                            });
+                Kind::Variable(..) => {
+                    for variable_token in &self.variables {
+                        println!(
+                            "Comparing {:?} WITH {:?} => {}",
+                            variable_token.kind,
+                            token.kind,
+                            variable_token.compare(&token)
+                        );
+                        if variable_token.compare(&token) {
+                            if let Some(node) = self.token_to_initial_node.get(variable_token) {
+                                edges.push(Edge {
+                                    origin_function: node.function.clone(),
+                                    destination_function: destination_node.function.clone(),
+                                    token: variable_token.clone(),
+                                });
+                            }
                         }
                     }
-                    None => {}
-                },
+                }
+
+                // match self.variables.iter().position(|t| t.compare(&token)) {
+                //     Some(index) => {
+                //         let consumed_variable = self.variables.remove(index);
+                //         if let Some(node) = self.token_to_initial_node.get(&consumed_variable) {
+                //             edges.push(Edge {
+                //                 origin_function: node.function.clone(),
+                //                 destination_function: destination_node.function.clone(),
+                //                 token: consumed_variable,
+                //             });
+                //         }
+                //     }
+                //     None => {}
+                // },
                 Kind::Error(..) => match self.errors.iter().position(|t| t.compare(&token)) {
                     Some(index) => {
                         let consumed_error = self.errors.remove(index);
@@ -237,10 +257,9 @@ impl Flow {
             for pool in &mut self.pools {
                 let new_edges = pool.consume(function.consumes.clone(), node.clone());
                 self.edges.extend(new_edges.clone());
-                if !new_edges.is_empty() {
-                    for produced_tokens in &function.produces {
-                        pool.produce(produced_tokens.clone(), node.clone());
-                    }
+
+                for produced_tokens in &function.produces {
+                    pool.produce(produced_tokens.clone(), node.clone());
                 }
             }
         }
@@ -320,18 +339,18 @@ fn main() -> std::io::Result<()> {
             Cardinality::Unitary,
             None,
         )],
-        produces: vec![
-            vec![Token::new(
+        produces: vec![vec![
+            Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
                 None,
-            )],
-            vec![Token::new(
+            ),
+            Token::new(
                 Arc::new(Kind::Variable(path_to_config.clone())),
                 Cardinality::Unitary,
                 None,
-            )],
-        ],
+            ),
+        ]],
     });
 
     let load_config = Arc::new(Function {
