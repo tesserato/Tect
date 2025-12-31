@@ -107,10 +107,10 @@ impl TokenPool {
 
         for token in tokens {
             token_to_initial_node.insert(token.clone(), initial_node.clone());
-            match *token.kind {
-                Kind::Variable { .. } => variables.push(token),
-                Kind::Error { .. } => errors.push(token),
-                Kind::Constant { .. } => {
+            match &*token.kind {
+                Kind::Variable(..) => variables.push(token),
+                Kind::Error(..) => errors.push(token),
+                Kind::Constant(..) => {
                     constants.insert(token);
                 }
             }
@@ -127,10 +127,10 @@ impl TokenPool {
         for token in tokens {
             self.token_to_initial_node
                 .insert(token.clone(), initial_node.clone());
-            match *token.kind {
-                Kind::Variable { .. } => self.variables.push(token),
-                Kind::Error { .. } => self.errors.push(token),
-                Kind::Constant { .. } => {
+            match &*token.kind {
+                Kind::Variable(..) => self.variables.push(token),
+                Kind::Error(..) => self.errors.push(token),
+                Kind::Constant(..) => {
                     self.constants.insert(token);
                 }
             }
@@ -141,23 +141,21 @@ impl TokenPool {
         let mut edges = Vec::new();
 
         for token in tokens {
-            match *token.kind {
-                Kind::Variable { .. } => {
-                    match self.variables.iter().position(|t| t.compare(&token)) {
-                        Some(index) => {
-                            let consumed_variable = self.variables.remove(index);
-                            if let Some(node) = self.token_to_initial_node.get(&token) {
-                                edges.push(Edge {
-                                    origin_function: node.function.clone(),
-                                    destination_function: destination_node.function.clone(),
-                                    token: consumed_variable,
-                                });
-                            }
+            match &*token.kind {
+                Kind::Variable(..) => match self.variables.iter().position(|t| t.compare(&token)) {
+                    Some(index) => {
+                        let consumed_variable = self.variables.remove(index);
+                        if let Some(node) = self.token_to_initial_node.get(&token) {
+                            edges.push(Edge {
+                                origin_function: node.function.clone(),
+                                destination_function: destination_node.function.clone(),
+                                token: consumed_variable,
+                            });
                         }
-                        None => {}
                     }
-                }
-                Kind::Error { .. } => match self.errors.iter().position(|t| t.compare(&token)) {
+                    None => {}
+                },
+                Kind::Error(..) => match self.errors.iter().position(|t| t.compare(&token)) {
                     Some(index) => {
                         let consumed_error = self.errors.remove(index);
                         if let Some(node) = self.token_to_initial_node.get(&token) {
@@ -170,12 +168,9 @@ impl TokenPool {
                     }
                     None => {}
                 },
-                Kind::Constant { .. } => {
-                    // Iterate through every available constant in the state
+                Kind::Constant(..) => {
                     for constant_token in &self.constants {
-                        // Test the incoming token against the current constant token
                         if constant_token.compare(&token) {
-                            // If a match is found, attempt to find the initial node for the matching constant
                             if let Some(node) = self.token_to_initial_node.get(constant_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
@@ -256,8 +251,8 @@ impl Flow {
 
 #[derive(Serialize)]
 struct GraphExport {
-    nodes: Vec<Function>,
-    edges: Vec<Token>,
+    nodes: Vec<Arc<Node>>,
+    edges: Vec<Edge>,
 }
 
 #[test]
@@ -476,7 +471,6 @@ fn main() -> std::io::Result<()> {
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
     let mut buf = Vec::new();
     let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-
 
     (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
     let json_data = String::from_utf8(buf).unwrap();
