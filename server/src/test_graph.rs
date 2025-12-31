@@ -95,11 +95,11 @@ pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
     pub constants: HashSet<Token>,
-    pub token_to_initial_node: HashMap<Token, Node>,
+    pub token_to_initial_node: HashMap<Token, Arc<Node>>,
 }
 
 impl TokenPool {
-    pub fn new(tokens: Vec<Token>, initial_node: Node) -> Self {
+    pub fn new(tokens: Vec<Token>, initial_node: Arc<Node>) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
         let mut constants = HashSet::new();
@@ -123,7 +123,7 @@ impl TokenPool {
         }
     }
 
-    pub fn add(&mut self, tokens: Vec<Token>, initial_node: Node) {
+    pub fn produce(&mut self, tokens: Vec<Token>, initial_node: Arc<Node>) {
         for token in tokens {
             self.token_to_initial_node
                 .insert(token.clone(), initial_node.clone());
@@ -137,7 +137,7 @@ impl TokenPool {
         }
     }
 
-    pub fn consume(&mut self, tokens: Vec<Token>, destination_node: Node) -> Vec<Edge> {
+    pub fn consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Vec<Edge> {
         let mut edges = Vec::new();
 
         for token in tokens {
@@ -194,41 +194,65 @@ impl TokenPool {
 
 pub struct Flow {
     uid_counter: u32,
-    pub nodes: Vec<Node>,
+    pub nodes: Vec<Arc<Node>>,
     pub edges: Vec<Edge>,
     pub pools: Vec<TokenPool>,
 }
 
-// impl Flow {
-//     pub fn new(functions: Vec<Function>) -> Self {
-//         let mut nodes = Vec::new();
-//         let mut edges = Vec::new();
-//         let mut pools = Vec::new();
+impl Flow {
+    pub fn new() -> Self {
+        Self {
+            uid_counter: 0,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            pools: Vec::new(),
+        }
+    }
+    pub fn process_flow(&mut self, functions: Vec<Arc<Function>>) -> (Vec<Arc<Node>>, Vec<Edge>) {
+        let initial_node = Arc::new(Node {
+            uid: 0,
+            function: Arc::new(Function {
+                name: "InitialNode".to_string(),
+                documentation: Some("Artificial initial node".to_string()),
+                consumes: vec![],
+                produces: vec![],
+            }),
+            is_artificial_graph_start: true,
+            is_artificial_graph_end: false,
+            is_artificial_error_termination: false,
+        });
+        self.nodes.push(initial_node.clone());
 
-//         let initial_node = Node {
-//             uid: 0,
-//             function: Function {
+        self.pools.push(TokenPool::new(
+            functions.first().unwrap().consumes.clone(),
+            initial_node.clone(),
+        ));
 
-//         for function in functions {
-//             let node = Node {
+        for function in functions {
+            self.uid_counter += 1;
+            let node = Arc::new(Node {
+                uid: self.uid_counter,
+                function: function.clone(),
+                is_artificial_graph_start: false,
+                is_artificial_graph_end: false,
+                is_artificial_error_termination: false,
+            });
+            self.nodes.push(node.clone());
 
-//                 function: function.clone(),
-//                 is_artificial_graph_start: false,
-//                 is_artificial_graph_end: false,
-//                 is_artificial_error_termination: false,
-//             };
-//             nodes.push(node);
-//         }
+            for pool in &mut self.pools {
+                let new_edges = pool.consume(function.consumes.clone(), node.clone());
+                self.edges.extend(new_edges.clone());
+                if !new_edges.is_empty() {
+                    for produced_tokens in &function.produces {
+                        pool.produce(produced_tokens.clone(), node.clone());
+                    }
+                }
+            }
+        }
 
-//         Self {
-//             uid_counter: 0,
-//             nodes: Vec::new(),
-//             edges: Vec::new(),
-//             pools: Vec::new(),
-//         }
-//     }
-
-// }
+        (self.nodes.clone(), self.edges.clone())
+    }
+}
 
 #[derive(Serialize)]
 struct GraphExport {
@@ -293,7 +317,7 @@ fn main() -> std::io::Result<()> {
 
     // define functions
 
-    let process_cli = Function {
+    let process_cli = Arc::new(Function {
         name: "ProcessCLI".to_string(),
         documentation: Some("Processes command-line input".to_string()),
         consumes: vec![Token::new(
@@ -313,9 +337,9 @@ fn main() -> std::io::Result<()> {
                 None,
             )],
         ],
-    };
+    });
 
-    let load_config = Function {
+    let load_config = Arc::new(Function {
         name: "LoadConfig".to_string(),
         documentation: Some("Loads configuration from a file".to_string()),
         consumes: vec![Token::new(
@@ -328,8 +352,8 @@ fn main() -> std::io::Result<()> {
             Cardinality::Unitary,
             None,
         )]],
-    };
-    let load_templates = Function {
+    });
+    let load_templates = Arc::new(Function {
         name: "LoadTemplates".to_string(),
         documentation: Some("Loads HTML templates based on settings".to_string()),
         consumes: vec![Token::new(
@@ -342,8 +366,8 @@ fn main() -> std::io::Result<()> {
             Cardinality::Unitary,
             None,
         )]],
-    };
-    let scan_fs = Function {
+    });
+    let scan_fs = Arc::new(Function {
         name: "ScanFS".to_string(),
         documentation: Some("Scans the filesystem for source files".to_string()),
         consumes: vec![Token::new(
@@ -363,9 +387,9 @@ fn main() -> std::io::Result<()> {
                 None,
             )],
         ],
-    };
+    });
 
-    let parse_markdown = Function {
+    let parse_markdown = Arc::new(Function {
         name: "ParseMarkdown".to_string(),
         documentation: Some("Parses markdown files into article structures".to_string()),
         consumes: vec![Token::new(
@@ -385,8 +409,8 @@ fn main() -> std::io::Result<()> {
                 None,
             )],
         ],
-    };
-    let render_html = Function {
+    });
+    let render_html = Arc::new(Function {
         name: "RenderHTML".to_string(),
         documentation: Some("Renders articles into HTML using templates".to_string()),
         consumes: vec![
@@ -411,8 +435,8 @@ fn main() -> std::io::Result<()> {
             Cardinality::Unitary,
             None,
         )]],
-    };
-    let write_to_disk = Function {
+    });
+    let write_to_disk = Arc::new(Function {
         name: "WriteToDisk".to_string(),
         documentation: Some("Writes HTML files to disk".to_string()),
         consumes: vec![Token::new(
@@ -432,7 +456,7 @@ fn main() -> std::io::Result<()> {
                 None,
             )],
         ],
-    };
+    });
 
     let pipeline = vec![
         process_cli,
@@ -444,15 +468,19 @@ fn main() -> std::io::Result<()> {
         write_to_disk,
     ];
 
-    // Serialization with 4-space indentation
-    // let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-    // let mut buf = Vec::new();
-    // let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-    // let (nodes, edges) = engine.process_flow(pipeline);
+    let mut flow = Flow::new();
 
-    // (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
-    // let json_data = String::from_utf8(buf).unwrap();
-    // let mut file = File::create("../experiments/architecture.json")?;
-    // file.write_all(json_data.as_bytes())?;
+    let (nodes, edges) = flow.process_flow(pipeline);
+
+    // Serialization with 4-space indentation
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut buf = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+
+
+    (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
+    let json_data = String::from_utf8(buf).unwrap();
+    let mut file = File::create("../experiments/architecture.json")?;
+    file.write_all(json_data.as_bytes())?;
     Ok(())
 }
