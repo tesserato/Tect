@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
@@ -80,14 +80,14 @@ impl Token {
 }
 
 // Graph components
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
     pub uid: u32,
     pub function: Arc<Function>,
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
-    pub is_called_multiple_times: bool,
+    pub is_called_multiple_times: AtomicBool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
@@ -176,9 +176,12 @@ impl TokenPool {
     }
 
     pub fn produce(&mut self, tokens: Vec<Token>, initial_node: Arc<Node>) {
-        for token in tokens {
+        for mut token in tokens {
             self.token_to_initial_node
                 .insert(token.clone(), initial_node.clone());
+            if initial_node.is_called_multiple_times.load(Ordering::SeqCst) {
+                token.cardinality = Cardinality::Collection;
+            }
             match &*token.kind {
                 Kind::Variable(..) => self.variables.push(token),
                 Kind::Error(..) => self.errors.push(token),
@@ -190,6 +193,7 @@ impl TokenPool {
     pub fn try_to_consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
         let mut consumed_tokens: Vec<Token> = Vec::new();
+        let mut is_called_multiple_times = false;
         for requested_token in &tokens {
             match &*requested_token.kind {
                 Kind::Variable(..) => {
@@ -202,7 +206,7 @@ impl TokenPool {
                                 if requested_token.cardinality == Cardinality::Unitary
                                     && available_var_token.cardinality == Cardinality::Collection
                                 {
-                                   node.is_called_multiple_times = true;
+                                    is_called_multiple_times = true;
                                 }
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
@@ -224,6 +228,11 @@ impl TokenPool {
                             if let Some(node) =
                                 self.token_to_initial_node.get(available_error_token)
                             {
+                                if requested_token.cardinality == Cardinality::Unitary
+                                    && available_error_token.cardinality == Cardinality::Collection
+                                {
+                                    is_called_multiple_times = true;
+                                }
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
@@ -243,6 +252,11 @@ impl TokenPool {
                             if let Some(node) =
                                 self.token_to_initial_node.get(available_const_token)
                             {
+                                if requested_token.cardinality == Cardinality::Unitary
+                                    && available_const_token.cardinality == Cardinality::Collection
+                                {
+                                    is_called_multiple_times = true;
+                                }
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
@@ -266,10 +280,15 @@ impl TokenPool {
             .cloned()
             .collect();
         if unconsumed_tokens.is_empty() {
-            print!(
-                "All tokens consumed for function: {}\n",
-                destination_node.function.name
-            );
+            if is_called_multiple_times {
+                destination_node
+                    .is_called_multiple_times
+                    .store(true, Ordering::SeqCst);
+            }
+            // print!(
+            //     "All tokens consumed for function: {}\n",
+            //     destination_node.function.name
+            // );
             &self.variables.retain(|t| !consumed_tokens.contains(t));
             &self.errors.retain(|t| !consumed_tokens.contains(t));
             return Consumed::AllTokens(edges);
@@ -307,6 +326,7 @@ impl Flow {
             is_artificial_graph_start: true,
             is_artificial_graph_end: false,
             is_artificial_error_termination: false,
+            is_called_multiple_times: AtomicBool::new(false),
         });
         self.nodes.push(initial_node.clone());
 
@@ -324,6 +344,7 @@ impl Flow {
                 is_artificial_graph_start: false,
                 is_artificial_graph_end: false,
                 is_artificial_error_termination: false,
+                is_called_multiple_times: AtomicBool::new(false),
             });
             self.nodes.push(node.clone());
 
