@@ -637,8 +637,7 @@ fn main() -> std::io::Result<()> {
 
     let mut flow = Flow::new();
 
-    let  (nodes,mut edges) = flow.process_flow(&pipeline);
-
+    let (nodes, mut edges) = flow.process_flow(&pipeline);
 
     // Removes duplicated edges caused by the multiple pools
     edges.sort_unstable_by(|a, b| a.token.uid.cmp(&b.token.uid));

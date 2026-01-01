@@ -11,9 +11,9 @@ mod graphviz;
 mod html;
 mod lsp;
 mod models;
-mod tests;
-mod test_parse;
 mod test_graph;
+mod test_parse;
+mod tests;
 
 /// The primary entry point for the Tect toolset.
 #[derive(ClapParser, Debug)]

@@ -1,6 +1,6 @@
-use std::fs;
 use pest::Parser;
 use pest_derive::Parser;
+use std::fs;
 
 #[derive(Parser)]
 #[grammar = "tect.pest"]
@@ -12,7 +12,8 @@ fn main() {
 
     let file = TectParser::parse(Rule::program, &unparsed_file)
         .expect("unsuccessful parse") // unwrap the parse result
-        .next().unwrap(); // get and unwrap the `file` rule; never fails
+        .next()
+        .unwrap(); // get and unwrap the `file` rule; never fails
 
     for record in file.into_inner() {
         let rule = record.as_rule();
