@@ -87,6 +87,7 @@ pub struct Node {
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
+    pub is_called_multiple_times: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
@@ -107,6 +108,7 @@ pub struct TokenPool {
     pub errors: Vec<Token>,
     pub constants: Vec<Token>,
     pub token_to_initial_node: HashMap<Token, Arc<Node>>,
+    // pub functions_called_multiple_times: HashMap<Arc<Node>, bool>,
 }
 
 impl TokenPool {
@@ -154,6 +156,7 @@ impl TokenPool {
         let mut errors = Vec::new();
         let mut constants = Vec::new();
         let mut token_to_initial_node = HashMap::new();
+        // let mut functions_called_multiple_times = HashMap::new();
 
         for token in tokens {
             token_to_initial_node.insert(token.clone(), initial_node.clone());
@@ -168,6 +171,7 @@ impl TokenPool {
             errors,
             constants,
             token_to_initial_node,
+            // functions_called_multiple_times,
         }
     }
 
@@ -195,11 +199,11 @@ impl TokenPool {
                         {
                             if let Some(node) = self.token_to_initial_node.get(available_var_token)
                             {
-                                // if requested_token.cardinality == Cardinality::Unitary
-                                //     && available_var_token.cardinality == Cardinality::Collection
-                                // {
-                                //     available_var_token.cardinality = Cardinality::Collection;
-                                // }
+                                if requested_token.cardinality == Cardinality::Unitary
+                                    && available_var_token.cardinality == Cardinality::Collection
+                                {
+                                   node.is_called_multiple_times = true;
+                                }
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
@@ -277,9 +281,9 @@ impl TokenPool {
 
 pub struct Flow {
     uid_counter: u32,
-    pub nodes: Vec<Arc<Node>>,
-    pub edges: Vec<Edge>,
-    pub pools: Vec<TokenPool>,
+    nodes: Vec<Arc<Node>>,
+    edges: Vec<Edge>,
+    pools: Vec<TokenPool>,
 }
 
 impl Flow {
