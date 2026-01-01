@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum Cardinality {
@@ -49,9 +50,12 @@ pub struct Function {
     pub produces: Vec<Vec<Token>>,
 }
 
+static TOKEN_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+
 // Mutable. References previous constant structs.
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Token {
+    pub uid: u32,
     pub kind: Arc<Kind>,
     pub cardinality: Cardinality,
     pub group: Option<Arc<Group>>,
@@ -60,6 +64,7 @@ pub struct Token {
 impl Token {
     pub fn new(kind: Arc<Kind>, cardinality: Cardinality, group: Option<Arc<Group>>) -> Self {
         Self {
+            uid: TOKEN_ID_COUNTER.fetch_add(1, Ordering::SeqCst),
             kind,
             cardinality,
             group,
@@ -262,7 +267,7 @@ impl Flow {
             pools: Vec::new(),
         }
     }
-    pub fn process_flow(&mut self, functions: Vec<Arc<Function>>) -> (Vec<Arc<Node>>, Vec<Edge>) {
+    pub fn process_flow(&mut self, functions: &Vec<Arc<Function>>) -> (Vec<Arc<Node>>, Vec<Edge>) {
         let initial_node = Arc::new(Node {
             uid: 0,
             function: Arc::new(Function {
@@ -525,7 +530,7 @@ fn main() -> std::io::Result<()> {
 
     let mut flow = Flow::new();
 
-    let (nodes, edges) = flow.process_flow(pipeline);
+    let (nodes, edges) = flow.process_flow(&pipeline);
 
     // Serialization with 4-space indentation
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
