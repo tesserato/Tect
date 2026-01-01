@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
 pub enum Cardinality {
@@ -183,64 +183,48 @@ impl TokenPool {
 
     pub fn consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Vec<Edge> {
         let mut edges = Vec::new();
-
+        let mut consumed_tokens: HashSet<Token> = HashSet::new();
         for token in tokens {
             match &*token.kind {
                 Kind::Variable(..) => {
                     for variable_token in &self.variables {
-                        // println!(
-                        //     "Comparing {:?} WITH {:?} => {}",
-                        //     variable_token.kind,
-                        //     token.kind,
-                        //     variable_token.compare(&token)
-                        // );
-                        if variable_token.compare(&token) {
+                        if variable_token.compare(&token) && !consumed_tokens.contains(variable_token) {
                             if let Some(node) = self.token_to_initial_node.get(variable_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
                                     token: variable_token.clone(),
                                 });
+                                consumed_tokens.insert(variable_token.clone());
                             }
                         }
                     }
                 }
 
-                // match self.variables.iter().position(|t| t.compare(&token)) {
-                //     Some(index) => {
-                //         let consumed_variable = self.variables.remove(index);
-                //         if let Some(node) = self.token_to_initial_node.get(&consumed_variable) {
-                //             edges.push(Edge {
-                //                 origin_function: node.function.clone(),
-                //                 destination_function: destination_node.function.clone(),
-                //                 token: consumed_variable,
-                //             });
-                //         }
-                //     }
-                //     None => {}
-                // },
-                Kind::Error(..) => match self.errors.iter().position(|t| t.compare(&token)) {
-                    Some(index) => {
-                        let consumed_error = self.errors.remove(index);
-                        if let Some(node) = self.token_to_initial_node.get(&consumed_error) {
-                            edges.push(Edge {
-                                origin_function: node.function.clone(),
-                                destination_function: destination_node.function.clone(),
-                                token: consumed_error,
-                            });
+                Kind::Error(..) => {
+                    for error_token in &self.errors {
+                        if error_token.compare(&token) && !consumed_tokens.contains(error_token) {
+                            if let Some(node) = self.token_to_initial_node.get(error_token) {
+                                edges.push(Edge {
+                                    origin_function: node.function.clone(),
+                                    destination_function: destination_node.function.clone(),
+                                    token: error_token.clone(),
+                                });
+                                consumed_tokens.insert(error_token.clone());
+                            }
                         }
                     }
-                    None => {}
-                },
+                }
                 Kind::Constant(..) => {
                     for constant_token in &self.constants {
-                        if constant_token.compare(&token) {
+                        if constant_token.compare(&token) && !consumed_tokens.contains(constant_token) {
                             if let Some(node) = self.token_to_initial_node.get(constant_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
                                     token: constant_token.clone(),
                                 });
+                                consumed_tokens.insert(constant_token.clone());
                             }
                         }
                     }
@@ -385,18 +369,18 @@ fn main() -> std::io::Result<()> {
             Cardinality::Unitary,
             None,
         )],
-        produces: vec![vec![
-            Token::new(
+        produces: vec![
+            vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-            Token::new(
+            )],
+            vec![Token::new(
                 Arc::new(Kind::Variable(path_to_config.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-        ]],
+            )],
+        ],
     });
 
     let load_config = Arc::new(Function {
