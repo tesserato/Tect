@@ -100,6 +100,8 @@ pub enum Consumed {
     AllTokens(Vec<Edge>),
     SomeTokens(Vec<Token>),
 }
+
+#[derive(Clone)]
 pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
@@ -306,21 +308,30 @@ impl Flow {
             });
             self.nodes.push(node.clone());
 
+            let mut new_pools: Vec<TokenPool> = Vec::new();
             for pool in &mut self.pools {
                 match pool.try_to_consume(function.consumes.clone(), node.clone()) {
                     Consumed::AllTokens(new_edges) => {
                         self.edges.extend(new_edges.clone());
+                        for produced_tokens in &function.produces {
+                            let mut new_pool = pool.clone();
+                            new_pool.produce(produced_tokens.clone(), node.clone());
+                            new_pools.push(new_pool);
+                        }
                     }
-                    Consumed::SomeTokens(_unconsumed_tokens) => {
+                    Consumed::SomeTokens(unconsumed_tokens) => {
                         // Currently ignoring unconsumed tokens
                     }
                 }
-
-                for produced_tokens in &function.produces {
-                    pool.produce(produced_tokens.clone(), node.clone());
-                }
             }
-            self.pools.first_mut().unwrap().log_contents();
+            self.pools = new_pools;
+            for (i, pool) in &mut self.pools.iter().enumerate() {
+                println!(
+                    "--- Token Pool {} after processing function: {} ---",
+                    i, function.name
+                );
+                pool.log_contents();
+            }
         }
 
         (self.nodes.clone(), self.edges.clone())
