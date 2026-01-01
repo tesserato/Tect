@@ -96,6 +96,10 @@ pub struct Edge {
     pub token: Token,
 }
 
+pub enum Consumed {
+    AllTokens(Vec<Edge>),
+    SomeTokens(Vec<Token>),
+}
 pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
@@ -154,10 +158,8 @@ impl TokenPool {
             match &*token.kind {
                 Kind::Variable(..) => variables.push(token),
                 Kind::Error(..) => errors.push(token),
-                Kind::Constant(..) => {
-                    constants.push(token);
-                }
-            }
+                Kind::Constant(..) => constants.push(token),
+            };
         }
         Self {
             variables,
@@ -174,28 +176,28 @@ impl TokenPool {
             match &*token.kind {
                 Kind::Variable(..) => self.variables.push(token),
                 Kind::Error(..) => self.errors.push(token),
-                Kind::Constant(..) => {
-                    self.constants.push(token);
-                }
-            }
+                Kind::Constant(..) => self.constants.push(token),
+            };
         }
     }
 
-    pub fn consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Vec<Edge> {
+    pub fn try_to_consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
-        let mut consumed_tokens: HashSet<Token> = HashSet::new();
-        for token in tokens {
+        let mut consumed_tokens: Vec<Token> = Vec::new();
+        for token in &tokens {
             match &*token.kind {
                 Kind::Variable(..) => {
                     for variable_token in &self.variables {
-                        if variable_token.compare(&token) && !consumed_tokens.contains(variable_token) {
+                        if variable_token.compare(&token)
+                            && !consumed_tokens.contains(variable_token)
+                        {
                             if let Some(node) = self.token_to_initial_node.get(variable_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
                                     token: variable_token.clone(),
                                 });
-                                consumed_tokens.insert(variable_token.clone());
+                                consumed_tokens.push(variable_token.clone());
                             }
                         }
                     }
@@ -210,28 +212,49 @@ impl TokenPool {
                                     destination_function: destination_node.function.clone(),
                                     token: error_token.clone(),
                                 });
-                                consumed_tokens.insert(error_token.clone());
+                                consumed_tokens.push(error_token.clone());
                             }
                         }
                     }
                 }
                 Kind::Constant(..) => {
                     for constant_token in &self.constants {
-                        if constant_token.compare(&token) && !consumed_tokens.contains(constant_token) {
+                        if constant_token.compare(&token)
+                            && !consumed_tokens.contains(constant_token)
+                        {
                             if let Some(node) = self.token_to_initial_node.get(constant_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
                                     token: constant_token.clone(),
                                 });
-                                consumed_tokens.insert(constant_token.clone());
+                                consumed_tokens.push(constant_token.clone());
                             }
                         }
                     }
                 }
             }
         }
-        edges
+        let unconsumed_tokens: Vec<Token> = tokens
+            .iter()
+            .filter(|req_token| {
+                // A token is unconsumed if the consumed_tokens list
+                // doesn't contain anything that "matches" (via Kind)
+                !consumed_tokens.iter().any(|c| c.compare(req_token))
+            })
+            .cloned()
+            .collect();
+        if unconsumed_tokens.is_empty() {
+            print!(
+                "All tokens consumed for function: {}\n",
+                destination_node.function.name
+            );
+            &self.variables.retain(|t| !consumed_tokens.contains(t));
+            &self.errors.retain(|t| !consumed_tokens.contains(t));
+            return Consumed::AllTokens(edges);
+        } else {
+            return Consumed::SomeTokens(unconsumed_tokens);
+        }
     }
 }
 
@@ -284,8 +307,14 @@ impl Flow {
             self.nodes.push(node.clone());
 
             for pool in &mut self.pools {
-                let new_edges = pool.consume(function.consumes.clone(), node.clone());
-                self.edges.extend(new_edges.clone());
+                match pool.try_to_consume(function.consumes.clone(), node.clone()) {
+                    Consumed::AllTokens(new_edges) => {
+                        self.edges.extend(new_edges.clone());
+                    }
+                    Consumed::SomeTokens(_unconsumed_tokens) => {
+                        // Currently ignoring unconsumed tokens
+                    }
+                }
 
                 for produced_tokens in &function.produces {
                     pool.produce(produced_tokens.clone(), node.clone());
