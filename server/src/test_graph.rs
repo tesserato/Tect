@@ -189,17 +189,23 @@ impl TokenPool {
         for requested_token in &tokens {
             match &*requested_token.kind {
                 Kind::Variable(..) => {
-                    for variable_token in &self.variables {
-                        if variable_token.compare(&requested_token)
-                            && !consumed_tokens.contains(variable_token)
+                    for available_var_token in &mut self.variables {
+                        if available_var_token.compare(&requested_token)
+                            && !consumed_tokens.contains(available_var_token)
                         {
-                            if let Some(node) = self.token_to_initial_node.get(variable_token) {
+                            if let Some(node) = self.token_to_initial_node.get(available_var_token)
+                            {
+                                // if requested_token.cardinality == Cardinality::Unitary
+                                //     && available_var_token.cardinality == Cardinality::Collection
+                                // {
+                                //     available_var_token.cardinality = Cardinality::Collection;
+                                // }
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
-                                    token: variable_token.clone(),
+                                    token: available_var_token.clone(),
                                 });
-                                consumed_tokens.push(variable_token.clone());
+                                consumed_tokens.push(available_var_token.clone());
                                 break;
                             }
                         }
@@ -207,32 +213,38 @@ impl TokenPool {
                 }
 
                 Kind::Error(..) => {
-                    for error_token in &self.errors {
-                        if error_token.compare(&requested_token) && !consumed_tokens.contains(error_token) {
-                            if let Some(node) = self.token_to_initial_node.get(error_token) {
+                    for available_error_token in &self.errors {
+                        if available_error_token.compare(&requested_token)
+                            && !consumed_tokens.contains(available_error_token)
+                        {
+                            if let Some(node) =
+                                self.token_to_initial_node.get(available_error_token)
+                            {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
-                                    token: error_token.clone(),
+                                    token: available_error_token.clone(),
                                 });
-                                consumed_tokens.push(error_token.clone());
+                                consumed_tokens.push(available_error_token.clone());
                                 break;
                             }
                         }
                     }
                 }
                 Kind::Constant(..) => {
-                    for constant_token in &self.constants {
-                        if constant_token.compare(&requested_token)
-                            && !consumed_tokens.contains(constant_token)
+                    for available_const_token in &self.constants {
+                        if available_const_token.compare(&requested_token)
+                            && !consumed_tokens.contains(available_const_token)
                         {
-                            if let Some(node) = self.token_to_initial_node.get(constant_token) {
+                            if let Some(node) =
+                                self.token_to_initial_node.get(available_const_token)
+                            {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
                                     destination_function: destination_node.function.clone(),
-                                    token: constant_token.clone(),
+                                    token: available_const_token.clone(),
                                 });
-                                consumed_tokens.push(constant_token.clone());
+                                consumed_tokens.push(available_const_token.clone());
                                 break;
                             }
                         }
