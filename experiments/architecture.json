@@ -19,6 +19,7 @@
                 "documentation": "Processes command-line input",
                 "consumes": [
                     {
+                        "uid": 0,
                         "kind": {
                             "Variable": {
                                 "name": "InitialCommand",
@@ -32,6 +33,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -40,8 +42,11 @@
                             },
                             "cardinality": "Unitary",
                             "group": null
-                        },
+                        }
+                    ],
+                    [
                         {
+                            "uid": 2,
                             "kind": {
                                 "Variable": {
                                     "name": "PathToConfig",
@@ -65,6 +70,7 @@
                 "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
+                        "uid": 3,
                         "kind": {
                             "Variable": {
                                 "name": "PathToConfig",
@@ -78,6 +84,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -101,6 +108,7 @@
                 "documentation": "Loads HTML templates based on settings",
                 "consumes": [
                     {
+                        "uid": 5,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -114,6 +122,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 6,
                             "kind": {
                                 "Constant": {
                                     "name": "Templates",
@@ -137,6 +146,7 @@
                 "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
+                        "uid": 7,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -150,6 +160,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 8,
                             "kind": {
                                 "Constant": {
                                     "name": "SourceFile",
@@ -162,6 +173,7 @@
                     ],
                     [
                         {
+                            "uid": 9,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -185,6 +197,7 @@
                 "documentation": "Parses markdown files into article structures",
                 "consumes": [
                     {
+                        "uid": 10,
                         "kind": {
                             "Constant": {
                                 "name": "SourceFile",
@@ -198,6 +211,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 11,
                             "kind": {
                                 "Variable": {
                                     "name": "Article",
@@ -210,6 +224,7 @@
                     ],
                     [
                         {
+                            "uid": 12,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -233,6 +248,7 @@
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
+                        "uid": 13,
                         "kind": {
                             "Variable": {
                                 "name": "Article",
@@ -243,6 +259,7 @@
                         "group": null
                     },
                     {
+                        "uid": 14,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -253,6 +270,7 @@
                         "group": null
                     },
                     {
+                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -266,6 +284,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 16,
                             "kind": {
                                 "Variable": {
                                     "name": "HTML",
@@ -289,6 +308,7 @@
                 "documentation": "Writes HTML files to disk",
                 "consumes": [
                     {
+                        "uid": 17,
                         "kind": {
                             "Variable": {
                                 "name": "HTML",
@@ -302,6 +322,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 18,
                             "kind": {
                                 "Variable": {
                                     "name": "SuccessReport",
@@ -314,6 +335,7 @@
                     ],
                     [
                         {
+                            "uid": 19,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -344,6 +366,7 @@
                 "documentation": "Processes command-line input",
                 "consumes": [
                     {
+                        "uid": 0,
                         "kind": {
                             "Variable": {
                                 "name": "InitialCommand",
@@ -357,6 +380,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -365,8 +389,11 @@
                             },
                             "cardinality": "Unitary",
                             "group": null
-                        },
+                        }
+                    ],
+                    [
                         {
+                            "uid": 2,
                             "kind": {
                                 "Variable": {
                                     "name": "PathToConfig",
@@ -380,6 +407,7 @@
                 ]
             },
             "token": {
+                "uid": 0,
                 "kind": {
                     "Variable": {
                         "name": "InitialCommand",
@@ -396,6 +424,7 @@
                 "documentation": "Processes command-line input",
                 "consumes": [
                     {
+                        "uid": 0,
                         "kind": {
                             "Variable": {
                                 "name": "InitialCommand",
@@ -409,6 +438,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -417,8 +447,11 @@
                             },
                             "cardinality": "Unitary",
                             "group": null
-                        },
+                        }
+                    ],
+                    [
                         {
+                            "uid": 2,
                             "kind": {
                                 "Variable": {
                                     "name": "PathToConfig",
@@ -436,6 +469,7 @@
                 "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
+                        "uid": 3,
                         "kind": {
                             "Variable": {
                                 "name": "PathToConfig",
@@ -449,6 +483,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -462,6 +497,7 @@
                 ]
             },
             "token": {
+                "uid": 2,
                 "kind": {
                     "Variable": {
                         "name": "PathToConfig",
@@ -474,10 +510,101 @@
         },
         {
             "origin_function": {
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
+                "consumes": [
+                    {
+                        "uid": 0,
+                        "kind": {
+                            "Variable": {
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 1,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 2,
+                            "kind": {
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "LoadTemplates",
+                "documentation": "Loads HTML templates based on settings",
+                "consumes": [
+                    {
+                        "uid": 5,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 6,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Templates",
+                                    "documentation": "The registry of HTML templates used for rendering"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 1,
+                "kind": {
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
                 "name": "LoadConfig",
                 "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
+                        "uid": 3,
                         "kind": {
                             "Variable": {
                                 "name": "PathToConfig",
@@ -491,6 +618,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -508,6 +636,7 @@
                 "documentation": "Loads HTML templates based on settings",
                 "consumes": [
                     {
+                        "uid": 5,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -521,6 +650,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 6,
                             "kind": {
                                 "Constant": {
                                     "name": "Templates",
@@ -534,6 +664,7 @@
                 ]
             },
             "token": {
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -546,14 +677,15 @@
         },
         {
             "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
                 "consumes": [
                     {
+                        "uid": 0,
                         "kind": {
                             "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
                             }
                         },
                         "cardinality": "Unitary",
@@ -563,6 +695,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -572,73 +705,14 @@
                             "cardinality": "Unitary",
                             "group": null
                         }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "LoadTemplates",
-                "documentation": "Loads HTML templates based on settings",
-                "consumes": [
-                    {
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
+                    ],
                     [
                         {
+                            "uid": 2,
                             "kind": {
-                                "Constant": {
-                                    "name": "Templates",
-                                    "documentation": "The registry of HTML templates used for rendering"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "kind": {
-                    "Constant": {
-                        "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
-                "consumes": [
-                    {
-                        "kind": {
-                            "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "kind": {
-                                "Constant": {
-                                    "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -652,6 +726,7 @@
                 "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
+                        "uid": 7,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -665,6 +740,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 8,
                             "kind": {
                                 "Constant": {
                                     "name": "SourceFile",
@@ -677,6 +753,7 @@
                     ],
                     [
                         {
+                            "uid": 9,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -690,6 +767,7 @@
                 ]
             },
             "token": {
+                "uid": 1,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -706,6 +784,7 @@
                 "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
+                        "uid": 3,
                         "kind": {
                             "Variable": {
                                 "name": "PathToConfig",
@@ -719,6 +798,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -736,6 +816,7 @@
                 "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
+                        "uid": 7,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -749,6 +830,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 8,
                             "kind": {
                                 "Constant": {
                                     "name": "SourceFile",
@@ -761,6 +843,7 @@
                     ],
                     [
                         {
+                            "uid": 9,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -774,6 +857,7 @@
                 ]
             },
             "token": {
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -790,6 +874,7 @@
                 "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
+                        "uid": 7,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -803,6 +888,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 8,
                             "kind": {
                                 "Constant": {
                                     "name": "SourceFile",
@@ -815,6 +901,7 @@
                     ],
                     [
                         {
+                            "uid": 9,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -832,6 +919,7 @@
                 "documentation": "Parses markdown files into article structures",
                 "consumes": [
                     {
+                        "uid": 10,
                         "kind": {
                             "Constant": {
                                 "name": "SourceFile",
@@ -845,6 +933,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 11,
                             "kind": {
                                 "Variable": {
                                     "name": "Article",
@@ -857,6 +946,7 @@
                     ],
                     [
                         {
+                            "uid": 12,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -870,6 +960,110 @@
                 ]
             },
             "token": {
+                "uid": 8,
+                "kind": {
+                    "Constant": {
+                        "name": "SourceFile",
+                        "documentation": "A raw input file found in the source directory"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
+                "consumes": [
+                    {
+                        "uid": 7,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 8,
+                            "kind": {
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 9,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Variable": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 8,
                 "kind": {
                     "Constant": {
                         "name": "SourceFile",
@@ -886,6 +1080,7 @@
                 "documentation": "Parses markdown files into article structures",
                 "consumes": [
                     {
+                        "uid": 10,
                         "kind": {
                             "Constant": {
                                 "name": "SourceFile",
@@ -899,6 +1094,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 11,
                             "kind": {
                                 "Variable": {
                                     "name": "Article",
@@ -911,6 +1107,7 @@
                     ],
                     [
                         {
+                            "uid": 12,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -928,6 +1125,7 @@
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
+                        "uid": 13,
                         "kind": {
                             "Variable": {
                                 "name": "Article",
@@ -938,6 +1136,7 @@
                         "group": null
                     },
                     {
+                        "uid": 14,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -948,6 +1147,7 @@
                         "group": null
                     },
                     {
+                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -961,6 +1161,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 16,
                             "kind": {
                                 "Variable": {
                                     "name": "HTML",
@@ -974,6 +1175,7 @@
                 ]
             },
             "token": {
+                "uid": 11,
                 "kind": {
                     "Variable": {
                         "name": "Article",
@@ -990,6 +1192,7 @@
                 "documentation": "Loads HTML templates based on settings",
                 "consumes": [
                     {
+                        "uid": 5,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1003,6 +1206,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 6,
                             "kind": {
                                 "Constant": {
                                     "name": "Templates",
@@ -1020,6 +1224,7 @@
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
+                        "uid": 13,
                         "kind": {
                             "Variable": {
                                 "name": "Article",
@@ -1030,6 +1235,7 @@
                         "group": null
                     },
                     {
+                        "uid": 14,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1040,6 +1246,7 @@
                         "group": null
                     },
                     {
+                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1053,6 +1260,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 16,
                             "kind": {
                                 "Variable": {
                                     "name": "HTML",
@@ -1066,6 +1274,330 @@
                 ]
             },
             "token": {
+                "uid": 6,
+                "kind": {
+                    "Constant": {
+                        "name": "Templates",
+                        "documentation": "The registry of HTML templates used for rendering"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
+                "consumes": [
+                    {
+                        "uid": 0,
+                        "kind": {
+                            "Variable": {
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 1,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 2,
+                            "kind": {
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTML",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Variable": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 15,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 16,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTML",
+                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 1,
+                "kind": {
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Variable": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTML",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Variable": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 15,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 16,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTML",
+                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 11,
+                "kind": {
+                    "Variable": {
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "LoadTemplates",
+                "documentation": "Loads HTML templates based on settings",
+                "consumes": [
+                    {
+                        "uid": 5,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 6,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Templates",
+                                    "documentation": "The registry of HTML templates used for rendering"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTML",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Variable": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 15,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 16,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTML",
+                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 6,
                 "kind": {
                     "Constant": {
                         "name": "Templates",
@@ -1082,6 +1614,7 @@
                 "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
+                        "uid": 3,
                         "kind": {
                             "Variable": {
                                 "name": "PathToConfig",
@@ -1095,6 +1628,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -1112,6 +1646,7 @@
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
+                        "uid": 13,
                         "kind": {
                             "Variable": {
                                 "name": "Article",
@@ -1122,6 +1657,7 @@
                         "group": null
                     },
                     {
+                        "uid": 14,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1132,6 +1668,7 @@
                         "group": null
                     },
                     {
+                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1145,6 +1682,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 16,
                             "kind": {
                                 "Variable": {
                                     "name": "HTML",
@@ -1158,98 +1696,7 @@
                 ]
             },
             "token": {
-                "kind": {
-                    "Constant": {
-                        "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
-                "consumes": [
-                    {
-                        "kind": {
-                            "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "kind": {
-                                "Constant": {
-                                    "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "RenderHTML",
-                "documentation": "Renders articles into HTML using templates",
-                "consumes": [
-                    {
-                        "kind": {
-                            "Variable": {
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "kind": {
-                            "Constant": {
-                                "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "kind": {
-                                "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -1266,6 +1713,7 @@
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
+                        "uid": 13,
                         "kind": {
                             "Variable": {
                                 "name": "Article",
@@ -1276,6 +1724,7 @@
                         "group": null
                     },
                     {
+                        "uid": 14,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1286,6 +1735,7 @@
                         "group": null
                     },
                     {
+                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1299,6 +1749,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 16,
                             "kind": {
                                 "Variable": {
                                     "name": "HTML",
@@ -1316,6 +1767,7 @@
                 "documentation": "Writes HTML files to disk",
                 "consumes": [
                     {
+                        "uid": 17,
                         "kind": {
                             "Variable": {
                                 "name": "HTML",
@@ -1329,6 +1781,7 @@
                 "produces": [
                     [
                         {
+                            "uid": 18,
                             "kind": {
                                 "Variable": {
                                     "name": "SuccessReport",
@@ -1341,6 +1794,7 @@
                     ],
                     [
                         {
+                            "uid": 19,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -1354,6 +1808,119 @@
                 ]
             },
             "token": {
+                "uid": 16,
+                "kind": {
+                    "Variable": {
+                        "name": "HTML",
+                        "documentation": "The final rendered HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTML",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Variable": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 15,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 16,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTML",
+                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 17,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTML",
+                                "documentation": "The final rendered HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 18,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 19,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 16,
                 "kind": {
                     "Variable": {
                         "name": "HTML",

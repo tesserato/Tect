@@ -186,11 +186,11 @@ impl TokenPool {
     pub fn try_to_consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
         let mut consumed_tokens: Vec<Token> = Vec::new();
-        for token in &tokens {
-            match &*token.kind {
+        for requested_token in &tokens {
+            match &*requested_token.kind {
                 Kind::Variable(..) => {
                     for variable_token in &self.variables {
-                        if variable_token.compare(&token)
+                        if variable_token.compare(&requested_token)
                             && !consumed_tokens.contains(variable_token)
                         {
                             if let Some(node) = self.token_to_initial_node.get(variable_token) {
@@ -200,6 +200,7 @@ impl TokenPool {
                                     token: variable_token.clone(),
                                 });
                                 consumed_tokens.push(variable_token.clone());
+                                break;
                             }
                         }
                     }
@@ -207,7 +208,7 @@ impl TokenPool {
 
                 Kind::Error(..) => {
                     for error_token in &self.errors {
-                        if error_token.compare(&token) && !consumed_tokens.contains(error_token) {
+                        if error_token.compare(&requested_token) && !consumed_tokens.contains(error_token) {
                             if let Some(node) = self.token_to_initial_node.get(error_token) {
                                 edges.push(Edge {
                                     origin_function: node.function.clone(),
@@ -215,13 +216,14 @@ impl TokenPool {
                                     token: error_token.clone(),
                                 });
                                 consumed_tokens.push(error_token.clone());
+                                break;
                             }
                         }
                     }
                 }
                 Kind::Constant(..) => {
                     for constant_token in &self.constants {
-                        if constant_token.compare(&token)
+                        if constant_token.compare(&requested_token)
                             && !consumed_tokens.contains(constant_token)
                         {
                             if let Some(node) = self.token_to_initial_node.get(constant_token) {
@@ -231,6 +233,7 @@ impl TokenPool {
                                     token: constant_token.clone(),
                                 });
                                 consumed_tokens.push(constant_token.clone());
+                                break;
                             }
                         }
                     }
@@ -320,7 +323,7 @@ impl Flow {
                         }
                     }
                     Consumed::SomeTokens(unconsumed_tokens) => {
-                        // Currently ignoring unconsumed tokens
+                        new_pools.push(pool.clone());
                     }
                 }
             }
