@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
@@ -80,14 +80,13 @@ impl Token {
 }
 
 // Graph components
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Node {
     pub uid: u32,
     pub function: Arc<Function>,
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
-    pub is_called_multiple_times: AtomicBool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
@@ -108,7 +107,7 @@ pub struct TokenPool {
     pub errors: Vec<Token>,
     pub constants: Vec<Token>,
     pub token_to_initial_node: HashMap<Token, Arc<Node>>,
-    // pub functions_called_multiple_times: HashMap<Arc<Node>, bool>,
+    pub functions_called_multiple_times: HashSet<u32>,
 }
 
 impl TokenPool {
@@ -156,7 +155,6 @@ impl TokenPool {
         let mut errors = Vec::new();
         let mut constants = Vec::new();
         let mut token_to_initial_node = HashMap::new();
-        // let mut functions_called_multiple_times = HashMap::new();
 
         for token in tokens {
             token_to_initial_node.insert(token.clone(), initial_node.clone());
@@ -171,17 +169,20 @@ impl TokenPool {
             errors,
             constants,
             token_to_initial_node,
-            // functions_called_multiple_times,
+            functions_called_multiple_times: HashSet::new(),
         }
     }
 
     pub fn produce(&mut self, tokens: Vec<Token>, initial_node: Arc<Node>) {
         for mut token in tokens {
-            self.token_to_initial_node
-                .insert(token.clone(), initial_node.clone());
-            if initial_node.is_called_multiple_times.load(Ordering::SeqCst) {
+            if self
+                .functions_called_multiple_times
+                .contains(&initial_node.uid)
+            {
                 token.cardinality = Cardinality::Collection;
             }
+            self.token_to_initial_node
+                .insert(token.clone(), initial_node.clone());
             match &*token.kind {
                 Kind::Variable(..) => self.variables.push(token),
                 Kind::Error(..) => self.errors.push(token),
@@ -281,14 +282,9 @@ impl TokenPool {
             .collect();
         if unconsumed_tokens.is_empty() {
             if is_called_multiple_times {
-                destination_node
-                    .is_called_multiple_times
-                    .store(true, Ordering::SeqCst);
+                self.functions_called_multiple_times
+                    .insert(destination_node.uid);
             }
-            // print!(
-            //     "All tokens consumed for function: {}\n",
-            //     destination_node.function.name
-            // );
             &self.variables.retain(|t| !consumed_tokens.contains(t));
             &self.errors.retain(|t| !consumed_tokens.contains(t));
             return Consumed::AllTokens(edges);
@@ -300,9 +296,9 @@ impl TokenPool {
 
 pub struct Flow {
     uid_counter: u32,
-    nodes: Vec<Arc<Node>>,
-    edges: Vec<Edge>,
-    pools: Vec<TokenPool>,
+    pub nodes: Vec<Arc<Node>>,
+    pub edges: Vec<Edge>,
+    pub pools: Vec<TokenPool>,
 }
 
 impl Flow {
@@ -326,7 +322,6 @@ impl Flow {
             is_artificial_graph_start: true,
             is_artificial_graph_end: false,
             is_artificial_error_termination: false,
-            is_called_multiple_times: AtomicBool::new(false),
         });
         self.nodes.push(initial_node.clone());
 
@@ -344,7 +339,6 @@ impl Flow {
                 is_artificial_graph_start: false,
                 is_artificial_graph_end: false,
                 is_artificial_error_termination: false,
-                is_called_multiple_times: AtomicBool::new(false),
             });
             self.nodes.push(node.clone());
 

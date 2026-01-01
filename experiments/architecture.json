@@ -1182,7 +1182,7 @@
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
                 },
-                "cardinality": "Unitary",
+                "cardinality": "Collection",
                 "group": null
             }
         },
@@ -1505,7 +1505,7 @@
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
                 },
-                "cardinality": "Unitary",
+                "cardinality": "Collection",
                 "group": null
             }
         },
@@ -1815,7 +1815,7 @@
                         "documentation": "The final rendered HTML string ready to be written to disk"
                     }
                 },
-                "cardinality": "Unitary",
+                "cardinality": "Collection",
                 "group": null
             }
         },
@@ -1927,7 +1927,7 @@
                         "documentation": "The final rendered HTML string ready to be written to disk"
                     }
                 },
-                "cardinality": "Unitary",
+                "cardinality": "Collection",
                 "group": null
             }
         }

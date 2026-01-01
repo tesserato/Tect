@@ -30,3 +30,4 @@ editors/vscode/out/extension.js
 *.svg
 *.html
 experiments/lib
+DRAFT.md
