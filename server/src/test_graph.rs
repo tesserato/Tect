@@ -5,44 +5,44 @@ use std::io::Write;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash, PartialOrd)]
 pub enum Cardinality {
     Unitary,
     Collection,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Variable {
     name: String,
     documentation: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Constant {
     name: String,
     documentation: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Error {
     name: String,
     documentation: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub enum Kind {
     Variable(Arc<Variable>),
     Constant(Arc<Constant>),
     Error(Arc<Error>),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Group {
     name: String,
     documentation: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Function {
     pub name: String,
     pub documentation: Option<String>,
@@ -53,7 +53,7 @@ pub struct Function {
 static TOKEN_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 // Mutable. References previous constant structs.
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Token {
     pub uid: u32,
     pub kind: Arc<Kind>,
@@ -89,7 +89,7 @@ pub struct Node {
     pub is_artificial_error_termination: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Edge {
     pub origin_function: Arc<Function>,
     pub destination_function: Arc<Function>,
@@ -637,7 +637,12 @@ fn main() -> std::io::Result<()> {
 
     let mut flow = Flow::new();
 
-    let (nodes, edges) = flow.process_flow(&pipeline);
+    let  (nodes,mut edges) = flow.process_flow(&pipeline);
+
+
+    // Removes duplicated edges caused by the multiple pools
+    edges.sort_unstable_by(|a, b| a.token.uid.cmp(&b.token.uid));
+    edges.dedup();
 
     // Serialization with 4-space indentation
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");

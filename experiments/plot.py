@@ -95,21 +95,42 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
 
         if u is not None and v is not None:
             token = e["token"]
-            # Extract name from Rust Enum: {"Variable": {"name": "..."}}
-            kind_content = list(token["kind"].values())[0]
+
+            # Determine Kind (Variable, Constant, or Error)
+            # kind_key will be "Variable", "Constant", or "Error"
+            kind_key = list(token["kind"].keys())[0]
+            kind_content = token["kind"][kind_key]
             token_name = kind_content["name"]
 
             is_many = token.get("cardinality") == "Collection"
 
+            # Style settings based on Token Kind
+            if kind_key == "Variable":
+                edge_width = 1.0  # Bold/Pronounced
+                edge_dashes = False  # Solid
+                edge_color = "#818cf8"  # Indigo
+            elif kind_key == "Constant":
+                edge_width = 1.0  # Thin
+                edge_dashes = [5, 8]  # Dotted/Dashed
+                edge_color = "#818cf8"  # Slate Gray
+            else:  # Error
+                edge_width = 1.0
+                edge_dashes = False
+                edge_color = "#f87171"  # Light Red
+
+            # Optional: Make Collections even thicker if they are variables
+            if is_many:
+                edge_width *= 5.0
+
             net.add_edge(
                 u,
                 v,
-                label=token_name + ("[]" if is_many else ""),
-                color="#818cf8" if is_many else "#94a3b8",
-                width=4 if is_many else 1.5,
-                dashes=[12, 4] if is_many else False,
+                label=  f"[{token_name}]" if is_many else token_name,
+                color=edge_color,
+                width=edge_width,
+                dashes=edge_dashes,
+                font={"size": 12, "strokeWidth": 2, "strokeColor": "#ffffff"},
             )
-
     options = {
         "physics": {
             "forceAtlas2Based": {
