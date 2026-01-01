@@ -405,18 +405,23 @@ fn main() -> std::io::Result<()> {
         documentation: Some("A raw input file found in the source directory".to_string()),
     });
 
-    let article = Arc::new(Variable {
+    let article = Arc::new(Constant {
         name: "Article".to_string(),
         documentation: Some(
             "The processed data structure containing markdown content and metadata".to_string(),
         ),
     });
 
-    let html = Arc::new(Variable {
-        name: "HTML".to_string(),
+    let html_article = Arc::new(Variable {
+        name: "HTMLarticle".to_string(),
         documentation: Some(
-            "The final rendered HTML string ready to be written to disk".to_string(),
+            "The final article HTML string ready to be written to disk".to_string(),
         ),
+    });
+
+    let html_index = Arc::new(Variable {
+        name: "HTMLIndex".to_string(),
+        documentation: Some("The final index HTML string ready to be written to disk".to_string()),
     });
 
     let fs_error = Arc::new(Error {
@@ -517,7 +522,7 @@ fn main() -> std::io::Result<()> {
         )],
         produces: vec![
             vec![Token::new(
-                Arc::new(Kind::Variable(article.clone())),
+                Arc::new(Kind::Constant(article.clone())),
                 Cardinality::Unitary,
                 None,
             )],
@@ -528,12 +533,33 @@ fn main() -> std::io::Result<()> {
             )],
         ],
     });
-    let render_html = Arc::new(Function {
-        name: "RenderHTML".to_string(),
+    let render_html_index = Arc::new(Function {
+        name: "RenderHTMLIndex".to_string(),
+        documentation: Some("Renders the index page into HTML using templates".to_string()),
+        consumes: vec![
+            Token::new(
+                Arc::new(Kind::Constant(article.clone())),
+                Cardinality::Collection,
+                None,
+            ),
+            Token::new(
+                Arc::new(Kind::Constant(settings.clone())),
+                Cardinality::Unitary,
+                None,
+            ),
+        ],
+        produces: vec![vec![Token::new(
+            Arc::new(Kind::Variable(html_index.clone())),
+            Cardinality::Unitary,
+            None,
+        )]],
+    });
+    let render_html_articles = Arc::new(Function {
+        name: "RenderHTMLArticles".to_string(),
         documentation: Some("Renders articles into HTML using templates".to_string()),
         consumes: vec![
             Token::new(
-                Arc::new(Kind::Variable(article.clone())),
+                Arc::new(Kind::Constant(article.clone())),
                 Cardinality::Unitary,
                 None,
             ),
@@ -549,16 +575,37 @@ fn main() -> std::io::Result<()> {
             ),
         ],
         produces: vec![vec![Token::new(
-            Arc::new(Kind::Variable(html.clone())),
+            Arc::new(Kind::Variable(html_article.clone())),
             Cardinality::Unitary,
             None,
         )]],
     });
-    let write_to_disk = Arc::new(Function {
-        name: "WriteToDisk".to_string(),
+    let write_index_to_disk = Arc::new(Function {
+        name: "WriteIndexToDisk".to_string(),
+        documentation: Some("Writes the index HTML file to disk".to_string()),
+        consumes: vec![Token::new(
+            Arc::new(Kind::Variable(html_index.clone())),
+            Cardinality::Unitary,
+            None,
+        )],
+        produces: vec![
+            vec![Token::new(
+                Arc::new(Kind::Variable(success.clone())),
+                Cardinality::Unitary,
+                None,
+            )],
+            vec![Token::new(
+                Arc::new(Kind::Error(fs_error.clone())),
+                Cardinality::Unitary,
+                None,
+            )],
+        ],
+    });
+    let write_articles_to_disk = Arc::new(Function {
+        name: "WriteArticlesToDisk".to_string(),
         documentation: Some("Writes HTML files to disk".to_string()),
         consumes: vec![Token::new(
-            Arc::new(Kind::Variable(html.clone())),
+            Arc::new(Kind::Variable(html_article.clone())),
             Cardinality::Unitary,
             None,
         )],
@@ -582,8 +629,10 @@ fn main() -> std::io::Result<()> {
         load_templates,
         scan_fs,
         parse_markdown,
-        render_html,
-        write_to_disk,
+        render_html_articles,
+        render_html_index,
+        write_articles_to_disk,
+        write_index_to_disk,
     ];
 
     let mut flow = Flow::new();

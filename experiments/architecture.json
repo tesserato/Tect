@@ -213,7 +213,7 @@
                         {
                             "uid": 11,
                             "kind": {
-                                "Variable": {
+                                "Constant": {
                                     "name": "Article",
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
@@ -244,13 +244,13 @@
         {
             "uid": 6,
             "function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -259,7 +259,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -270,7 +270,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -284,11 +284,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -304,15 +304,26 @@
         {
             "uid": 7,
             "function": {
-                "name": "WriteToDisk",
-                "documentation": "Writes HTML files to disk",
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 17,
+                        "uid": 13,
                         "kind": {
-                            "Variable": {
-                                "name": "HTML",
-                                "documentation": "The final rendered HTML string ready to be written to disk"
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -322,7 +333,45 @@
                 "produces": [
                     [
                         {
-                            "uid": 18,
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "is_artificial_graph_start": false,
+            "is_artificial_graph_end": false,
+            "is_artificial_error_termination": false
+        },
+        {
+            "uid": 8,
+            "function": {
+                "name": "WriteArticlesToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 23,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLarticle",
+                                "documentation": "The final article HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 24,
                             "kind": {
                                 "Variable": {
                                     "name": "SuccessReport",
@@ -335,7 +384,58 @@
                     ],
                     [
                         {
-                            "uid": 19,
+                            "uid": 25,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "is_artificial_graph_start": false,
+            "is_artificial_graph_end": false,
+            "is_artificial_error_termination": false
+        },
+        {
+            "uid": 9,
+            "function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -935,7 +1035,7 @@
                         {
                             "uid": 11,
                             "kind": {
-                                "Variable": {
+                                "Constant": {
                                     "name": "Article",
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
@@ -1038,7 +1138,7 @@
                         {
                             "uid": 11,
                             "kind": {
-                                "Variable": {
+                                "Constant": {
                                     "name": "Article",
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
@@ -1096,7 +1196,7 @@
                         {
                             "uid": 11,
                             "kind": {
-                                "Variable": {
+                                "Constant": {
                                     "name": "Article",
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
@@ -1121,13 +1221,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1136,7 +1236,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1147,7 +1247,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1161,11 +1261,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1177,7 +1277,7 @@
             "token": {
                 "uid": 11,
                 "kind": {
-                    "Variable": {
+                    "Constant": {
                         "name": "Article",
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
@@ -1220,13 +1320,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1235,7 +1335,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1246,7 +1346,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1260,11 +1360,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1332,13 +1432,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1347,7 +1447,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1358,7 +1458,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1372,11 +1472,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1419,7 +1519,7 @@
                         {
                             "uid": 11,
                             "kind": {
-                                "Variable": {
+                                "Constant": {
                                     "name": "Article",
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
@@ -1444,13 +1544,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1459,7 +1559,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1470,7 +1570,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1484,11 +1584,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1500,7 +1600,7 @@
             "token": {
                 "uid": 11,
                 "kind": {
-                    "Variable": {
+                    "Constant": {
                         "name": "Article",
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
@@ -1543,13 +1643,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1558,7 +1658,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1569,7 +1669,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1583,11 +1683,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1642,13 +1742,13 @@
                 ]
             },
             "destination_function": {
-                "name": "RenderHTML",
+                "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 13,
+                        "uid": 16,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
@@ -1657,7 +1757,7 @@
                         "group": null
                     },
                     {
-                        "uid": 14,
+                        "uid": 17,
                         "kind": {
                             "Constant": {
                                 "name": "Templates",
@@ -1668,7 +1768,7 @@
                         "group": null
                     },
                     {
-                        "uid": 15,
+                        "uid": 18,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1682,11 +1782,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 19,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1709,33 +1809,67 @@
         },
         {
             "origin_function": {
-                "name": "RenderHTML",
-                "documentation": "Renders articles into HTML using templates",
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
                 "consumes": [
                     {
                         "uid": 13,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
+                        "cardinality": "Collection",
                         "group": null
                     },
                     {
                         "uid": 14,
-                        "kind": {
-                            "Constant": {
-                                "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1749,56 +1883,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 15,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "WriteToDisk",
-                "documentation": "Writes HTML files to disk",
-                "consumes": [
-                    {
-                        "uid": 17,
-                        "kind": {
-                            "Variable": {
-                                "name": "HTML",
-                                "documentation": "The final rendered HTML string ready to be written to disk"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 18,
-                            "kind": {
-                                "Variable": {
-                                    "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 19,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1808,11 +1897,11 @@
                 ]
             },
             "token": {
-                "uid": 16,
+                "uid": 11,
                 "kind": {
-                    "Variable": {
-                        "name": "HTML",
-                        "documentation": "The final rendered HTML string ready to be written to disk"
+                    "Constant": {
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
                     }
                 },
                 "cardinality": "Collection",
@@ -1821,33 +1910,67 @@
         },
         {
             "origin_function": {
-                "name": "RenderHTML",
-                "documentation": "Renders articles into HTML using templates",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
+                "consumes": [
+                    {
+                        "uid": 0,
+                        "kind": {
+                            "Variable": {
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 1,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 2,
+                            "kind": {
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
                 "consumes": [
                     {
                         "uid": 13,
                         "kind": {
-                            "Variable": {
+                            "Constant": {
                                 "name": "Article",
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
+                        "cardinality": "Collection",
                         "group": null
                     },
                     {
                         "uid": 14,
-                        "kind": {
-                            "Constant": {
-                                "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 15,
                         "kind": {
                             "Constant": {
                                 "name": "Settings",
@@ -1861,11 +1984,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 15,
                             "kind": {
                                 "Variable": {
-                                    "name": "HTML",
-                                    "documentation": "The final rendered HTML string ready to be written to disk"
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1874,16 +1997,29 @@
                     ]
                 ]
             },
-            "destination_function": {
-                "name": "WriteToDisk",
-                "documentation": "Writes HTML files to disk",
+            "token": {
+                "uid": 1,
+                "kind": {
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
                 "consumes": [
                     {
-                        "uid": 17,
+                        "uid": 10,
                         "kind": {
-                            "Variable": {
-                                "name": "HTML",
-                                "documentation": "The final rendered HTML string ready to be written to disk"
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
                             }
                         },
                         "cardinality": "Unitary",
@@ -1893,7 +2029,250 @@
                 "produces": [
                     [
                         {
-                            "uid": 18,
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 11,
+                "kind": {
+                    "Constant": {
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "LoadConfig",
+                "documentation": "Loads configuration from a file",
+                "consumes": [
+                    {
+                        "uid": 3,
+                        "kind": {
+                            "Variable": {
+                                "name": "PathToConfig",
+                                "documentation": "The path to the configuration file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 4,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 4,
+                "kind": {
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLArticles",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 16,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 17,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 18,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 19,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteArticlesToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 23,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLarticle",
+                                "documentation": "The final article HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 24,
                             "kind": {
                                 "Variable": {
                                     "name": "SuccessReport",
@@ -1906,7 +2285,7 @@
                     ],
                     [
                         {
-                            "uid": 19,
+                            "uid": 25,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -1920,14 +2299,530 @@
                 ]
             },
             "token": {
-                "uid": 16,
+                "uid": 19,
                 "kind": {
                     "Variable": {
-                        "name": "HTML",
-                        "documentation": "The final rendered HTML string ready to be written to disk"
+                        "name": "HTMLarticle",
+                        "documentation": "The final article HTML string ready to be written to disk"
                     }
                 },
                 "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLArticles",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 16,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 17,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 18,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 19,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteArticlesToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 23,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLarticle",
+                                "documentation": "The final article HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 24,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 25,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 19,
+                "kind": {
+                    "Variable": {
+                        "name": "HTMLarticle",
+                        "documentation": "The final article HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 15,
+                "kind": {
+                    "Variable": {
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 15,
+                "kind": {
+                    "Variable": {
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 15,
+                "kind": {
+                    "Variable": {
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 15,
+                "kind": {
+                    "Variable": {
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary",
                 "group": null
             }
         }
