@@ -408,8 +408,22 @@ impl Flow {
             is_artificial_graph_end: true,
             is_artificial_error_termination: false,
         });
-
         self.nodes.push(final_node.clone());
+
+        let fatal_error_node = Arc::new(Node {
+            uid: self.uid_counter + 2,
+            function: Arc::new(Function {
+                name: "FatalErrors".to_string(),
+                documentation: Some("Artificial error termination node".to_string()),
+                consumes: vec![],
+                produces: vec![],
+            }),
+            is_artificial_graph_start: false,
+            is_artificial_graph_end: false,
+            is_artificial_error_termination: true,
+        });
+        self.nodes.push(fatal_error_node.clone());
+
 
         for pool in &mut self.pools {
             let leftovers = pool.get_leftover_tokens();
@@ -423,6 +437,30 @@ impl Flow {
                         .clone(),
                     destination_function: final_node.function.clone(),
                     token: var,
+                });
+            }
+            for cons in leftovers.constants {
+                self.edges.push(Edge {
+                    origin_function: pool
+                        .token_to_initial_node
+                        .get(&cons)
+                        .unwrap()
+                        .function
+                        .clone(),
+                    destination_function: final_node.function.clone(),
+                    token: cons,
+                });
+            }
+            for err in leftovers.errors {
+                self.edges.push(Edge {
+                    origin_function: pool
+                        .token_to_initial_node
+                        .get(&err)
+                        .unwrap()
+                        .function
+                        .clone(),
+                    destination_function: fatal_error_node.function.clone(),
+                    token: err,
                 });
             }
         }

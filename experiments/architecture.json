@@ -463,6 +463,18 @@
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": true,
             "is_artificial_error_termination": false
+        },
+        {
+            "uid": 11,
+            "function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "is_artificial_graph_start": false,
+            "is_artificial_graph_end": false,
+            "is_artificial_error_termination": true
         }
     ],
     "edges": [
@@ -1481,6 +1493,57 @@
         },
         {
             "origin_function": {
+                "name": "LoadTemplates",
+                "documentation": "Loads HTML templates based on settings",
+                "consumes": [
+                    {
+                        "uid": 5,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 6,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Templates",
+                                    "documentation": "The registry of HTML templates used for rendering"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FinalNode",
+                "documentation": "Artificial final node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 6,
+                "kind": {
+                    "Constant": {
+                        "name": "Templates",
+                        "documentation": "The registry of HTML templates used for rendering"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
                 "name": "ScanFS",
                 "documentation": "Scans the filesystem for source files",
                 "consumes": [
@@ -1576,6 +1639,70 @@
                     "Constant": {
                         "name": "SourceFile",
                         "documentation": "A raw input file found in the source directory"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
+                "consumes": [
+                    {
+                        "uid": 7,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 8,
+                            "kind": {
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 9,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 9,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
                 "cardinality": "Collection",
@@ -1789,6 +1916,70 @@
                     "Constant": {
                         "name": "Article",
                         "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 12,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
                 "cardinality": "Collection",
@@ -2074,6 +2265,70 @@
         },
         {
             "origin_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 22,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
                 "name": "WriteArticlesToDisk",
                 "documentation": "Writes HTML files to disk",
                 "consumes": [
@@ -2130,6 +2385,70 @@
                     "Variable": {
                         "name": "SuccessReport",
                         "documentation": "A final summary of the operations performed during the run"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            }
+        },
+        {
+            "origin_function": {
+                "name": "WriteArticlesToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 23,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLarticle",
+                                "documentation": "The final article HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 24,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 25,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 25,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
                 "cardinality": "Collection",
