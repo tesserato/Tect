@@ -101,6 +101,12 @@ pub enum Consumed {
     SomeTokens(Vec<Token>),
 }
 
+pub struct Leftovers {
+    pub variables: Vec<Token>,
+    pub errors: Vec<Token>,
+    pub constants: Vec<Token>,
+}
+
 #[derive(Clone)]
 pub struct TokenPool {
     pub variables: Vec<Token>,
@@ -108,6 +114,7 @@ pub struct TokenPool {
     pub constants: Vec<Token>,
     pub token_to_initial_node: HashMap<Token, Arc<Node>>,
     pub functions_called_multiple_times: HashSet<u32>,
+    pub constants_used_at_least_once: HashSet<u32>,
 }
 
 impl TokenPool {
@@ -170,6 +177,7 @@ impl TokenPool {
             constants,
             token_to_initial_node,
             functions_called_multiple_times: HashSet::new(),
+            constants_used_at_least_once: HashSet::new(),
         }
     }
 
@@ -287,9 +295,29 @@ impl TokenPool {
             }
             &self.variables.retain(|t| !consumed_tokens.contains(t));
             &self.errors.retain(|t| !consumed_tokens.contains(t));
-            return Consumed::AllTokens(edges);
+
+            for token in &consumed_tokens {
+                if let Kind::Constant(_) = &*token.kind {
+                    self.constants_used_at_least_once.insert(token.uid);
+                }
+            }
+            Consumed::AllTokens(edges)
         } else {
-            return Consumed::SomeTokens(unconsumed_tokens);
+            Consumed::SomeTokens(unconsumed_tokens)
+        }
+    }
+
+    pub fn get_leftover_tokens(&self) -> Leftovers {
+        let unused_constants: Vec<&Token> = self
+            .constants
+            .iter()
+            .filter(|c| !self.constants_used_at_least_once.contains(&c.uid))
+            .collect();
+
+        Leftovers {
+            variables: self.variables.clone(),
+            errors: self.errors.clone(),
+            constants: unused_constants.into_iter().cloned().collect(),
         }
     }
 }
@@ -365,6 +393,37 @@ impl Flow {
                     i, function.name
                 );
                 pool.log_contents();
+            }
+        }
+
+        let final_node = Arc::new(Node {
+            uid: self.uid_counter + 1,
+            function: Arc::new(Function {
+                name: "FinalNode".to_string(),
+                documentation: Some("Artificial final node".to_string()),
+                consumes: vec![],
+                produces: vec![],
+            }),
+            is_artificial_graph_start: false,
+            is_artificial_graph_end: true,
+            is_artificial_error_termination: false,
+        });
+
+        self.nodes.push(final_node.clone());
+
+        for pool in &mut self.pools {
+            let leftovers = pool.get_leftover_tokens();
+            for var in leftovers.variables {
+                self.edges.push(Edge {
+                    origin_function: pool
+                        .token_to_initial_node
+                        .get(&var)
+                        .unwrap()
+                        .function
+                        .clone(),
+                    destination_function: final_node.function.clone(),
+                    token: var,
+                });
             }
         }
 
