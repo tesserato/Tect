@@ -35,6 +35,12 @@ pub enum Cardinality {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
+pub struct Group {
+    pub name: String,
+    pub documentation: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Variable {
     pub name: String,
     pub documentation: Option<String>,
@@ -57,10 +63,6 @@ pub enum Kind {
     Variable(Arc<Variable>),
     Constant(Arc<Constant>),
     Error(Arc<Error>),
-    Data,
-    Function,
-    Group,
-    Logic,
 }
 
 impl fmt::Display for Kind {
@@ -69,15 +71,8 @@ impl fmt::Display for Kind {
             Kind::Variable(v) => write!(f, "Variable ({})", v.name),
             Kind::Constant(c) => write!(f, "Constant ({})", c.name),
             Kind::Error(e) => write!(f, "Error ({})", e.name),
-            other => write!(f, "{:?}", other),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Group {
-    pub name: String,
-    pub documentation: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
@@ -86,6 +81,7 @@ pub struct Function {
     pub documentation: Option<String>,
     pub consumes: Vec<Token>,
     pub produces: Vec<Vec<Token>>,
+    pub group: Option<Arc<Group>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
@@ -93,17 +89,14 @@ pub struct Token {
     pub uid: u32,
     pub kind: Arc<Kind>,
     pub cardinality: Cardinality,
-    pub group: Option<Arc<Group>>,
 }
 
 impl Token {
-    /// Signature remains exactly as originally requested.
-    pub fn new(kind: Arc<Kind>, cardinality: Cardinality, group: Option<Arc<Group>>) -> Self {
+    pub fn new(kind: Arc<Kind>, cardinality: Cardinality) -> Self {
         Self {
             uid: token_id_registry::next(), // Logic encapsulated
             kind,
             cardinality,
-            group,
         }
     }
 
@@ -122,10 +115,9 @@ pub struct Node {
 }
 
 impl Node {
-    /// Example of how the encapsulation is reused for the Node type.
     pub fn new(function: Arc<Function>) -> Self {
         Self {
-            uid: node_id_registry::next(), // Independent counter
+            uid: node_id_registry::next(),
             function,
             is_artificial_graph_start: false,
             is_artificial_graph_end: false,

@@ -83,18 +83,15 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Variable(initial_command.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![
                 vec![Token::new(
                     Arc::new(Kind::Constant(settings.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
                 vec![Token::new(
                     Arc::new(Kind::Variable(path_to_config.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
             ],
         });
@@ -105,12 +102,10 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Variable(path_to_config.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
-                None,
             )]],
         });
         let load_templates = Arc::new(Function {
@@ -119,12 +114,10 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![vec![Token::new(
                 Arc::new(Kind::Constant(templates.clone())),
                 Cardinality::Unitary,
-                None,
             )]],
         });
         let scan_fs = Arc::new(Function {
@@ -133,18 +126,15 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![
                 vec![Token::new(
                     Arc::new(Kind::Constant(source_file.clone())),
                     Cardinality::Collection,
-                    None,
                 )],
                 vec![Token::new(
                     Arc::new(Kind::Error(fs_error.clone())),
                     Cardinality::Collection,
-                    None,
                 )],
             ],
         });
@@ -155,18 +145,15 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Constant(source_file.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![
                 vec![Token::new(
                     Arc::new(Kind::Constant(article.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
                 vec![Token::new(
                     Arc::new(Kind::Error(fs_error.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
             ],
         });
@@ -177,18 +164,15 @@ mod tests {
                 Token::new(
                     Arc::new(Kind::Constant(article.clone())),
                     Cardinality::Collection,
-                    None,
                 ),
                 Token::new(
                     Arc::new(Kind::Constant(settings.clone())),
                     Cardinality::Unitary,
-                    None,
                 ),
             ],
             produces: vec![vec![Token::new(
                 Arc::new(Kind::Variable(html_index.clone())),
                 Cardinality::Unitary,
-                None,
             )]],
         });
         let render_html_articles = Arc::new(Function {
@@ -198,23 +182,19 @@ mod tests {
                 Token::new(
                     Arc::new(Kind::Constant(article.clone())),
                     Cardinality::Unitary,
-                    None,
                 ),
                 Token::new(
                     Arc::new(Kind::Constant(templates.clone())),
                     Cardinality::Unitary,
-                    None,
                 ),
                 Token::new(
                     Arc::new(Kind::Constant(settings.clone())),
                     Cardinality::Unitary,
-                    None,
                 ),
             ],
             produces: vec![vec![Token::new(
                 Arc::new(Kind::Variable(html_article.clone())),
                 Cardinality::Unitary,
-                None,
             )]],
         });
         let write_index_to_disk = Arc::new(Function {
@@ -223,18 +203,15 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Variable(html_index.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![
                 vec![Token::new(
                     Arc::new(Kind::Variable(success.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
                 vec![Token::new(
                     Arc::new(Kind::Error(fs_error.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
             ],
         });
@@ -244,18 +221,15 @@ mod tests {
             consumes: vec![Token::new(
                 Arc::new(Kind::Variable(html_article.clone())),
                 Cardinality::Unitary,
-                None,
             )],
             produces: vec![
                 vec![Token::new(
                     Arc::new(Kind::Variable(success.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
                 vec![Token::new(
                     Arc::new(Kind::Error(fs_error.clone())),
                     Cardinality::Unitary,
-                    None,
                 )],
             ],
         });

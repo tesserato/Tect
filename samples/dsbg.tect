@@ -1,20 +1,13 @@
 # ============================================================
-# Blog Architecture Specification
+# Blog Architecture Specification (.tect)
 # ============================================================
 
-# **Initial Command**
-# The raw input from the CLI. This is a mutable variable because
-# it is consumed by the CLI processor.
-variable InitialCommand
-
-# **Path To Config**
-# The resolved location of the configuration file on disk.
-variable PathToConfig
+# ------------------------------------------------------------
+# Type Definitions
+# ------------------------------------------------------------
 
 # **Settings**
-# The global configuration settings loaded from the config file.
-# Since this is a constant, it can be shared by many functions 
-# without being removed from the pool.
+# The global configuration object.
 constant Settings
 
 # **Templates**
@@ -22,89 +15,105 @@ constant Settings
 constant Templates
 
 # **Source File**
-# A raw input file found in the source directory (usually Markdown).
+# A raw input file from the source directory.
 constant SourceFile
 
 # **Article**
-# The processed data structure containing markdown content and metadata.
+# The processed data structure containing content and metadata.
 constant Article
 
+# **Initial Command**
+# Raw input from the CLI.
+variable InitialCommand
+
+# **Path To Config**
+# The resolved location of the config file.
+variable PathToConfig
+
 # **HTML Article**
-# The final article HTML string ready to be written to disk.
+# The final article HTML string.
 variable HTMLarticle
 
 # **HTML Index**
-# The final index HTML string ready to be written to disk.
+# The final index HTML string.
 variable HTMLIndex
 
 # **Success Report**
-# A final summary of the operations performed during the run.
+# A final summary of operations.
 variable SuccessReport
 
 # **File System Error**
-# Triggered when a file cannot be read from or written to the disk.
+# Triggered when IO operations fail.
 error FileSystemError
 
+# Group definitions
 
-# ============================================================
+# **Environment Group**
+# Setup and configuration phase.
+group Environment
+
+# **Ingestion Group**
+# Reading data from the physical world.
+group Ingestion
+
+# **Rendering Group**
+# Generating the presentation layer.
+group Rendering
+
+# **IO Group**
+# Committing data back to disk.
+group IO
+
+# ------------------------------------------------------------
 # Function Definitions
-# ============================================================
+# ------------------------------------------------------------
 
 # **Process CLI**
-# Processes command-line input to determine the next step.
-function ProcessCLI(InitialCommand)
-    -> Settings
+Environment function ProcessCLI(InitialCommand)
+    > Settings
     |  PathToConfig
 
 # **Load Config**
-# Loads configuration from a file.
-function LoadConfig(PathToConfig)
-    -> Settings
+Environment function LoadConfig(PathToConfig)
+    > Settings
 
 # **Load Templates**
-# Loads HTML templates based on settings.
+# This function is utility-focused and remains ungrouped.
 function LoadTemplates(Settings)
-    -> Templates
+    > Templates
 
 # **Scan File System**
-# Scans the filesystem for source files. Produces collections.
-function ScanFS(Settings)
-    -> [SourceFile]
+Ingestion function ScanFS(Settings)
+    > [SourceFile]
     |  [FileSystemError]
 
 # **Parse Markdown**
-# Parses markdown files into article structures.
+# Core logic often stands alone without a specific group.
 function ParseMarkdown(SourceFile)
-    -> Article
+    > Article
     |  FileSystemError
 
 # **Render HTML Index**
-# Renders the index page into HTML using templates.
-# Consumes a collection of articles.
-function RenderHTMLIndex([Article], Settings)
-    -> HTMLIndex
+Rendering function RenderHTMLIndex([Article], Settings)
+    > HTMLIndex
 
 # **Render HTML Articles**
-# Renders individual articles into HTML using templates.
-function RenderHTMLArticles(Article, Templates, Settings)
-    -> HTMLarticle
+Rendering function RenderHTMLArticles(Article, Templates, Settings)
+    > HTMLarticle
 
 # **Write Index To Disk**
-# Writes the index HTML file to disk.
-function WriteIndexToDisk(HTMLIndex)
-    -> SuccessReport
+IO function WriteIndexToDisk(HTMLIndex)
+    > SuccessReport
     |  FileSystemError
 
 # **Write Articles To Disk**
-# Writes HTML files to disk.
-function WriteArticlesToDisk(HTMLarticle)
-    -> SuccessReport
+IO function WriteArticlesToDisk(HTMLarticle)
+    > SuccessReport
     |  FileSystemError
 
-
-# ============================================================
-# Flow
-# ============================================================
+# ------------------------------------------------------------
+# The Flow (Execution Pipeline)
+# ------------------------------------------------------------
 
 ProcessCLI
 LoadConfig
