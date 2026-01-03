@@ -260,7 +260,7 @@ mod tests {
             ],
         });
 
-        let pipeline = vec![
+        let functions = vec![
             process_cli,
             load_config,
             load_templates,
@@ -273,7 +273,7 @@ mod tests {
         ];
 
         let mut flow = Flow::new();
-        let (nodes, mut edges) = flow.process_flow(&pipeline);
+        let (nodes, mut edges) = flow.process_flow(&functions);
 
         // Removes duplicated edges caused by the multiple pools
         // 1. Sort by logical identity: Source Name + Target Name + Kind
@@ -292,13 +292,21 @@ mod tests {
         // Serialization with 4-space indentation
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut buf = Vec::new();
-        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter.clone());
 
         GraphExport { nodes, edges }.serialize(&mut ser).unwrap();
         let json_data = String::from_utf8(buf).unwrap();
 
         let mut file = File::create("../experiments/architecture.json")?;
         file.write_all(json_data.as_bytes())?;
+
+        // --- EXPORT 2: The Source Logic (List of Functions) ---
+        let mut func_buf = Vec::new();
+        let mut func_ser = serde_json::Serializer::with_formatter(&mut func_buf, formatter);
+        functions.serialize(&mut func_ser).unwrap();
+
+        let mut func_file = File::create("../experiments/functions.json")?;
+        func_file.write_all(&func_buf)?;
 
         Ok(())
     }
