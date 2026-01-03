@@ -276,8 +276,18 @@ mod tests {
         let (nodes, mut edges) = flow.process_flow(&pipeline);
 
         // Removes duplicated edges caused by the multiple pools
-        edges.sort_unstable_by(|a, b| a.token.uid.cmp(&b.token.uid));
-        edges.dedup();
+        // 1. Sort by logical identity: Source Name + Target Name + Kind
+        edges.sort_unstable_by(|a, b| {
+            a.source
+                .cmp(&b.source)
+                .then_with(|| a.target.cmp(&b.target))
+                .then_with(|| format!("{:?}", a.token.kind).cmp(&format!("{:?}", b.token.kind)))
+        });
+
+        // 2. Deduplicate based on logical identity, ignoring the UID
+        edges.dedup_by(|a, b| {
+            a.source == b.source && a.target == b.target && a.token.kind == b.token.kind
+        });
 
         // Serialization with 4-space indentation
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");

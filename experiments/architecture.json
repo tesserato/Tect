@@ -540,19 +540,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "InitialNode",
+            "target": "ProcessCLI",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "ProcessCLI",
-                "documentation": "Processes command-line input",
+                "name": "LoadConfig",
+                "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
-                        "uid": 0,
+                        "uid": 3,
                         "kind": {
                             "Variable": {
-                                "name": "InitialCommand",
-                                "documentation": "The initial command input from the CLI"
+                                "name": "PathToConfig",
+                                "documentation": "The path to the configuration file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -562,24 +565,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 1,
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
                                     "documentation": "The loaded settings from the config file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 2,
-                            "kind": {
-                                "Variable": {
-                                    "name": "PathToConfig",
-                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -621,7 +611,7 @@
                 ]
             },
             "token": {
-                "uid": 1,
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -630,19 +620,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "LoadConfig",
+            "target": "LoadTemplates",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "ProcessCLI",
-                "documentation": "Processes command-line input",
+                "name": "LoadConfig",
+                "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
-                        "uid": 0,
+                        "uid": 3,
                         "kind": {
                             "Variable": {
-                                "name": "InitialCommand",
-                                "documentation": "The initial command input from the CLI"
+                                "name": "PathToConfig",
+                                "documentation": "The path to the configuration file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -652,127 +645,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 1,
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
                                     "documentation": "The loaded settings from the config file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 2,
-                            "kind": {
-                                "Variable": {
-                                    "name": "PathToConfig",
-                                    "documentation": "The path to the configuration file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "ScanFS",
-                "documentation": "Scans the filesystem for source files",
-                "consumes": [
-                    {
-                        "uid": 7,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 8,
-                            "kind": {
-                                "Constant": {
-                                    "name": "SourceFile",
-                                    "documentation": "A raw input file found in the source directory"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 9,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 1,
-                "kind": {
-                    "Constant": {
-                        "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ProcessCLI",
-                "documentation": "Processes command-line input",
-                "consumes": [
-                    {
-                        "uid": 0,
-                        "kind": {
-                            "Variable": {
-                                "name": "InitialCommand",
-                                "documentation": "The initial command input from the CLI"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 1,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 2,
-                            "kind": {
-                                "Variable": {
-                                    "name": "PathToConfig",
-                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -836,7 +713,7 @@
                 ]
             },
             "token": {
-                "uid": 1,
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -845,19 +722,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "LoadConfig",
+            "target": "RenderHTMLArticles",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "ProcessCLI",
-                "documentation": "Processes command-line input",
+                "name": "LoadConfig",
+                "documentation": "Loads configuration from a file",
                 "consumes": [
                     {
-                        "uid": 0,
+                        "uid": 3,
                         "kind": {
                             "Variable": {
-                                "name": "InitialCommand",
-                                "documentation": "The initial command input from the CLI"
+                                "name": "PathToConfig",
+                                "documentation": "The path to the configuration file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -867,24 +747,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 1,
+                            "uid": 4,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
                                     "documentation": "The loaded settings from the config file"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 2,
-                            "kind": {
-                                "Variable": {
-                                    "name": "PathToConfig",
-                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -937,7 +804,7 @@
                 ]
             },
             "token": {
-                "uid": 1,
+                "uid": 4,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -946,7 +813,545 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "LoadConfig",
+            "target": "RenderHTMLIndex",
+            "relation": "data_flow"
+        },
+        {
+            "origin_function": {
+                "name": "LoadConfig",
+                "documentation": "Loads configuration from a file",
+                "consumes": [
+                    {
+                        "uid": 3,
+                        "kind": {
+                            "Variable": {
+                                "name": "PathToConfig",
+                                "documentation": "The path to the configuration file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 4,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
+                "consumes": [
+                    {
+                        "uid": 7,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 8,
+                            "kind": {
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 9,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 4,
+                "kind": {
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            },
+            "source": "LoadConfig",
+            "target": "ScanFS",
+            "relation": "data_flow"
+        },
+        {
+            "origin_function": {
+                "name": "LoadTemplates",
+                "documentation": "Loads HTML templates based on settings",
+                "consumes": [
+                    {
+                        "uid": 5,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 6,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Templates",
+                                    "documentation": "The registry of HTML templates used for rendering"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FinalNode",
+                "documentation": "Artificial final node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 6,
+                "kind": {
+                    "Constant": {
+                        "name": "Templates",
+                        "documentation": "The registry of HTML templates used for rendering"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            },
+            "source": "LoadTemplates",
+            "target": "FinalNode",
+            "relation": "terminal_flow"
+        },
+        {
+            "origin_function": {
+                "name": "LoadTemplates",
+                "documentation": "Loads HTML templates based on settings",
+                "consumes": [
+                    {
+                        "uid": 5,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 6,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Templates",
+                                    "documentation": "The registry of HTML templates used for rendering"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLArticles",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 16,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 17,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 18,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 19,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 6,
+                "kind": {
+                    "Constant": {
+                        "name": "Templates",
+                        "documentation": "The registry of HTML templates used for rendering"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            },
+            "source": "LoadTemplates",
+            "target": "RenderHTMLArticles",
+            "relation": "data_flow"
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 12,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            },
+            "source": "ParseMarkdown",
+            "target": "FatalErrors",
+            "relation": "error_flow"
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLArticles",
+                "documentation": "Renders articles into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 16,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 17,
+                        "kind": {
+                            "Constant": {
+                                "name": "Templates",
+                                "documentation": "The registry of HTML templates used for rendering"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    },
+                    {
+                        "uid": 18,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 19,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLarticle",
+                                    "documentation": "The final article HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 11,
+                "kind": {
+                    "Constant": {
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            },
+            "source": "ParseMarkdown",
+            "target": "RenderHTMLArticles",
+            "relation": "data_flow"
+        },
+        {
+            "origin_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 12,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "token": {
+                "uid": 11,
+                "kind": {
+                    "Constant": {
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            },
+            "source": "ParseMarkdown",
+            "target": "RenderHTMLIndex",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
@@ -1036,19 +1441,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "ProcessCLI",
+            "target": "LoadConfig",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
                 "consumes": [
                     {
-                        "uid": 3,
+                        "uid": 0,
                         "kind": {
                             "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
                             }
                         },
                         "cardinality": "Unitary",
@@ -1058,11 +1466,24 @@
                 "produces": [
                     [
                         {
-                            "uid": 4,
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
                                     "documentation": "The loaded settings from the config file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 2,
+                            "kind": {
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1104,7 +1525,7 @@
                 ]
             },
             "token": {
-                "uid": 4,
+                "uid": 1,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -1113,19 +1534,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "ProcessCLI",
+            "target": "LoadTemplates",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
                 "consumes": [
                     {
-                        "uid": 3,
+                        "uid": 0,
                         "kind": {
                             "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
                             }
                         },
                         "cardinality": "Unitary",
@@ -1135,7 +1559,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 4,
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -1145,91 +1569,14 @@
                             "cardinality": "Unitary",
                             "group": null
                         }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "ScanFS",
-                "documentation": "Scans the filesystem for source files",
-                "consumes": [
-                    {
-                        "uid": 7,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 8,
-                            "kind": {
-                                "Constant": {
-                                    "name": "SourceFile",
-                                    "documentation": "A raw input file found in the source directory"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
                     ],
                     [
                         {
-                            "uid": 9,
+                            "uid": 2,
                             "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 4,
-                "kind": {
-                    "Constant": {
-                        "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
-                "consumes": [
-                    {
-                        "uid": 3,
-                        "kind": {
-                            "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 4,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -1293,7 +1640,7 @@
                 ]
             },
             "token": {
-                "uid": 4,
+                "uid": 1,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -1302,19 +1649,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "ProcessCLI",
+            "target": "RenderHTMLArticles",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
                 "consumes": [
                     {
-                        "uid": 3,
+                        "uid": 0,
                         "kind": {
                             "Variable": {
-                                "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
                             }
                         },
                         "cardinality": "Unitary",
@@ -1324,7 +1674,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 4,
+                            "uid": 1,
                             "kind": {
                                 "Constant": {
                                     "name": "Settings",
@@ -1334,6 +1684,19 @@
                             "cardinality": "Unitary",
                             "group": null
                         }
+                    ],
+                    [
+                        {
+                            "uid": 2,
+                            "kind": {
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
                     ]
                 ]
             },
@@ -1381,7 +1744,7 @@
                 ]
             },
             "token": {
-                "uid": 4,
+                "uid": 1,
                 "kind": {
                     "Constant": {
                         "name": "Settings",
@@ -1390,656 +1753,22 @@
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "ProcessCLI",
+            "target": "RenderHTMLIndex",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "LoadTemplates",
-                "documentation": "Loads HTML templates based on settings",
+                "name": "ProcessCLI",
+                "documentation": "Processes command-line input",
                 "consumes": [
                     {
-                        "uid": 5,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 6,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Templates",
-                                    "documentation": "The registry of HTML templates used for rendering"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "RenderHTMLArticles",
-                "documentation": "Renders articles into HTML using templates",
-                "consumes": [
-                    {
-                        "uid": 16,
-                        "kind": {
-                            "Constant": {
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 17,
-                        "kind": {
-                            "Constant": {
-                                "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 18,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 19,
-                            "kind": {
-                                "Variable": {
-                                    "name": "HTMLarticle",
-                                    "documentation": "The final article HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 6,
-                "kind": {
-                    "Constant": {
-                        "name": "Templates",
-                        "documentation": "The registry of HTML templates used for rendering"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "LoadTemplates",
-                "documentation": "Loads HTML templates based on settings",
-                "consumes": [
-                    {
-                        "uid": 5,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 6,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Templates",
-                                    "documentation": "The registry of HTML templates used for rendering"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "FinalNode",
-                "documentation": "Artificial final node",
-                "consumes": [],
-                "produces": []
-            },
-            "token": {
-                "uid": 6,
-                "kind": {
-                    "Constant": {
-                        "name": "Templates",
-                        "documentation": "The registry of HTML templates used for rendering"
-                    }
-                },
-                "cardinality": "Unitary",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ScanFS",
-                "documentation": "Scans the filesystem for source files",
-                "consumes": [
-                    {
-                        "uid": 7,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 8,
-                            "kind": {
-                                "Constant": {
-                                    "name": "SourceFile",
-                                    "documentation": "A raw input file found in the source directory"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 9,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "ParseMarkdown",
-                "documentation": "Parses markdown files into article structures",
-                "consumes": [
-                    {
-                        "uid": 10,
-                        "kind": {
-                            "Constant": {
-                                "name": "SourceFile",
-                                "documentation": "A raw input file found in the source directory"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 11,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Article",
-                                    "documentation": "The processed data structure containing markdown content and metadata"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 12,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 8,
-                "kind": {
-                    "Constant": {
-                        "name": "SourceFile",
-                        "documentation": "A raw input file found in the source directory"
-                    }
-                },
-                "cardinality": "Collection",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ScanFS",
-                "documentation": "Scans the filesystem for source files",
-                "consumes": [
-                    {
-                        "uid": 7,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 8,
-                            "kind": {
-                                "Constant": {
-                                    "name": "SourceFile",
-                                    "documentation": "A raw input file found in the source directory"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 9,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Collection",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "FatalErrors",
-                "documentation": "Artificial error termination node",
-                "consumes": [],
-                "produces": []
-            },
-            "token": {
-                "uid": 9,
-                "kind": {
-                    "Error": {
-                        "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
-                    }
-                },
-                "cardinality": "Collection",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ParseMarkdown",
-                "documentation": "Parses markdown files into article structures",
-                "consumes": [
-                    {
-                        "uid": 10,
-                        "kind": {
-                            "Constant": {
-                                "name": "SourceFile",
-                                "documentation": "A raw input file found in the source directory"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 11,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Article",
-                                    "documentation": "The processed data structure containing markdown content and metadata"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 12,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "RenderHTMLArticles",
-                "documentation": "Renders articles into HTML using templates",
-                "consumes": [
-                    {
-                        "uid": 16,
-                        "kind": {
-                            "Constant": {
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 17,
-                        "kind": {
-                            "Constant": {
-                                "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    },
-                    {
-                        "uid": 18,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 19,
-                            "kind": {
-                                "Variable": {
-                                    "name": "HTMLarticle",
-                                    "documentation": "The final article HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 11,
-                "kind": {
-                    "Constant": {
-                        "name": "Article",
-                        "documentation": "The processed data structure containing markdown content and metadata"
-                    }
-                },
-                "cardinality": "Collection",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ParseMarkdown",
-                "documentation": "Parses markdown files into article structures",
-                "consumes": [
-                    {
-                        "uid": 10,
-                        "kind": {
-                            "Constant": {
-                                "name": "SourceFile",
-                                "documentation": "A raw input file found in the source directory"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 11,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Article",
-                                    "documentation": "The processed data structure containing markdown content and metadata"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 12,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "RenderHTMLIndex",
-                "documentation": "Renders the index page into HTML using templates",
-                "consumes": [
-                    {
-                        "uid": 13,
-                        "kind": {
-                            "Constant": {
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Collection",
-                        "group": null
-                    },
-                    {
-                        "uid": 14,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 15,
-                            "kind": {
-                                "Variable": {
-                                    "name": "HTMLIndex",
-                                    "documentation": "The final index HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "token": {
-                "uid": 11,
-                "kind": {
-                    "Constant": {
-                        "name": "Article",
-                        "documentation": "The processed data structure containing markdown content and metadata"
-                    }
-                },
-                "cardinality": "Collection",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "ParseMarkdown",
-                "documentation": "Parses markdown files into article structures",
-                "consumes": [
-                    {
-                        "uid": 10,
-                        "kind": {
-                            "Constant": {
-                                "name": "SourceFile",
-                                "documentation": "A raw input file found in the source directory"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 11,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Article",
-                                    "documentation": "The processed data structure containing markdown content and metadata"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 12,
-                            "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "FatalErrors",
-                "documentation": "Artificial error termination node",
-                "consumes": [],
-                "produces": []
-            },
-            "token": {
-                "uid": 12,
-                "kind": {
-                    "Error": {
-                        "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
-                    }
-                },
-                "cardinality": "Collection",
-                "group": null
-            }
-        },
-        {
-            "origin_function": {
-                "name": "RenderHTMLIndex",
-                "documentation": "Renders the index page into HTML using templates",
-                "consumes": [
-                    {
-                        "uid": 13,
-                        "kind": {
-                            "Constant": {
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Collection",
-                        "group": null
-                    },
-                    {
-                        "uid": 14,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary",
-                        "group": null
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 15,
-                            "kind": {
-                                "Variable": {
-                                    "name": "HTMLIndex",
-                                    "documentation": "The final index HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary",
-                            "group": null
-                        }
-                    ]
-                ]
-            },
-            "destination_function": {
-                "name": "WriteIndexToDisk",
-                "documentation": "Writes the index HTML file to disk",
-                "consumes": [
-                    {
-                        "uid": 20,
+                        "uid": 0,
                         "kind": {
                             "Variable": {
-                                "name": "HTMLIndex",
-                                "documentation": "The final index HTML string ready to be written to disk"
+                                "name": "InitialCommand",
+                                "documentation": "The initial command input from the CLI"
                             }
                         },
                         "cardinality": "Unitary",
@@ -2049,11 +1778,11 @@
                 "produces": [
                     [
                         {
-                            "uid": 21,
+                            "uid": 1,
                             "kind": {
-                                "Variable": {
-                                    "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
+                                "Constant": {
+                                    "name": "Settings",
+                                    "documentation": "The loaded settings from the config file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -2062,11 +1791,11 @@
                     ],
                     [
                         {
-                            "uid": 22,
+                            "uid": 2,
                             "kind": {
-                                "Error": {
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                "Variable": {
+                                    "name": "PathToConfig",
+                                    "documentation": "The path to the configuration file"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -2075,17 +1804,65 @@
                     ]
                 ]
             },
+            "destination_function": {
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
+                "consumes": [
+                    {
+                        "uid": 7,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 8,
+                            "kind": {
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 9,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
             "token": {
-                "uid": 15,
+                "uid": 1,
                 "kind": {
-                    "Variable": {
-                        "name": "HTMLIndex",
-                        "documentation": "The final index HTML string ready to be written to disk"
+                    "Constant": {
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
                     }
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "ProcessCLI",
+            "target": "ScanFS",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
@@ -2197,10 +1974,56 @@
                 },
                 "cardinality": "Collection",
                 "group": null
-            }
+            },
+            "source": "RenderHTMLArticles",
+            "target": "WriteArticlesToDisk",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
+                "name": "RenderHTMLIndex",
+                "documentation": "Renders the index page into HTML using templates",
+                "consumes": [
+                    {
+                        "uid": 13,
+                        "kind": {
+                            "Constant": {
+                                "name": "Article",
+                                "documentation": "The processed data structure containing markdown content and metadata"
+                            }
+                        },
+                        "cardinality": "Collection",
+                        "group": null
+                    },
+                    {
+                        "uid": 14,
+                        "kind": {
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 15,
+                            "kind": {
+                                "Variable": {
+                                    "name": "HTMLIndex",
+                                    "documentation": "The final index HTML string ready to be written to disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
                 "name": "WriteIndexToDisk",
                 "documentation": "Writes the index HTML file to disk",
                 "consumes": [
@@ -2245,35 +2068,32 @@
                     ]
                 ]
             },
-            "destination_function": {
-                "name": "FinalNode",
-                "documentation": "Artificial final node",
-                "consumes": [],
-                "produces": []
-            },
             "token": {
-                "uid": 21,
+                "uid": 15,
                 "kind": {
                     "Variable": {
-                        "name": "SuccessReport",
-                        "documentation": "A final summary of the operations performed during the run"
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
                     }
                 },
                 "cardinality": "Unitary",
                 "group": null
-            }
+            },
+            "source": "RenderHTMLIndex",
+            "target": "WriteIndexToDisk",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
-                "name": "WriteIndexToDisk",
-                "documentation": "Writes the index HTML file to disk",
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
-                        "uid": 20,
+                        "uid": 7,
                         "kind": {
-                            "Variable": {
-                                "name": "HTMLIndex",
-                                "documentation": "The final index HTML string ready to be written to disk"
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -2283,27 +2103,27 @@
                 "produces": [
                     [
                         {
-                            "uid": 21,
+                            "uid": 8,
                             "kind": {
-                                "Variable": {
-                                    "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Unitary",
+                            "cardinality": "Collection",
                             "group": null
                         }
                     ],
                     [
                         {
-                            "uid": 22,
+                            "uid": 9,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
+                            "cardinality": "Collection",
                             "group": null
                         }
                     ]
@@ -2316,28 +2136,31 @@
                 "produces": []
             },
             "token": {
-                "uid": 22,
+                "uid": 9,
                 "kind": {
                     "Error": {
                         "name": "FileSystemError",
                         "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
-                "cardinality": "Unitary",
+                "cardinality": "Collection",
                 "group": null
-            }
+            },
+            "source": "ScanFS",
+            "target": "FatalErrors",
+            "relation": "error_flow"
         },
         {
             "origin_function": {
-                "name": "WriteArticlesToDisk",
-                "documentation": "Writes HTML files to disk",
+                "name": "ScanFS",
+                "documentation": "Scans the filesystem for source files",
                 "consumes": [
                     {
-                        "uid": 23,
+                        "uid": 7,
                         "kind": {
-                            "Variable": {
-                                "name": "HTMLarticle",
-                                "documentation": "The final article HTML string ready to be written to disk"
+                            "Constant": {
+                                "name": "Settings",
+                                "documentation": "The loaded settings from the config file"
                             }
                         },
                         "cardinality": "Unitary",
@@ -2347,11 +2170,56 @@
                 "produces": [
                     [
                         {
-                            "uid": 24,
+                            "uid": 8,
                             "kind": {
-                                "Variable": {
-                                    "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
+                                "Constant": {
+                                    "name": "SourceFile",
+                                    "documentation": "A raw input file found in the source directory"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 9,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Collection",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "ParseMarkdown",
+                "documentation": "Parses markdown files into article structures",
+                "consumes": [
+                    {
+                        "uid": 10,
+                        "kind": {
+                            "Constant": {
+                                "name": "SourceFile",
+                                "documentation": "A raw input file found in the source directory"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 11,
+                            "kind": {
+                                "Constant": {
+                                    "name": "Article",
+                                    "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
                             "cardinality": "Unitary",
@@ -2360,7 +2228,7 @@
                     ],
                     [
                         {
-                            "uid": 25,
+                            "uid": 12,
                             "kind": {
                                 "Error": {
                                     "name": "FileSystemError",
@@ -2373,23 +2241,20 @@
                     ]
                 ]
             },
-            "destination_function": {
-                "name": "FinalNode",
-                "documentation": "Artificial final node",
-                "consumes": [],
-                "produces": []
-            },
             "token": {
-                "uid": 24,
+                "uid": 8,
                 "kind": {
-                    "Variable": {
-                        "name": "SuccessReport",
-                        "documentation": "A final summary of the operations performed during the run"
+                    "Constant": {
+                        "name": "SourceFile",
+                        "documentation": "A raw input file found in the source directory"
                     }
                 },
                 "cardinality": "Collection",
                 "group": null
-            }
+            },
+            "source": "ScanFS",
+            "target": "ParseMarkdown",
+            "relation": "data_flow"
         },
         {
             "origin_function": {
@@ -2453,7 +2318,211 @@
                 },
                 "cardinality": "Collection",
                 "group": null
-            }
+            },
+            "source": "WriteArticlesToDisk",
+            "target": "FatalErrors",
+            "relation": "error_flow"
+        },
+        {
+            "origin_function": {
+                "name": "WriteArticlesToDisk",
+                "documentation": "Writes HTML files to disk",
+                "consumes": [
+                    {
+                        "uid": 23,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLarticle",
+                                "documentation": "The final article HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 24,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 25,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FinalNode",
+                "documentation": "Artificial final node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 24,
+                "kind": {
+                    "Variable": {
+                        "name": "SuccessReport",
+                        "documentation": "A final summary of the operations performed during the run"
+                    }
+                },
+                "cardinality": "Collection",
+                "group": null
+            },
+            "source": "WriteArticlesToDisk",
+            "target": "FinalNode",
+            "relation": "terminal_flow"
+        },
+        {
+            "origin_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FatalErrors",
+                "documentation": "Artificial error termination node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 22,
+                "kind": {
+                    "Error": {
+                        "name": "FileSystemError",
+                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            },
+            "source": "WriteIndexToDisk",
+            "target": "FatalErrors",
+            "relation": "error_flow"
+        },
+        {
+            "origin_function": {
+                "name": "WriteIndexToDisk",
+                "documentation": "Writes the index HTML file to disk",
+                "consumes": [
+                    {
+                        "uid": 20,
+                        "kind": {
+                            "Variable": {
+                                "name": "HTMLIndex",
+                                "documentation": "The final index HTML string ready to be written to disk"
+                            }
+                        },
+                        "cardinality": "Unitary",
+                        "group": null
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 21,
+                            "kind": {
+                                "Variable": {
+                                    "name": "SuccessReport",
+                                    "documentation": "A final summary of the operations performed during the run"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 22,
+                            "kind": {
+                                "Error": {
+                                    "name": "FileSystemError",
+                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                }
+                            },
+                            "cardinality": "Unitary",
+                            "group": null
+                        }
+                    ]
+                ]
+            },
+            "destination_function": {
+                "name": "FinalNode",
+                "documentation": "Artificial final node",
+                "consumes": [],
+                "produces": []
+            },
+            "token": {
+                "uid": 21,
+                "kind": {
+                    "Variable": {
+                        "name": "SuccessReport",
+                        "documentation": "A final summary of the operations performed during the run"
+                    }
+                },
+                "cardinality": "Unitary",
+                "group": null
+            },
+            "source": "WriteIndexToDisk",
+            "target": "FinalNode",
+            "relation": "terminal_flow"
         }
     ]
 }
