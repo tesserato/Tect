@@ -1,753 +1,295 @@
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::Write;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+#[cfg(test)]
+mod tests {
+    use crate::engine::Flow;
+    use crate::models::*;
+    use serde::Serialize;
+    use std::fs::File;
+    use std::io::Write;
+    use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash, PartialOrd)]
-pub enum Cardinality {
-    Unitary,
-    Collection,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Variable {
-    name: String,
-    documentation: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Constant {
-    name: String,
-    documentation: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Error {
-    name: String,
-    documentation: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub enum Kind {
-    Variable(Arc<Variable>),
-    Constant(Arc<Constant>),
-    Error(Arc<Error>),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Group {
-    name: String,
-    documentation: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Function {
-    pub name: String,
-    pub documentation: Option<String>,
-    pub consumes: Vec<Token>,
-    pub produces: Vec<Vec<Token>>,
-}
-
-static TOKEN_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-// Mutable. References previous constant structs.
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Token {
-    pub uid: u32,
-    pub kind: Arc<Kind>,
-    pub cardinality: Cardinality,
-    pub group: Option<Arc<Group>>,
-}
-
-impl Token {
-    pub fn new(kind: Arc<Kind>, cardinality: Cardinality, group: Option<Arc<Group>>) -> Self {
-        Self {
-            uid: TOKEN_ID_COUNTER.fetch_add(1, Ordering::SeqCst),
-            kind,
-            cardinality,
-            group,
-        }
-    }
-    pub fn compare(&self, other: &Self) -> bool {
-        if self.kind == other.kind {
-            true
-        } else {
-            false
-        }
-    }
-}
-
-// Graph components
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
-pub struct Node {
-    pub uid: u32,
-    pub function: Arc<Function>,
-    pub is_artificial_graph_start: bool,
-    pub is_artificial_graph_end: bool,
-    pub is_artificial_error_termination: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
-pub struct Edge {
-    pub origin_function: Arc<Function>,
-    pub destination_function: Arc<Function>,
-    pub token: Token,
-}
-
-pub enum Consumed {
-    AllTokens(Vec<Edge>),
-    SomeTokens(Vec<Token>),
-}
-
-pub struct Leftovers {
-    pub variables: Vec<Token>,
-    pub errors: Vec<Token>,
-    pub constants: Vec<Token>,
-}
-
-#[derive(Clone)]
-pub struct TokenPool {
-    pub variables: Vec<Token>,
-    pub errors: Vec<Token>,
-    pub constants: Vec<Token>,
-    pub token_to_initial_node: HashMap<Token, Arc<Node>>,
-    pub functions_called_multiple_times: HashSet<u32>,
-    pub constants_used_at_least_once: HashSet<u32>,
-}
-
-impl TokenPool {
-    pub fn log_contents(&self) {
-        println!("\n=== CURRENT TOKEN POOL STATE ===");
-
-        self.log_sub_pool("Variables", &self.variables);
-        self.log_sub_pool("Constants", &self.constants);
-        self.log_sub_pool("Errors", &self.errors);
-
-        println!("=================================\n");
+    #[derive(Serialize)]
+    struct GraphExport {
+        nodes: Vec<Arc<Node>>,
+        edges: Vec<Edge>,
     }
 
-    fn log_sub_pool(&self, label: &str, tokens: &[Token]) {
-        println!(" {}:", label);
-        if tokens.is_empty() {
-            println!("   (empty)");
-            return;
-        }
-
-        for token in tokens {
-            // Get the producer node name from the hashmap
-            let producer_name = self
-                .token_to_initial_node
-                .get(token)
-                .map(|node| node.function.name.as_str())
-                .unwrap_or("Unknown Source");
-
-            // Extract the specific name from the Kind enum
-            let kind_name = match &*token.kind {
-                Kind::Variable(v) => &v.name,
-                Kind::Constant(c) => &c.name,
-                Kind::Error(e) => &e.name,
-            };
-
-            println!(
-                "   - [{:?}] {} (from: {})",
-                token.cardinality, kind_name, producer_name
-            );
-        }
-    }
-
-    pub fn new(tokens: Vec<Token>, initial_node: Arc<Node>) -> Self {
-        let mut variables = Vec::new();
-        let mut errors = Vec::new();
-        let mut constants = Vec::new();
-        let mut token_to_initial_node = HashMap::new();
-
-        for token in tokens {
-            token_to_initial_node.insert(token.clone(), initial_node.clone());
-            match &*token.kind {
-                Kind::Variable(..) => variables.push(token),
-                Kind::Error(..) => errors.push(token),
-                Kind::Constant(..) => constants.push(token),
-            };
-        }
-        Self {
-            variables,
-            errors,
-            constants,
-            token_to_initial_node,
-            functions_called_multiple_times: HashSet::new(),
-            constants_used_at_least_once: HashSet::new(),
-        }
-    }
-
-    pub fn produce(&mut self, tokens: Vec<Token>, initial_node: Arc<Node>) {
-        for mut token in tokens {
-            if self
-                .functions_called_multiple_times
-                .contains(&initial_node.uid)
-            {
-                token.cardinality = Cardinality::Collection;
-            }
-            self.token_to_initial_node
-                .insert(token.clone(), initial_node.clone());
-            match &*token.kind {
-                Kind::Variable(..) => self.variables.push(token),
-                Kind::Error(..) => self.errors.push(token),
-                Kind::Constant(..) => self.constants.push(token),
-            };
-        }
-    }
-
-    pub fn try_to_consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Consumed {
-        let mut edges = Vec::new();
-        let mut consumed_tokens: Vec<Token> = Vec::new();
-        let mut is_called_multiple_times = false;
-        for requested_token in &tokens {
-            match &*requested_token.kind {
-                Kind::Variable(..) => {
-                    for available_var_token in &mut self.variables {
-                        if available_var_token.compare(&requested_token)
-                            && !consumed_tokens.contains(available_var_token)
-                        {
-                            if let Some(node) = self.token_to_initial_node.get(available_var_token)
-                            {
-                                if requested_token.cardinality == Cardinality::Unitary
-                                    && available_var_token.cardinality == Cardinality::Collection
-                                {
-                                    is_called_multiple_times = true;
-                                }
-                                edges.push(Edge {
-                                    origin_function: node.function.clone(),
-                                    destination_function: destination_node.function.clone(),
-                                    token: available_var_token.clone(),
-                                });
-                                consumed_tokens.push(available_var_token.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                Kind::Error(..) => {
-                    for available_error_token in &self.errors {
-                        if available_error_token.compare(&requested_token)
-                            && !consumed_tokens.contains(available_error_token)
-                        {
-                            if let Some(node) =
-                                self.token_to_initial_node.get(available_error_token)
-                            {
-                                if requested_token.cardinality == Cardinality::Unitary
-                                    && available_error_token.cardinality == Cardinality::Collection
-                                {
-                                    is_called_multiple_times = true;
-                                }
-                                edges.push(Edge {
-                                    origin_function: node.function.clone(),
-                                    destination_function: destination_node.function.clone(),
-                                    token: available_error_token.clone(),
-                                });
-                                consumed_tokens.push(available_error_token.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-                Kind::Constant(..) => {
-                    for available_const_token in &self.constants {
-                        if available_const_token.compare(&requested_token)
-                            && !consumed_tokens.contains(available_const_token)
-                        {
-                            if let Some(node) =
-                                self.token_to_initial_node.get(available_const_token)
-                            {
-                                if requested_token.cardinality == Cardinality::Unitary
-                                    && available_const_token.cardinality == Cardinality::Collection
-                                {
-                                    is_called_multiple_times = true;
-                                }
-                                edges.push(Edge {
-                                    origin_function: node.function.clone(),
-                                    destination_function: destination_node.function.clone(),
-                                    token: available_const_token.clone(),
-                                });
-                                consumed_tokens.push(available_const_token.clone());
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let unconsumed_tokens: Vec<Token> = tokens
-            .iter()
-            .filter(|req_token| {
-                // A token is unconsumed if the consumed_tokens list
-                // doesn't contain anything that "matches" (via Kind)
-                !consumed_tokens.iter().any(|c| c.compare(req_token))
-            })
-            .cloned()
-            .collect();
-        if unconsumed_tokens.is_empty() {
-            if is_called_multiple_times {
-                self.functions_called_multiple_times
-                    .insert(destination_node.uid);
-            }
-            &self.variables.retain(|t| !consumed_tokens.contains(t));
-            &self.errors.retain(|t| !consumed_tokens.contains(t));
-
-            for token in &consumed_tokens {
-                if let Kind::Constant(_) = &*token.kind {
-                    self.constants_used_at_least_once.insert(token.uid);
-                }
-            }
-            Consumed::AllTokens(edges)
-        } else {
-            Consumed::SomeTokens(unconsumed_tokens)
-        }
-    }
-
-    pub fn get_leftover_tokens(&self) -> Leftovers {
-        let unused_constants: Vec<&Token> = self
-            .constants
-            .iter()
-            .filter(|c| !self.constants_used_at_least_once.contains(&c.uid))
-            .collect();
-
-        Leftovers {
-            variables: self.variables.clone(),
-            errors: self.errors.clone(),
-            constants: unused_constants.into_iter().cloned().collect(),
-        }
-    }
-}
-
-pub struct Flow {
-    uid_counter: u32,
-    pub nodes: Vec<Arc<Node>>,
-    pub edges: Vec<Edge>,
-    pub pools: Vec<TokenPool>,
-}
-
-impl Flow {
-    pub fn new() -> Self {
-        Self {
-            uid_counter: 0,
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            pools: Vec::new(),
-        }
-    }
-    pub fn process_flow(&mut self, functions: &Vec<Arc<Function>>) -> (Vec<Arc<Node>>, Vec<Edge>) {
-        let initial_node = Arc::new(Node {
-            uid: 0,
-            function: Arc::new(Function {
-                name: "InitialNode".to_string(),
-                documentation: Some("Artificial initial node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-            }),
-            is_artificial_graph_start: true,
-            is_artificial_graph_end: false,
-            is_artificial_error_termination: false,
+    #[test]
+    fn generate_blog_architecture_json() -> std::io::Result<()> {
+        // Define types (constants, variables, errors)
+        let initial_command = Arc::new(Variable {
+            name: "InitialCommand".to_string(),
+            documentation: Some("The initial command input from the CLI".to_string()),
         });
-        self.nodes.push(initial_node.clone());
-
-        self.pools.push(TokenPool::new(
-            functions.first().unwrap().consumes.clone(),
-            initial_node.clone(),
-        ));
-
-        self.pools.first_mut().unwrap().log_contents();
-        for function in functions {
-            self.uid_counter += 1;
-            let node = Arc::new(Node {
-                uid: self.uid_counter,
-                function: function.clone(),
-                is_artificial_graph_start: false,
-                is_artificial_graph_end: false,
-                is_artificial_error_termination: false,
-            });
-            self.nodes.push(node.clone());
-
-            let mut new_pools: Vec<TokenPool> = Vec::new();
-            for pool in &mut self.pools {
-                match pool.try_to_consume(function.consumes.clone(), node.clone()) {
-                    Consumed::AllTokens(new_edges) => {
-                        self.edges.extend(new_edges.clone());
-                        for produced_tokens in &function.produces {
-                            let mut new_pool = pool.clone();
-                            new_pool.produce(produced_tokens.clone(), node.clone());
-                            new_pools.push(new_pool);
-                        }
-                    }
-                    Consumed::SomeTokens(unconsumed_tokens) => {
-                        new_pools.push(pool.clone());
-                    }
-                }
-            }
-            self.pools = new_pools;
-            for (i, pool) in &mut self.pools.iter().enumerate() {
-                println!(
-                    "--- Token Pool {} after processing function: {} ---",
-                    i, function.name
-                );
-                pool.log_contents();
-            }
-        }
-
-        let final_node = Arc::new(Node {
-            uid: self.uid_counter + 1,
-            function: Arc::new(Function {
-                name: "FinalNode".to_string(),
-                documentation: Some("Artificial final node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-            }),
-            is_artificial_graph_start: false,
-            is_artificial_graph_end: true,
-            is_artificial_error_termination: false,
+        let path_to_config = Arc::new(Variable {
+            name: "PathToConfig".to_string(),
+            documentation: Some("The path to the configuration file".to_string()),
         });
-        self.nodes.push(final_node.clone());
 
-        let fatal_error_node = Arc::new(Node {
-            uid: self.uid_counter + 2,
-            function: Arc::new(Function {
-                name: "FatalErrors".to_string(),
-                documentation: Some("Artificial error termination node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-            }),
-            is_artificial_graph_start: false,
-            is_artificial_graph_end: false,
-            is_artificial_error_termination: true,
+        let settings = Arc::new(Constant {
+            name: "Settings".to_string(),
+            documentation: Some("The loaded settings from the config file".to_string()),
         });
-        self.nodes.push(fatal_error_node.clone());
 
+        let templates = Arc::new(Constant {
+            name: "Templates".to_string(),
+            documentation: Some("The registry of HTML templates used for rendering".to_string()),
+        });
 
-        for pool in &mut self.pools {
-            let leftovers = pool.get_leftover_tokens();
-            for var in leftovers.variables {
-                self.edges.push(Edge {
-                    origin_function: pool
-                        .token_to_initial_node
-                        .get(&var)
-                        .unwrap()
-                        .function
-                        .clone(),
-                    destination_function: final_node.function.clone(),
-                    token: var,
-                });
-            }
-            for cons in leftovers.constants {
-                self.edges.push(Edge {
-                    origin_function: pool
-                        .token_to_initial_node
-                        .get(&cons)
-                        .unwrap()
-                        .function
-                        .clone(),
-                    destination_function: final_node.function.clone(),
-                    token: cons,
-                });
-            }
-            for err in leftovers.errors {
-                self.edges.push(Edge {
-                    origin_function: pool
-                        .token_to_initial_node
-                        .get(&err)
-                        .unwrap()
-                        .function
-                        .clone(),
-                    destination_function: fatal_error_node.function.clone(),
-                    token: err,
-                });
-            }
-        }
+        let source_file = Arc::new(Constant {
+            name: "SourceFile".to_string(),
+            documentation: Some("A raw input file found in the source directory".to_string()),
+        });
 
-        (self.nodes.clone(), self.edges.clone())
-    }
-}
+        let article = Arc::new(Constant {
+            name: "Article".to_string(),
+            documentation: Some(
+                "The processed data structure containing markdown content and metadata".to_string(),
+            ),
+        });
 
-#[derive(Serialize)]
-struct GraphExport {
-    nodes: Vec<Arc<Node>>,
-    edges: Vec<Edge>,
-}
+        let html_article = Arc::new(Variable {
+            name: "HTMLarticle".to_string(),
+            documentation: Some(
+                "The final article HTML string ready to be written to disk".to_string(),
+            ),
+        });
 
-#[test]
-fn main() -> std::io::Result<()> {
-    // Define types (constants, variables, errors)
-    let initial_command = Arc::new(Variable {
-        name: "InitialCommand".to_string(),
-        documentation: Some("The initial command input from the CLI".to_string()),
-    });
-    let path_to_config = Arc::new(Variable {
-        name: "PathToConfig".to_string(),
-        documentation: Some("The path to the configuration file".to_string()),
-    });
+        let html_index = Arc::new(Variable {
+            name: "HTMLIndex".to_string(),
+            documentation: Some(
+                "The final index HTML string ready to be written to disk".to_string(),
+            ),
+        });
 
-    let settings = Arc::new(Constant {
-        name: "Settings".to_string(),
-        documentation: Some("The loaded settings from the config file".to_string()),
-    });
+        let fs_error = Arc::new(Error {
+            name: "FileSystemError".to_string(),
+            documentation: Some(
+                "Triggered when a file cannot be read from or written to the disk".to_string(),
+            ),
+        });
 
-    let templates = Arc::new(Constant {
-        name: "Templates".to_string(),
-        documentation: Some("The registry of HTML templates used for rendering".to_string()),
-    });
+        let success = Arc::new(Variable {
+            name: "SuccessReport".to_string(),
+            documentation: Some(
+                "A final summary of the operations performed during the run".to_string(),
+            ),
+        });
 
-    let source_file = Arc::new(Constant {
-        name: "SourceFile".to_string(),
-        documentation: Some("A raw input file found in the source directory".to_string()),
-    });
+        // define functions
 
-    let article = Arc::new(Constant {
-        name: "Article".to_string(),
-        documentation: Some(
-            "The processed data structure containing markdown content and metadata".to_string(),
-        ),
-    });
-
-    let html_article = Arc::new(Variable {
-        name: "HTMLarticle".to_string(),
-        documentation: Some(
-            "The final article HTML string ready to be written to disk".to_string(),
-        ),
-    });
-
-    let html_index = Arc::new(Variable {
-        name: "HTMLIndex".to_string(),
-        documentation: Some("The final index HTML string ready to be written to disk".to_string()),
-    });
-
-    let fs_error = Arc::new(Error {
-        name: "FileSystemError".to_string(),
-        documentation: Some(
-            "Triggered when a file cannot be read from or written to the disk".to_string(),
-        ),
-    });
-
-    let success = Arc::new(Variable {
-        name: "SuccessReport".to_string(),
-        documentation: Some(
-            "A final summary of the operations performed during the run".to_string(),
-        ),
-    });
-
-    // define functions
-
-    let process_cli = Arc::new(Function {
-        name: "ProcessCLI".to_string(),
-        documentation: Some("Processes command-line input".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Variable(initial_command.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![
-            vec![Token::new(
-                Arc::new(Kind::Constant(settings.clone())),
+        let process_cli = Arc::new(Function {
+            name: "ProcessCLI".to_string(),
+            documentation: Some("Processes command-line input".to_string()),
+            consumes: vec![Token::new(
+                Arc::new(Kind::Variable(initial_command.clone())),
                 Cardinality::Unitary,
                 None,
             )],
-            vec![Token::new(
+            produces: vec![
+                vec![Token::new(
+                    Arc::new(Kind::Constant(settings.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+                vec![Token::new(
+                    Arc::new(Kind::Variable(path_to_config.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+            ],
+        });
+
+        let load_config = Arc::new(Function {
+            name: "LoadConfig".to_string(),
+            documentation: Some("Loads configuration from a file".to_string()),
+            consumes: vec![Token::new(
                 Arc::new(Kind::Variable(path_to_config.clone())),
                 Cardinality::Unitary,
                 None,
             )],
-        ],
-    });
-
-    let load_config = Arc::new(Function {
-        name: "LoadConfig".to_string(),
-        documentation: Some("Loads configuration from a file".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Variable(path_to_config.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![vec![Token::new(
-            Arc::new(Kind::Constant(settings.clone())),
-            Cardinality::Unitary,
-            None,
-        )]],
-    });
-    let load_templates = Arc::new(Function {
-        name: "LoadTemplates".to_string(),
-        documentation: Some("Loads HTML templates based on settings".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Constant(settings.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![vec![Token::new(
-            Arc::new(Kind::Constant(templates.clone())),
-            Cardinality::Unitary,
-            None,
-        )]],
-    });
-    let scan_fs = Arc::new(Function {
-        name: "ScanFS".to_string(),
-        documentation: Some("Scans the filesystem for source files".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Constant(settings.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![
-            vec![Token::new(
-                Arc::new(Kind::Constant(source_file.clone())),
-                Cardinality::Collection,
-                None,
-            )],
-            vec![Token::new(
-                Arc::new(Kind::Error(fs_error.clone())),
-                Cardinality::Collection,
-                None,
-            )],
-        ],
-    });
-
-    let parse_markdown = Arc::new(Function {
-        name: "ParseMarkdown".to_string(),
-        documentation: Some("Parses markdown files into article structures".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Constant(source_file.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![
-            vec![Token::new(
-                Arc::new(Kind::Constant(article.clone())),
-                Cardinality::Unitary,
-                None,
-            )],
-            vec![Token::new(
-                Arc::new(Kind::Error(fs_error.clone())),
-                Cardinality::Unitary,
-                None,
-            )],
-        ],
-    });
-    let render_html_index = Arc::new(Function {
-        name: "RenderHTMLIndex".to_string(),
-        documentation: Some("Renders the index page into HTML using templates".to_string()),
-        consumes: vec![
-            Token::new(
-                Arc::new(Kind::Constant(article.clone())),
-                Cardinality::Collection,
-                None,
-            ),
-            Token::new(
+            produces: vec![vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-        ],
-        produces: vec![vec![Token::new(
-            Arc::new(Kind::Variable(html_index.clone())),
-            Cardinality::Unitary,
-            None,
-        )]],
-    });
-    let render_html_articles = Arc::new(Function {
-        name: "RenderHTMLArticles".to_string(),
-        documentation: Some("Renders articles into HTML using templates".to_string()),
-        consumes: vec![
-            Token::new(
-                Arc::new(Kind::Constant(article.clone())),
+            )]],
+        });
+        let load_templates = Arc::new(Function {
+            name: "LoadTemplates".to_string(),
+            documentation: Some("Loads HTML templates based on settings".to_string()),
+            consumes: vec![Token::new(
+                Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-            Token::new(
+            )],
+            produces: vec![vec![Token::new(
                 Arc::new(Kind::Constant(templates.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-            Token::new(
+            )]],
+        });
+        let scan_fs = Arc::new(Function {
+            name: "ScanFS".to_string(),
+            documentation: Some("Scans the filesystem for source files".to_string()),
+            consumes: vec![Token::new(
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
                 None,
-            ),
-        ],
-        produces: vec![vec![Token::new(
-            Arc::new(Kind::Variable(html_article.clone())),
-            Cardinality::Unitary,
-            None,
-        )]],
-    });
-    let write_index_to_disk = Arc::new(Function {
-        name: "WriteIndexToDisk".to_string(),
-        documentation: Some("Writes the index HTML file to disk".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Variable(html_index.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![
-            vec![Token::new(
-                Arc::new(Kind::Variable(success.clone())),
+            )],
+            produces: vec![
+                vec![Token::new(
+                    Arc::new(Kind::Constant(source_file.clone())),
+                    Cardinality::Collection,
+                    None,
+                )],
+                vec![Token::new(
+                    Arc::new(Kind::Error(fs_error.clone())),
+                    Cardinality::Collection,
+                    None,
+                )],
+            ],
+        });
+
+        let parse_markdown = Arc::new(Function {
+            name: "ParseMarkdown".to_string(),
+            documentation: Some("Parses markdown files into article structures".to_string()),
+            consumes: vec![Token::new(
+                Arc::new(Kind::Constant(source_file.clone())),
                 Cardinality::Unitary,
                 None,
             )],
-            vec![Token::new(
-                Arc::new(Kind::Error(fs_error.clone())),
+            produces: vec![
+                vec![Token::new(
+                    Arc::new(Kind::Constant(article.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+                vec![Token::new(
+                    Arc::new(Kind::Error(fs_error.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+            ],
+        });
+        let render_html_index = Arc::new(Function {
+            name: "RenderHTMLIndex".to_string(),
+            documentation: Some("Renders the index page into HTML using templates".to_string()),
+            consumes: vec![
+                Token::new(
+                    Arc::new(Kind::Constant(article.clone())),
+                    Cardinality::Collection,
+                    None,
+                ),
+                Token::new(
+                    Arc::new(Kind::Constant(settings.clone())),
+                    Cardinality::Unitary,
+                    None,
+                ),
+            ],
+            produces: vec![vec![Token::new(
+                Arc::new(Kind::Variable(html_index.clone())),
+                Cardinality::Unitary,
+                None,
+            )]],
+        });
+        let render_html_articles = Arc::new(Function {
+            name: "RenderHTMLArticles".to_string(),
+            documentation: Some("Renders articles into HTML using templates".to_string()),
+            consumes: vec![
+                Token::new(
+                    Arc::new(Kind::Constant(article.clone())),
+                    Cardinality::Unitary,
+                    None,
+                ),
+                Token::new(
+                    Arc::new(Kind::Constant(templates.clone())),
+                    Cardinality::Unitary,
+                    None,
+                ),
+                Token::new(
+                    Arc::new(Kind::Constant(settings.clone())),
+                    Cardinality::Unitary,
+                    None,
+                ),
+            ],
+            produces: vec![vec![Token::new(
+                Arc::new(Kind::Variable(html_article.clone())),
+                Cardinality::Unitary,
+                None,
+            )]],
+        });
+        let write_index_to_disk = Arc::new(Function {
+            name: "WriteIndexToDisk".to_string(),
+            documentation: Some("Writes the index HTML file to disk".to_string()),
+            consumes: vec![Token::new(
+                Arc::new(Kind::Variable(html_index.clone())),
                 Cardinality::Unitary,
                 None,
             )],
-        ],
-    });
-    let write_articles_to_disk = Arc::new(Function {
-        name: "WriteArticlesToDisk".to_string(),
-        documentation: Some("Writes HTML files to disk".to_string()),
-        consumes: vec![Token::new(
-            Arc::new(Kind::Variable(html_article.clone())),
-            Cardinality::Unitary,
-            None,
-        )],
-        produces: vec![
-            vec![Token::new(
-                Arc::new(Kind::Variable(success.clone())),
+            produces: vec![
+                vec![Token::new(
+                    Arc::new(Kind::Variable(success.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+                vec![Token::new(
+                    Arc::new(Kind::Error(fs_error.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+            ],
+        });
+        let write_articles_to_disk = Arc::new(Function {
+            name: "WriteArticlesToDisk".to_string(),
+            documentation: Some("Writes HTML files to disk".to_string()),
+            consumes: vec![Token::new(
+                Arc::new(Kind::Variable(html_article.clone())),
                 Cardinality::Unitary,
                 None,
             )],
-            vec![Token::new(
-                Arc::new(Kind::Error(fs_error.clone())),
-                Cardinality::Unitary,
-                None,
-            )],
-        ],
-    });
+            produces: vec![
+                vec![Token::new(
+                    Arc::new(Kind::Variable(success.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+                vec![Token::new(
+                    Arc::new(Kind::Error(fs_error.clone())),
+                    Cardinality::Unitary,
+                    None,
+                )],
+            ],
+        });
 
-    let pipeline = vec![
-        process_cli,
-        load_config,
-        load_templates,
-        scan_fs,
-        parse_markdown,
-        render_html_articles,
-        render_html_index,
-        write_articles_to_disk,
-        write_index_to_disk,
-    ];
+        let pipeline = vec![
+            process_cli,
+            load_config,
+            load_templates,
+            scan_fs,
+            parse_markdown,
+            render_html_articles,
+            render_html_index,
+            write_articles_to_disk,
+            write_index_to_disk,
+        ];
 
-    let mut flow = Flow::new();
+        let mut flow = Flow::new();
+        let (nodes, mut edges) = flow.process_flow(&pipeline);
 
-    let (nodes, mut edges) = flow.process_flow(&pipeline);
+        // Removes duplicated edges caused by the multiple pools
+        edges.sort_unstable_by(|a, b| a.token.uid.cmp(&b.token.uid));
+        edges.dedup();
 
-    // Removes duplicated edges caused by the multiple pools
-    edges.sort_unstable_by(|a, b| a.token.uid.cmp(&b.token.uid));
-    edges.dedup();
+        // Serialization with 4-space indentation
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut buf = Vec::new();
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
 
-    // Serialization with 4-space indentation
-    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-    let mut buf = Vec::new();
-    let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        GraphExport { nodes, edges }.serialize(&mut ser).unwrap();
+        let json_data = String::from_utf8(buf).unwrap();
 
-    (GraphExport { nodes, edges }).serialize(&mut ser).unwrap();
-    let json_data = String::from_utf8(buf).unwrap();
-    let mut file = File::create("../experiments/architecture.json")?;
-    file.write_all(json_data.as_bytes())?;
-    Ok(())
+        let mut file = File::create("../experiments/architecture.json")?;
+        file.write_all(json_data.as_bytes())?;
+
+        Ok(())
+    }
 }
