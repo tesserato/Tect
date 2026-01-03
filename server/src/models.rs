@@ -1,9 +1,32 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-static TOKEN_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+// ==========================================================
+// 1. UID ENCAPSULATION SETUP
+// ==========================================================
+
+/// This macro creates a private module containing a hidden atomic counter.
+/// It provides a clean way to reuse UID logic across different types.
+macro_rules! define_id_generator {
+    ($name:ident) => {
+        mod $name {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+            pub fn next() -> u32 {
+                COUNTER.fetch_add(1, Ordering::SeqCst)
+            }
+        }
+    };
+}
+
+// Generate independent registries for each type that needs UIDs
+define_id_generator!(token_id_registry);
+define_id_generator!(node_id_registry);
+
+// ==========================================================
+// 2. DATA MODELS
+// ==========================================================
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Eq, Hash, PartialOrd)]
 pub enum Cardinality {
@@ -34,7 +57,6 @@ pub enum Kind {
     Variable(Arc<Variable>),
     Constant(Arc<Constant>),
     Error(Arc<Error>),
-    // Legacy support for LSP simple analyzer
     Data,
     Function,
     Group,
@@ -75,9 +97,10 @@ pub struct Token {
 }
 
 impl Token {
+    /// Signature remains exactly as originally requested.
     pub fn new(kind: Arc<Kind>, cardinality: Cardinality, group: Option<Arc<Group>>) -> Self {
         Self {
-            uid: TOKEN_ID_COUNTER.fetch_add(1, Ordering::SeqCst),
+            uid: token_id_registry::next(), // Logic encapsulated
             kind,
             cardinality,
             group,
@@ -98,12 +121,24 @@ pub struct Node {
     pub is_artificial_error_termination: bool,
 }
 
+impl Node {
+    /// Example of how the encapsulation is reused for the Node type.
+    pub fn new(function: Arc<Function>) -> Self {
+        Self {
+            uid: node_id_registry::next(), // Independent counter
+            function,
+            is_artificial_graph_start: false,
+            is_artificial_graph_end: false,
+            is_artificial_error_termination: false,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct Edge {
     pub origin_function: Arc<Function>,
     pub destination_function: Arc<Function>,
     pub token: Token,
-    // Legacy support for simple graphviz
     pub source: String,
     pub target: String,
     pub relation: String,
