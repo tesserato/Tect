@@ -170,6 +170,7 @@ impl Flow {
                 documentation: Some("Artificial initial node".to_string()),
                 consumes: vec![],
                 produces: vec![],
+                group: None,
             }),
             is_artificial_graph_start: true,
             is_artificial_graph_end: false,
@@ -221,6 +222,7 @@ impl Flow {
                 documentation: Some("Artificial final node".to_string()),
                 consumes: vec![],
                 produces: vec![],
+                group: None, 
             }),
             is_artificial_graph_start: false,
             is_artificial_graph_end: true,
@@ -235,6 +237,7 @@ impl Flow {
                 documentation: Some("Artificial error termination node".to_string()),
                 consumes: vec![],
                 produces: vec![],
+                group: None, // TODO: Consider grouping by error type
             }),
             is_artificial_graph_start: false,
             is_artificial_graph_end: false,

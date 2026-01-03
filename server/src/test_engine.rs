@@ -15,6 +15,24 @@ mod tests {
 
     #[test]
     fn generate_blog_architecture_json() -> std::io::Result<()> {
+        // Define Groups
+        let g_env = Some(Arc::new(Group {
+            name: "Environment".to_string(),
+            documentation: None,
+        }));
+        let g_ing = Some(Arc::new(Group {
+            name: "Ingestion".to_string(),
+            documentation: None,
+        }));
+        let g_ren = Some(Arc::new(Group {
+            name: "Rendering".to_string(),
+            documentation: None,
+        }));
+        let g_io = Some(Arc::new(Group {
+            name: "IO".to_string(),
+            documentation: None,
+        }));
+
         // Define types (constants, variables, errors)
         let initial_command = Arc::new(Variable {
             name: "InitialCommand".to_string(),
@@ -94,6 +112,7 @@ mod tests {
                     Cardinality::Unitary,
                 )],
             ],
+            group: g_env.clone(),
         });
 
         let load_config = Arc::new(Function {
@@ -107,6 +126,7 @@ mod tests {
                 Arc::new(Kind::Constant(settings.clone())),
                 Cardinality::Unitary,
             )]],
+            group: g_env.clone(),
         });
         let load_templates = Arc::new(Function {
             name: "LoadTemplates".to_string(),
@@ -119,6 +139,7 @@ mod tests {
                 Arc::new(Kind::Constant(templates.clone())),
                 Cardinality::Unitary,
             )]],
+            group: None,
         });
         let scan_fs = Arc::new(Function {
             name: "ScanFS".to_string(),
@@ -137,6 +158,7 @@ mod tests {
                     Cardinality::Collection,
                 )],
             ],
+            group: g_ing.clone(),
         });
 
         let parse_markdown = Arc::new(Function {
@@ -156,6 +178,7 @@ mod tests {
                     Cardinality::Unitary,
                 )],
             ],
+            group: None,
         });
         let render_html_index = Arc::new(Function {
             name: "RenderHTMLIndex".to_string(),
@@ -174,6 +197,7 @@ mod tests {
                 Arc::new(Kind::Variable(html_index.clone())),
                 Cardinality::Unitary,
             )]],
+            group: g_ren.clone(),
         });
         let render_html_articles = Arc::new(Function {
             name: "RenderHTMLArticles".to_string(),
@@ -196,6 +220,7 @@ mod tests {
                 Arc::new(Kind::Variable(html_article.clone())),
                 Cardinality::Unitary,
             )]],
+            group: g_ren.clone(),
         });
         let write_index_to_disk = Arc::new(Function {
             name: "WriteIndexToDisk".to_string(),
@@ -214,6 +239,7 @@ mod tests {
                     Cardinality::Unitary,
                 )],
             ],
+            group: g_io.clone(),
         });
         let write_articles_to_disk = Arc::new(Function {
             name: "WriteArticlesToDisk".to_string(),
@@ -232,6 +258,7 @@ mod tests {
                     Cardinality::Unitary,
                 )],
             ],
+            group: g_io.clone(),
         });
 
         let functions = vec![

@@ -6,7 +6,8 @@
                 "name": "InitialNode",
                 "documentation": "Artificial initial node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "is_artificial_graph_start": true,
             "is_artificial_graph_end": false,
@@ -26,8 +27,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -40,8 +40,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -53,11 +52,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -77,8 +79,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -91,11 +92,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -115,8 +119,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -129,11 +132,11 @@
                                     "documentation": "The registry of HTML templates used for rendering"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -153,8 +156,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -167,8 +169,7 @@
                                     "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ],
                     [
@@ -180,11 +181,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Ingestion",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -204,8 +208,7 @@
                                 "documentation": "A raw input file found in the source directory"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -218,8 +221,7 @@
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -231,11 +233,11 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -255,8 +257,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -266,8 +267,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -277,8 +277,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -291,11 +290,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -315,8 +317,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Collection",
-                        "group": null
+                        "cardinality": "Collection"
                     },
                     {
                         "uid": 14,
@@ -326,8 +327,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -340,11 +340,14 @@
                                     "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -364,8 +367,7 @@
                                 "documentation": "The final article HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -378,8 +380,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -391,11 +392,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -415,8 +419,7 @@
                                 "documentation": "The final index HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -429,8 +432,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -442,11 +444,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -458,7 +463,8 @@
                 "name": "FinalNode",
                 "documentation": "Artificial final node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": true,
@@ -470,7 +476,8 @@
                 "name": "FatalErrors",
                 "documentation": "Artificial error termination node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "is_artificial_graph_start": false,
             "is_artificial_graph_end": false,
@@ -483,7 +490,8 @@
                 "name": "InitialNode",
                 "documentation": "Artificial initial node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "destination_function": {
                 "name": "ProcessCLI",
@@ -497,8 +505,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -511,8 +518,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -524,11 +530,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 0,
@@ -538,8 +547,7 @@
                         "documentation": "The initial command input from the CLI"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "InitialNode",
             "target": "ProcessCLI",
@@ -558,8 +566,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -572,11 +579,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "LoadTemplates",
@@ -590,8 +600,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -604,11 +613,11 @@
                                     "documentation": "The registry of HTML templates used for rendering"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "token": {
                 "uid": 4,
@@ -618,8 +627,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadConfig",
             "target": "LoadTemplates",
@@ -638,8 +646,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -652,11 +659,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "RenderHTMLArticles",
@@ -670,8 +680,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -681,8 +690,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -692,8 +700,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -706,11 +713,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 4,
@@ -720,8 +730,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadConfig",
             "target": "RenderHTMLArticles",
@@ -740,8 +749,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -754,11 +762,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "RenderHTMLIndex",
@@ -772,8 +783,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Collection",
-                        "group": null
+                        "cardinality": "Collection"
                     },
                     {
                         "uid": 14,
@@ -783,8 +793,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -797,11 +806,14 @@
                                     "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 4,
@@ -811,8 +823,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadConfig",
             "target": "RenderHTMLIndex",
@@ -831,8 +842,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -845,11 +855,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "ScanFS",
@@ -863,8 +876,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -877,8 +889,7 @@
                                     "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ],
                     [
@@ -890,11 +901,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Ingestion",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 4,
@@ -904,8 +918,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadConfig",
             "target": "ScanFS",
@@ -924,8 +937,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -938,17 +950,18 @@
                                     "documentation": "The registry of HTML templates used for rendering"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "destination_function": {
                 "name": "FinalNode",
                 "documentation": "Artificial final node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 6,
@@ -958,8 +971,7 @@
                         "documentation": "The registry of HTML templates used for rendering"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadTemplates",
             "target": "FinalNode",
@@ -978,8 +990,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -992,11 +1003,11 @@
                                     "documentation": "The registry of HTML templates used for rendering"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "destination_function": {
                 "name": "RenderHTMLArticles",
@@ -1010,8 +1021,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -1021,8 +1031,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -1032,8 +1041,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1046,11 +1054,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 6,
@@ -1060,8 +1071,7 @@
                         "documentation": "The registry of HTML templates used for rendering"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "LoadTemplates",
             "target": "RenderHTMLArticles",
@@ -1080,8 +1090,7 @@
                                 "documentation": "A raw input file found in the source directory"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1094,8 +1103,7 @@
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1107,17 +1115,18 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "destination_function": {
                 "name": "FatalErrors",
                 "documentation": "Artificial error termination node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 12,
@@ -1127,8 +1136,7 @@
                         "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "ParseMarkdown",
             "target": "FatalErrors",
@@ -1147,8 +1155,7 @@
                                 "documentation": "A raw input file found in the source directory"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1161,8 +1168,7 @@
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1174,11 +1180,11 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "destination_function": {
                 "name": "RenderHTMLArticles",
@@ -1192,8 +1198,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -1203,8 +1208,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -1214,8 +1218,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1228,11 +1231,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 11,
@@ -1242,8 +1248,7 @@
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "ParseMarkdown",
             "target": "RenderHTMLArticles",
@@ -1262,8 +1267,7 @@
                                 "documentation": "A raw input file found in the source directory"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1276,8 +1280,7 @@
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1289,11 +1292,11 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "destination_function": {
                 "name": "RenderHTMLIndex",
@@ -1307,8 +1310,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Collection",
-                        "group": null
+                        "cardinality": "Collection"
                     },
                     {
                         "uid": 14,
@@ -1318,8 +1320,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1332,11 +1333,14 @@
                                     "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 11,
@@ -1346,8 +1350,7 @@
                         "documentation": "The processed data structure containing markdown content and metadata"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "ParseMarkdown",
             "target": "RenderHTMLIndex",
@@ -1366,8 +1369,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1380,8 +1382,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1393,11 +1394,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "LoadConfig",
@@ -1411,8 +1415,7 @@
                                 "documentation": "The path to the configuration file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1425,11 +1428,14 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 2,
@@ -1439,8 +1445,7 @@
                         "documentation": "The path to the configuration file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "ProcessCLI",
             "target": "LoadConfig",
@@ -1459,8 +1464,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1473,8 +1477,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1486,11 +1489,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "LoadTemplates",
@@ -1504,8 +1510,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1518,11 +1523,11 @@
                                     "documentation": "The registry of HTML templates used for rendering"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "token": {
                 "uid": 1,
@@ -1532,8 +1537,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "ProcessCLI",
             "target": "LoadTemplates",
@@ -1552,8 +1556,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1566,8 +1569,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1579,11 +1581,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "RenderHTMLArticles",
@@ -1597,8 +1602,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -1608,8 +1612,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -1619,8 +1622,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1633,11 +1635,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 1,
@@ -1647,8 +1652,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "ProcessCLI",
             "target": "RenderHTMLArticles",
@@ -1667,8 +1671,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1681,8 +1684,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1694,11 +1696,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "RenderHTMLIndex",
@@ -1712,8 +1717,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Collection",
-                        "group": null
+                        "cardinality": "Collection"
                     },
                     {
                         "uid": 14,
@@ -1723,8 +1727,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1737,11 +1740,14 @@
                                     "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 1,
@@ -1751,8 +1757,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "ProcessCLI",
             "target": "RenderHTMLIndex",
@@ -1771,8 +1776,7 @@
                                 "documentation": "The initial command input from the CLI"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1785,8 +1789,7 @@
                                     "documentation": "The loaded settings from the config file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1798,11 +1801,14 @@
                                     "documentation": "The path to the configuration file"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Environment",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "ScanFS",
@@ -1816,8 +1822,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1830,8 +1835,7 @@
                                     "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ],
                     [
@@ -1843,11 +1847,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Ingestion",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 1,
@@ -1857,8 +1864,7 @@
                         "documentation": "The loaded settings from the config file"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "ProcessCLI",
             "target": "ScanFS",
@@ -1877,8 +1883,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 17,
@@ -1888,8 +1893,7 @@
                                 "documentation": "The registry of HTML templates used for rendering"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     },
                     {
                         "uid": 18,
@@ -1899,8 +1903,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1913,11 +1916,14 @@
                                     "documentation": "The final article HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "WriteArticlesToDisk",
@@ -1931,8 +1937,7 @@
                                 "documentation": "The final article HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -1945,8 +1950,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -1958,11 +1962,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 19,
@@ -1972,8 +1979,7 @@
                         "documentation": "The final article HTML string ready to be written to disk"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "RenderHTMLArticles",
             "target": "WriteArticlesToDisk",
@@ -1992,8 +1998,7 @@
                                 "documentation": "The processed data structure containing markdown content and metadata"
                             }
                         },
-                        "cardinality": "Collection",
-                        "group": null
+                        "cardinality": "Collection"
                     },
                     {
                         "uid": 14,
@@ -2003,8 +2008,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2017,11 +2021,14 @@
                                     "documentation": "The final index HTML string ready to be written to disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Rendering",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "WriteIndexToDisk",
@@ -2035,8 +2042,7 @@
                                 "documentation": "The final index HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2049,8 +2055,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2062,11 +2067,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "token": {
                 "uid": 15,
@@ -2076,8 +2084,7 @@
                         "documentation": "The final index HTML string ready to be written to disk"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "RenderHTMLIndex",
             "target": "WriteIndexToDisk",
@@ -2096,8 +2103,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2110,8 +2116,7 @@
                                     "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ],
                     [
@@ -2123,17 +2128,21 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Ingestion",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "FatalErrors",
                 "documentation": "Artificial error termination node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 9,
@@ -2143,8 +2152,7 @@
                         "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "ScanFS",
             "target": "FatalErrors",
@@ -2163,8 +2171,7 @@
                                 "documentation": "The loaded settings from the config file"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2177,8 +2184,7 @@
                                     "documentation": "A raw input file found in the source directory"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ],
                     [
@@ -2190,11 +2196,14 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Collection",
-                            "group": null
+                            "cardinality": "Collection"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "Ingestion",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "ParseMarkdown",
@@ -2208,8 +2217,7 @@
                                 "documentation": "A raw input file found in the source directory"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2222,8 +2230,7 @@
                                     "documentation": "The processed data structure containing markdown content and metadata"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2235,11 +2242,11 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": null
             },
             "token": {
                 "uid": 8,
@@ -2249,8 +2256,7 @@
                         "documentation": "A raw input file found in the source directory"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "ScanFS",
             "target": "ParseMarkdown",
@@ -2269,8 +2275,7 @@
                                 "documentation": "The final article HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2283,8 +2288,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2296,17 +2300,21 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "FatalErrors",
                 "documentation": "Artificial error termination node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 25,
@@ -2316,8 +2324,7 @@
                         "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "WriteArticlesToDisk",
             "target": "FatalErrors",
@@ -2336,8 +2343,7 @@
                                 "documentation": "The final article HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2350,8 +2356,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2363,17 +2368,21 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "FinalNode",
                 "documentation": "Artificial final node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 24,
@@ -2383,8 +2392,7 @@
                         "documentation": "A final summary of the operations performed during the run"
                     }
                 },
-                "cardinality": "Collection",
-                "group": null
+                "cardinality": "Collection"
             },
             "source": "WriteArticlesToDisk",
             "target": "FinalNode",
@@ -2403,8 +2411,7 @@
                                 "documentation": "The final index HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2417,8 +2424,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2430,17 +2436,21 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "FatalErrors",
                 "documentation": "Artificial error termination node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 22,
@@ -2450,8 +2460,7 @@
                         "documentation": "Triggered when a file cannot be read from or written to the disk"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "WriteIndexToDisk",
             "target": "FatalErrors",
@@ -2470,8 +2479,7 @@
                                 "documentation": "The final index HTML string ready to be written to disk"
                             }
                         },
-                        "cardinality": "Unitary",
-                        "group": null
+                        "cardinality": "Unitary"
                     }
                 ],
                 "produces": [
@@ -2484,8 +2492,7 @@
                                     "documentation": "A final summary of the operations performed during the run"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ],
                     [
@@ -2497,17 +2504,21 @@
                                     "documentation": "Triggered when a file cannot be read from or written to the disk"
                                 }
                             },
-                            "cardinality": "Unitary",
-                            "group": null
+                            "cardinality": "Unitary"
                         }
                     ]
-                ]
+                ],
+                "group": {
+                    "name": "IO",
+                    "documentation": null
+                }
             },
             "destination_function": {
                 "name": "FinalNode",
                 "documentation": "Artificial final node",
                 "consumes": [],
-                "produces": []
+                "produces": [],
+                "group": null
             },
             "token": {
                 "uid": 21,
@@ -2517,8 +2528,7 @@
                         "documentation": "A final summary of the operations performed during the run"
                     }
                 },
-                "cardinality": "Unitary",
-                "group": null
+                "cardinality": "Unitary"
             },
             "source": "WriteIndexToDisk",
             "target": "FinalNode",
