@@ -12,8 +12,8 @@ mod engine;
 // mod html;
 // mod lsp;
 mod models;
-mod test_graph;
-mod test_parse;
+mod test_engine;
+mod test_parser;
 // mod tests;
 
 fn main() -> Result<()> {
