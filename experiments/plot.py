@@ -1,12 +1,10 @@
-import itertools
 import json
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from pydantic import BaseModel
-from pyvis.network import Network
 
 
-# Note: Keeping original classes for compatibility, though we primarily use generate_graph now.
+# --- ORIGINAL CLASSES (Kept for compatibility) ---
 class Cardinality(Enum):
     ONE = "1"
     MANY = "*"
@@ -15,14 +13,6 @@ class Cardinality(Enum):
 class Type(BaseModel):
     name: str
     is_mutable: bool = True
-
-
-class Data(Type):
-    pass
-
-
-class Error(Type):
-    pass
 
 
 class Token(BaseModel):
@@ -44,112 +34,165 @@ class Function(BaseModel):
 
 
 def generate_graph(json_input_file: str, html_output_file: str = "architecture.html"):
-    """
-    Loads Rust-generated JSON and generates a color-coded Pyvis visualization.
-    """
     with open(json_input_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    net = Network(
-        height="900px",
-        width="100%",
-        bgcolor="#0b0e14",
-        font_color="#e0e0e0",
-        directed=True,
-    )
-
-    # Map to link Function Names (from Edges) to UIDs (from Nodes)
-    # Rust Edge JSON contains the Function object, but Pyvis needs the Node UID.
+    vis_nodes = []
+    vis_edges = []
+    groups = set()
     name_to_uid = {}
 
-    # Add Nodes
+    # 1. Process Nodes
     for n in data.get("nodes", []):
         func_data = n["function"]
         uid = n["uid"]
         name = func_data["name"]
-        name_to_uid[name] = uid  # Store for edge lookups
+        name_to_uid[name] = uid
 
-        if n.get("is_artificial_error_termination"):
-            color = "#dc2626"  # Red
-        elif n.get("is_artificial_graph_start") or n.get("is_artificial_graph_end"):
-            color = "#059669"  # Emerald
-        else:
-            color = "#1d4ed8"  # Blue
-
-        net.add_node(
-            uid,
-            label=f" {name} ",
-            title=func_data.get("documentation", ""),
-            shape="box",
-            color={"background": color, "border": "#ffffff"},
-            borderWidth=1,
-            margin=10,
+        group_info = func_data.get("group")
+        group_name = (
+            group_info["name"]
+            if (group_info and isinstance(group_info, dict))
+            else None
         )
 
-    # Add Edges
+        if group_name:
+            groups.add(group_name)
+
+        # Color Logic
+        if n.get("is_artificial_error_termination"):
+            bg_color = "#dc2626"  # Red
+        elif n.get("is_artificial_graph_start") or n.get("is_artificial_graph_end"):
+            bg_color = "#059669"  # Emerald
+        else:
+            bg_color = "#1d4ed8"  # Blue
+
+        # Requirement: Yellow border if in a group, otherwise white
+        border_color = "#fbbf24" if group_name else "#ffffff"
+
+        vis_nodes.append(
+            {
+                "id": uid,
+                "label": f" {name} ",
+                "title": func_data.get("documentation", ""),
+                "shape": "box",
+                "margin": 10,
+                # RENAME 'group' to 'clusterGroup' to prevent Vis.js auto-coloring
+                "clusterGroup": group_name,
+                "color": {
+                    "background": bg_color,
+                    "border": border_color,
+                    "highlight": {"background": bg_color, "border": border_color},
+                    "hover": {"background": bg_color, "border": border_color},
+                },
+                "borderWidth": 2 if group_name else 1,
+                "font": {"color": "#e0e0e0"},
+            }
+        )
+
+    # 2. Process Edges
     for e in data.get("edges", []):
-        # Resolve UIDs from function names
-        u_name = e["origin_function"]["name"]
-        v_name = e["destination_function"]["name"]
-        u, v = name_to_uid.get(u_name), name_to_uid.get(v_name)
+        u = name_to_uid.get(e["origin_function"]["name"])
+        v = name_to_uid.get(e["destination_function"]["name"])
 
         if u is not None and v is not None:
             token = e["token"]
-
-            # Determine Kind (Variable, Constant, or Error)
-            # kind_key will be "Variable", "Constant", or "Error"
             kind_key = list(token["kind"].keys())[0]
-            kind_content = token["kind"][kind_key]
-            token_name = kind_content["name"]
-
+            token_name = token["kind"][kind_key]["name"]
             is_many = token.get("cardinality") == "Collection"
 
-            # Style settings based on Token Kind
             if kind_key == "Variable":
-                edge_width = 1.0  # Bold/Pronounced
-                edge_dashes = False  # Solid
-                edge_color = "#818cf8"  # Indigo
+                width, dashes, color = 1.0, False, "#818cf8"
             elif kind_key == "Constant":
-                edge_width = 1.0  # Thin
-                edge_dashes = [5, 8]  # Dotted/Dashed
-                edge_color = "#818cf8"  # Slate Gray
+                width, dashes, color = 1.0, [5, 8], "#818cf8"
             else:  # Error
-                edge_width = 1.0
-                edge_dashes = False
-                edge_color = "#f87171"  # Light Red
+                width, dashes, color = 1.0, False, "#f87171"
 
-            # Optional: Make Collections even thicker if they are variables
             if is_many:
-                edge_width *= 5.0
+                width *= 5.0
 
-            net.add_edge(
-                u,
-                v,
-                label=  f"[{token_name}]" if is_many else token_name,
-                color=edge_color,
-                width=edge_width,
-                dashes=edge_dashes,
-                font={"size": 12, "strokeWidth": 2, "strokeColor": "#ffffff"},
+            vis_edges.append(
+                {
+                    "from": u,
+                    "to": v,
+                    "label": f"[{token_name}]" if is_many else token_name,
+                    "color": color,
+                    "width": width,
+                    "dashes": dashes,
+                    "font": {"size": 12, "color": "#e0e0e0", "strokeWidth": 0},
+                    "arrows": "to",
+                }
             )
-    options = {
-        "physics": {
-            "forceAtlas2Based": {
-                "theta": 0.1,
-                "gravitationalConstant": -105,
-                "springLength": 5,
-                "damping": 1,
-                "avoidOverlap": 1,
-            },
-            "minVelocity": 0.75,
-            "solver": "forceAtlas2Based",
-            "timestep": 0.01,
-        },
-    }
-    net.set_options(json.dumps(options))
-    net.show(html_output_file, notebook=False)
+
+    # 3. Generate HTML Template
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+        <style type="text/css">
+            body {{ background-color: #0b0e14; margin: 0; padding: 0; overflow: hidden; }}
+            #mynetwork {{ width: 100vw; height: 100vh; }}
+        </style>
+    </head>
+    <body>
+    <div id="mynetwork"></div>
+    <script type="text/javascript">
+        const nodes = new vis.DataSet({json.dumps(vis_nodes)});
+        const edges = new vis.DataSet({json.dumps(vis_edges)});
+        const groupNames = {json.dumps(list(groups))};
+
+        const container = document.getElementById('mynetwork');
+        const data = {{ nodes: nodes, edges: edges }};
+        const options = {{
+            physics: {{
+                forceAtlas2Based: {{ theta: 0.1, gravitationalConstant: -105, springLength: 5, damping: 1, avoidOverlap: 1 }},
+                solver: 'forceAtlas2Based',
+                timestep: 0.01
+            }}
+        }};
+        const network = new vis.Network(container, data, options);
+
+        const clusterOptionsByGroup = (group) => ({{
+            // Use our custom property name 'clusterGroup'
+            joinCondition: (node) => node.clusterGroup === group,
+            clusterNodeProperties: {{
+                id: 'cluster:' + group,
+                label: ' GROUP: ' + group + ' ',
+                shape: 'box',
+                margin: 10,
+                color: {{ background: '#fbbf24', border: '#ffffff' }},
+                font: {{ color: '#000000' }},
+                allowSingleNodeCluster: false
+            }}
+        }});
+
+        // Initial Clustering
+        groupNames.forEach(group => network.cluster(clusterOptionsByGroup(group)));
+
+        // Handle Click for Collapse/Expand
+        network.on("click", function (params) {{
+            if (params.nodes.length > 0) {{
+                let nodeId = params.nodes[0];
+                if (network.isCluster(nodeId)) {{
+                    network.openCluster(nodeId);
+                }} else {{
+                    let nodeData = nodes.get(nodeId);
+                    if (nodeData && nodeData.clusterGroup) {{
+                        network.cluster(clusterOptionsByGroup(nodeData.clusterGroup));
+                    }}
+                }}
+            }}
+        }});
+    </script>
+    </body>
+    </html>
+    """
+
+    with open(html_output_file, "w", encoding="utf-8") as f:
+        f.write(html_template)
     print(f"Graph generated: {html_output_file}")
 
 
 if __name__ == "__main__":
-    # Point this to the file generated by your Rust code
     generate_graph("architecture.json", "architecture.html")
