@@ -17,9 +17,9 @@ kw_group    = { "group" }
 kw_function = { "function" }
 
 // Tokens (Unitary vs Collection)
-token         = { collection | unitary }
-collection    = { "[" ~ ident ~ "]" }
-unitary       = { ident }
+token      = { collection | unitary }
+collection = { "[" ~ ident ~ "]" }
+unitary    = { ident }
 
 // ------------------------------------------------------------
 // Definitions
@@ -39,9 +39,9 @@ output_line = { (">" | "|") ~ token_list }
 // Supports: [Group] function Name(Inputs) \n > Outputs \n | Branches
 func_def = {
     doc_line* ~
-    ident? ~           // Optional Group Prefix
+    (!kw_function ~ ident)? ~ // Optional Group Prefix (must not be the word 'function')
     kw_function ~
-    ident ~            // Function Name
+    ident ~                   // Function Name
     "(" ~ token_list? ~ ")" ~
     (ln | WHITESPACE)* ~
     func_outputs
