@@ -3,8 +3,6 @@ from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
 
-# ... (Original Function/Token classes remain exactly as before) ...
-
 
 def generate_graph(json_input_file: str, html_output_file: str = "architecture.html"):
     with open(json_input_file, "r", encoding="utf-8") as f:
@@ -84,29 +82,47 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
         <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
         <style type="text/css">
             body {{ background-color: #0b0e14; color: #e0e0e0; margin: 0; display: flex; font-family: sans-serif; height: 100vh; overflow: hidden; }}
-            
             #mynetwork {{ flex-grow: 1; height: 100vh; }}
-            
-            /* Draggable Resizer */
-            #resizer {{
-                width: 6px;
-                cursor: col-resize;
-                background-color: #30363d;
-                transition: background 0.2s;
-                z-index: 10;
-            }}
+            #resizer {{ width: 6px; cursor: col-resize; background-color: #30363d; transition: background 0.2s; z-index: 10; }}
             #resizer:hover {{ background-color: #58a6ff; }}
 
-            /* Config Sidebar */
-            #config {{ 
-                width: 320px; 
-                min-width: 200px;
-                height: 100vh; 
-                overflow-y: auto; 
-                background: #161b22; 
+            #config {{ width: 350px; min-width: 250px; height: 100vh; overflow-y: auto; background: #161b22; flex-shrink: 0; display: flex; flex-direction: column; }}
+            #config-controls {{ flex-grow: 1; }}
+            
+            /* Export Options Section */
+            #options-export {{ 
+                padding: 15px; 
+                background: #0d1117; 
+                border-top: 2px solid #30363d; 
                 flex-shrink: 0;
             }}
-            
+            #options-export h3 {{ margin-top: 0; font-size: 14px; color: #58a6ff; }}
+            #options-code {{ 
+                background: #161b22; 
+                padding: 10px; 
+                border-radius: 4px; 
+                font-family: monospace; 
+                font-size: 11px; 
+                max-height: 200px; 
+                overflow: auto; 
+                white-space: pre-wrap;
+                border: 1px solid #30363d;
+                color: #8b949e;
+            }}
+            #copy-btn {{
+                margin-top: 10px;
+                width: 100%;
+                padding: 8px;
+                background: #238636;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+            }}
+            #copy-btn:hover {{ background: #2ea043; }}
+            #copy-btn:active {{ background: #238636; }}
+
             .vis-configuration-wrapper {{ color: #e0e0e0 !important; padding: 10px; }}
             .vis-config-item {{ background: none !important; border: none !important; }}
             .vis-config-label {{ color: #bbb !important; }}
@@ -117,58 +133,73 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
     <body>
     <div id="mynetwork"></div>
     <div id="resizer"></div>
-    <div id="config"></div>
+    <div id="config">
+        <div id="config-controls"></div>
+        <div id="options-export">
+            <h3>Current Options (JSON)</h3>
+            <div id="options-code">Modify a control to see JSON...</div>
+            <button id="copy-btn">Copy Options</button>
+        </div>
+    </div>
 
     <script type="text/javascript">
         const configContainer = document.getElementById('config');
+        const controlsDiv = document.getElementById('config-controls');
         const resizer = document.getElementById('resizer');
+        const optionsCode = document.getElementById('options-code');
+        const copyBtn = document.getElementById('copy-btn');
+        
         const nodes = new vis.DataSet({json.dumps(vis_nodes)});
         const edges = new vis.DataSet({json.dumps(vis_edges)});
         
         // --- 1. DRAGGABLE SIDEBAR LOGIC ---
         let isResizing = false;
-        resizer.addEventListener('mousedown', (e) => {{
-            isResizing = true;
-            document.body.style.cursor = 'col-resize';
-        }});
-
+        resizer.addEventListener('mousedown', () => isResizing = true);
         document.addEventListener('mousemove', (e) => {{
             if (!isResizing) return;
             const newWidth = window.innerWidth - e.clientX;
-            if (newWidth > 150 && newWidth < 800) {{
-                configContainer.style.width = newWidth + 'px';
-            }}
+            if (newWidth > 200 && newWidth < 900) configContainer.style.width = newWidth + 'px';
         }});
+        document.addEventListener('mouseup', () => isResizing = false);
 
-        document.addEventListener('mouseup', () => {{
-            isResizing = false;
-            document.body.style.cursor = 'default';
-        }});
-
-        // --- 2. SCROLL PERSISTENCE LOGIC ---
+        // --- 2. SCROLL PERSISTENCE ---
         let lastScrollTop = 0;
-        configContainer.addEventListener('scroll', () => {{
-            // Don't update if it's a reset to 0 caused by a re-render
-            if (configContainer.scrollTop > 0) {{
-                lastScrollTop = configContainer.scrollTop;
-            }}
-        }}, {{passive: true}});
+        configContainer.addEventListener('scroll', () => {{ if (configContainer.scrollTop > 0) lastScrollTop = configContainer.scrollTop; }}, {{passive: true}});
+        new MutationObserver(() => {{ if (configContainer.scrollTop !== lastScrollTop) configContainer.scrollTop = lastScrollTop; }})
+            .observe(controlsDiv, {{ childList: true, subtree: true }});
 
-        // Observe when Vis.js updates the DOM inside the config panel
-        const observer = new MutationObserver(() => {{
-            if (configContainer.scrollTop !== lastScrollTop) {{
-                configContainer.scrollTop = lastScrollTop;
-            }}
+        // --- 3. OPTIONS EXPORT & COPY ---
+        function updateOptionsDisplay(params) {{
+            // Format JSON for display
+            optionsCode.innerText = JSON.stringify(params, null, 2);
+        }}
+
+        copyBtn.addEventListener('click', () => {{
+            const text = optionsCode.innerText;
+            if (text.startsWith('Modify')) return;
+            navigator.clipboard.writeText(text).then(() => {{
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = "Copied!";
+                copyBtn.style.background = "#58a6ff";
+                setTimeout(() => {{ 
+                    copyBtn.innerText = originalText; 
+                    copyBtn.style.background = "#238636";
+                }}, 1500);
+            }});
         }});
-        observer.observe(configContainer, {{ childList: true, subtree: true }});
 
-        // --- 3. GRAPH INITIALIZATION ---
+        // --- 4. GRAPH INITIALIZATION ---
         const options = {{
             physics: {{ solver: 'forceAtlas2Based', forceAtlas2Based: {{ gravitationalConstant: -100, springLength: 10, avoidOverlap: 1 }} }},
             interaction: {{ navigationButtons: true, keyboard: true }},
-            configure: {{ enabled: true, container: configContainer, showButton: false }}
+            configure: {{ enabled: true, container: controlsDiv, showButton: false }}
         }};
         const network = new vis.Network(document.getElementById('mynetwork'), {{ nodes, edges }}, options);
+
+        // Capture live updates from the configurator
+        network.on("configChange", (params) => {{
+            updateOptionsDisplay(params);
+        }});
 
         const clusterBy = (g) => ({{
             joinCondition: (n) => n.clusterGroup === g,
@@ -190,7 +221,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
 
     with open(html_output_file, "w", encoding="utf-8") as f:
         f.write(html_template)
-    print(f"Interactive graph generated: {html_output_file}")
+    print(f"Interactive graph with export generated: {html_output_file}")
 
 
 if __name__ == "__main__":
