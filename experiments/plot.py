@@ -12,7 +12,6 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
 
     vis_nodes, vis_edges, groups, name_to_uid = [], [], set(), {}
 
-    # 1. Process Nodes
     for n in data.get("nodes", []):
         func_data = n["function"]
         uid, name = n["uid"], func_data["name"]
@@ -21,7 +20,6 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
         if group_name:
             groups.add(group_name)
 
-        # Color Logic
         if n.get("is_artificial_error_termination"):
             bg = "#dc2626"
         elif n.get("is_artificial_graph_start") or n.get("is_artificial_graph_end"):
@@ -49,7 +47,6 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
             }
         )
 
-    # 2. Process Edges
     for e in data.get("edges", []):
         u, v = (
             name_to_uid.get(e["origin_function"]["name"]),
@@ -58,7 +55,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
         if u is not None and v is not None:
             token = e["token"]
             kind = list(token["kind"].keys())[0]
-            name = token["kind"][kind]["name"]
+            t_name = token["kind"][kind]["name"]
             is_many = token.get("cardinality") == "Collection"
             width, dash, color = (
                 (1.0, False, "#818cf8")
@@ -71,7 +68,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
                 {
                     "from": u,
                     "to": v,
-                    "label": f"[{name}]" if is_many else name,
+                    "label": f"[{t_name}]" if is_many else t_name,
                     "color": color,
                     "width": width * 5.0 if is_many else width,
                     "dashes": dash,
@@ -80,42 +77,99 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
                 }
             )
 
-    # 3. Generate HTML with Native Dark Theme
     html_template = f"""
     <!DOCTYPE html>
     <html style="color-scheme: dark;">
     <head>
         <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
         <style type="text/css">
-            body {{ background-color: #0b0e14; color: #e0e0e0; margin: 0; display: flex; font-family: sans-serif; }}
-            #mynetwork {{ flex-grow: 1; height: 100vh; }}
-            #config {{ width: 320px; height: 100vh; overflow-y: auto; background: #161b22; border-left: 1px solid #333; }}
+            body {{ background-color: #0b0e14; color: #e0e0e0; margin: 0; display: flex; font-family: sans-serif; height: 100vh; overflow: hidden; }}
             
-            /* Simple Dark Theme overrides for Vis.js specific labels */
+            #mynetwork {{ flex-grow: 1; height: 100vh; }}
+            
+            /* Draggable Resizer */
+            #resizer {{
+                width: 6px;
+                cursor: col-resize;
+                background-color: #30363d;
+                transition: background 0.2s;
+                z-index: 10;
+            }}
+            #resizer:hover {{ background-color: #58a6ff; }}
+
+            /* Config Sidebar */
+            #config {{ 
+                width: 320px; 
+                min-width: 200px;
+                height: 100vh; 
+                overflow-y: auto; 
+                background: #161b22; 
+                flex-shrink: 0;
+            }}
+            
             .vis-configuration-wrapper {{ color: #e0e0e0 !important; padding: 10px; }}
             .vis-config-item {{ background: none !important; border: none !important; }}
             .vis-config-label {{ color: #bbb !important; }}
             .vis-config-header {{ color: #58a6ff !important; font-weight: bold; margin-top: 10px; border-bottom: 1px solid #333; }}
-            
-            /* Dark Navigation Buttons */
             .vis-network .vis-navigation .vis-button {{ background-color: #21262d; border: 1px solid #444; border-radius: 4px; }}
         </style>
     </head>
     <body>
     <div id="mynetwork"></div>
+    <div id="resizer"></div>
     <div id="config"></div>
+
     <script type="text/javascript">
+        const configContainer = document.getElementById('config');
+        const resizer = document.getElementById('resizer');
         const nodes = new vis.DataSet({json.dumps(vis_nodes)});
         const edges = new vis.DataSet({json.dumps(vis_edges)});
-        const data = {{ nodes, edges }};
+        
+        // --- 1. DRAGGABLE SIDEBAR LOGIC ---
+        let isResizing = false;
+        resizer.addEventListener('mousedown', (e) => {{
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+        }});
+
+        document.addEventListener('mousemove', (e) => {{
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth > 150 && newWidth < 800) {{
+                configContainer.style.width = newWidth + 'px';
+            }}
+        }});
+
+        document.addEventListener('mouseup', () => {{
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        }});
+
+        // --- 2. SCROLL PERSISTENCE LOGIC ---
+        let lastScrollTop = 0;
+        configContainer.addEventListener('scroll', () => {{
+            // Don't update if it's a reset to 0 caused by a re-render
+            if (configContainer.scrollTop > 0) {{
+                lastScrollTop = configContainer.scrollTop;
+            }}
+        }}, {{passive: true}});
+
+        // Observe when Vis.js updates the DOM inside the config panel
+        const observer = new MutationObserver(() => {{
+            if (configContainer.scrollTop !== lastScrollTop) {{
+                configContainer.scrollTop = lastScrollTop;
+            }}
+        }});
+        observer.observe(configContainer, {{ childList: true, subtree: true }});
+
+        // --- 3. GRAPH INITIALIZATION ---
         const options = {{
             physics: {{ solver: 'forceAtlas2Based', forceAtlas2Based: {{ gravitationalConstant: -100, springLength: 10, avoidOverlap: 1 }} }},
             interaction: {{ navigationButtons: true, keyboard: true }},
-            configure: {{ enabled: true, container: document.getElementById('config'), showButton: false }}
+            configure: {{ enabled: true, container: configContainer, showButton: false }}
         }};
-        const network = new vis.Network(document.getElementById('mynetwork'), data, options);
+        const network = new vis.Network(document.getElementById('mynetwork'), {{ nodes, edges }}, options);
 
-        // Clustering Logic
         const clusterBy = (g) => ({{
             joinCondition: (n) => n.clusterGroup === g,
             clusterNodeProperties: {{ id: 'c:'+g, label: g, shape: 'box', margin: 10, color: {{ background: '#fbbf24', border: '#fff' }}, font: {{ color: '#000' }} }}
@@ -136,7 +190,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
 
     with open(html_output_file, "w", encoding="utf-8") as f:
         f.write(html_template)
-    print(f"Dark graph generated: {html_output_file}")
+    print(f"Interactive graph generated: {html_output_file}")
 
 
 if __name__ == "__main__":
