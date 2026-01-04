@@ -6,55 +6,75 @@ ln         = _{ "\r\n" | "\n" }
 comment  = @{ "#" ~ (!ln ~ ANY)* }
 doc_line =  { comment ~ ln }
 
-// Hard Casing Rules
-type_ident = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
-var_ident  = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
-number     = @{ ASCII_DIGIT+ }
-range      =  { number ~ ".." ~ number }
-wildcard   =  { "_" }
+// Identifiers
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Keywords
-kw_data   = { "data" }
-kw_error  = { "error" }
-kw_func   = { "function" }
-kw_for    = { "for" }
-kw_in     = { "in" }
-kw_match  = { "match" }
-kw_break  = { "break" }
-kw_group  = { "group" }
-arrow     = { "->" }
-fat_arrow = { "=>" }
+kw_constant = { "constant" }
+kw_variable = { "variable" }
+kw_error    = { "error" }
+kw_group    = { "group" }
+kw_function = { "function" }
 
-// Group Tag (Atomic for better highlighting/hover)
-group_tag = @{ "@" ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
+// Tokens (Unitary vs Collection)
+token         = { collection | unitary }
+collection    = { "[" ~ ident ~ "]" }
+unitary       = { ident }
 
+// ------------------------------------------------------------
 // Definitions
-data_def   = { doc_line* ~ kw_data ~ type_ident }
-error_def  = { doc_line* ~ kw_error ~ type_ident }
-func_def   = { doc_line* ~ kw_func ~ type_ident ~ "(" ~ type_ident ~ ")" ~ arrow ~ type_union }
-type_union = { type_ident ~ ("|" ~ type_ident)* }
+// ------------------------------------------------------------
 
-// Flow and Logic
-instantiation = { doc_line* ~ var_ident ~ ":" ~ type_ident ~ group_tag? }
-assignment    = { doc_line* ~ var_ident ~ "=" ~ type_ident ~ "(" ~ var_ident ~ ")" ~ group_tag? }
-call          = { doc_line* ~ type_ident ~ "(" ~ var_ident ~ ")" ~ group_tag? }
-break_stmt    = { kw_break ~ group_tag? }
-for_stmt      = { kw_for ~ var_ident ~ kw_in ~ range ~ "{" ~ (statement | ln)* ~ "}" }
-match_stmt    = { kw_match ~ var_ident ~ "{" ~ (match_arm | ln)* ~ "}" }
-match_arm     = { (type_ident | wildcard) ~ fat_arrow ~ "{" ~ (statement | ln)* ~ "}" }
-group_block   = { kw_group ~ var_ident ~ "{" ~ (statement | ln)* ~ "}" }
+const_def = { doc_line* ~ kw_constant ~ ident }
+var_def   = { doc_line* ~ kw_variable ~ ident }
+err_def   = { doc_line* ~ kw_error ~ ident }
+group_def = { doc_line* ~ kw_group ~ ident }
+
+token_list = { token ~ ("," ~ token)* }
+
+// An output line starts with > or | followed by a list of tokens
+output_line = { (">" | "|") ~ token_list }
+
+// Function Definition
+// Supports: [Group] function Name(Inputs) \n > Outputs \n | Branches
+func_def = {
+    doc_line* ~
+    ident? ~           // Optional Group Prefix
+    kw_function ~
+    ident ~            // Function Name
+    "(" ~ token_list? ~ ")" ~
+    (ln | WHITESPACE)* ~
+    func_outputs
+}
+
+func_outputs = { output_line ~ ((ln | WHITESPACE)* ~ output_line)* }
+
+// ------------------------------------------------------------
+// Flow (Execution)
+// ------------------------------------------------------------
+
+// A flow step is just the name of a function to be executed
+flow_step = { !keyword ~ ident }
+
+keyword = {
+    kw_constant
+  | kw_variable
+  | kw_error
+  | kw_group
+  | kw_function
+}
+
+// ------------------------------------------------------------
+// Main Program Structure
+// ------------------------------------------------------------
 
 statement = _{
-    group_block
-  | data_def
-  | error_def
+    const_def
+  | var_def
+  | err_def
+  | group_def
   | func_def
-  | for_stmt
-  | match_stmt
-  | assignment
-  | instantiation
-  | call
-  | break_stmt
+  | flow_step
   | comment
   | ln
 }
