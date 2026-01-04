@@ -118,7 +118,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
         // Clustering Logic
         const clusterBy = (g) => ({{
             joinCondition: (n) => n.clusterGroup === g,
-            clusterNodeProperties: {{ id: 'c:'+g, label: ' GROUP: '+g+' ', shape: 'box', margin: 10, color: {{ background: '#fbbf24', border: '#fff' }}, font: {{ color: '#000' }} }}
+            clusterNodeProperties: {{ id: 'c:'+g, label: g, shape: 'box', margin: 10, color: {{ background: '#fbbf24', border: '#fff' }}, font: {{ color: '#000' }} }}
         }});
         {json.dumps(list(groups))}.forEach(g => network.cluster(clusterBy(g)));
 
