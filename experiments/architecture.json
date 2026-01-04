@@ -957,59 +957,6 @@
                 "group": null
             },
             "destination_function": {
-                "name": "FinalNode",
-                "documentation": "Artificial final node",
-                "consumes": [],
-                "produces": [],
-                "group": null
-            },
-            "token": {
-                "uid": 6,
-                "kind": {
-                    "Constant": {
-                        "name": "Templates",
-                        "documentation": "The registry of HTML templates used for rendering"
-                    }
-                },
-                "cardinality": "Unitary"
-            },
-            "source": "LoadTemplates",
-            "target": "FinalNode",
-            "relation": "terminal_flow"
-        },
-        {
-            "origin_function": {
-                "name": "LoadTemplates",
-                "documentation": "Loads HTML templates based on settings",
-                "consumes": [
-                    {
-                        "uid": 5,
-                        "kind": {
-                            "Constant": {
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary"
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 6,
-                            "kind": {
-                                "Constant": {
-                                    "name": "Templates",
-                                    "documentation": "The registry of HTML templates used for rendering"
-                                }
-                            },
-                            "cardinality": "Unitary"
-                        }
-                    ]
-                ],
-                "group": null
-            },
-            "destination_function": {
                 "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [

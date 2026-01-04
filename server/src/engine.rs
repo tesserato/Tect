@@ -36,7 +36,6 @@ impl TokenPool {
                 Kind::Variable(..) => variables.push(token),
                 Kind::Error(..) => errors.push(token),
                 Kind::Constant(..) => constants.push(token),
-                _ => {}
             };
         }
         Self {
@@ -74,33 +73,52 @@ impl TokenPool {
         let mut is_called_multiple_times = false;
 
         for requested_token in &tokens {
+            // Step 1: Find the first available match to create the Edge
             let pool_to_check = match &*requested_token.kind {
                 Kind::Variable(..) => &self.variables,
                 Kind::Error(..) => &self.errors,
                 Kind::Constant(..) => &self.constants,
-                _ => continue,
             };
 
+            let mut matched_token: Option<Token> = None;
             for available_token in pool_to_check {
-                if available_token.compare(requested_token)
+                if available_token.kind == requested_token.kind
                     && !consumed_tokens.contains(available_token)
                 {
-                    if let Some(node) = self.token_to_initial_node.get(available_token) {
-                        if requested_token.cardinality == Cardinality::Unitary
-                            && available_token.cardinality == Cardinality::Collection
-                        {
-                            is_called_multiple_times = true;
+                    matched_token = Some(available_token.clone());
+                    break;
+                }
+            }
+
+            // Step 2: If a match was found, create the edge and mark ALL compatible constants
+            if let Some(available_token) = matched_token {
+                if let Some(node) = self.token_to_initial_node.get(&available_token) {
+                    if requested_token.cardinality == Cardinality::Unitary
+                        && available_token.cardinality == Cardinality::Collection
+                    {
+                        is_called_multiple_times = true;
+                    }
+
+                    edges.push(Edge {
+                        origin_function: node.function.clone(),
+                        destination_function: destination_node.function.clone(),
+                        token: available_token.clone(),
+                        source: node.function.name.clone(),
+                        target: destination_node.function.name.clone(),
+                        relation: "data_flow".to_string(),
+                    });
+
+                    consumed_tokens.push(available_token.clone());
+
+                    // Mark ALL compatible constants in the pool as used
+                    if matches!(&*available_token.kind, Kind::Constant(..)) {
+                        // We iterate through all constants in the pool
+                        for c in &self.constants {
+                            // If this constant in the pool is compatible with what we just used
+                            if c.kind == requested_token.kind {
+                                self.constants_used_at_least_once.insert(c.uid);
+                            }
                         }
-                        edges.push(Edge {
-                            origin_function: node.function.clone(),
-                            destination_function: destination_node.function.clone(),
-                            token: available_token.clone(),
-                            source: node.function.name.clone(),
-                            target: destination_node.function.name.clone(),
-                            relation: "data_flow".to_string(),
-                        });
-                        consumed_tokens.push(available_token.clone());
-                        break;
                     }
                 }
             }
@@ -108,7 +126,7 @@ impl TokenPool {
 
         let unconsumed_tokens: Vec<Token> = tokens
             .iter()
-            .filter(|req_token| !consumed_tokens.iter().any(|c| c.compare(req_token)))
+            .filter(|req_token| !consumed_tokens.iter().any(|c| c.kind == req_token.kind))
             .cloned()
             .collect();
 
@@ -117,14 +135,11 @@ impl TokenPool {
                 self.functions_called_multiple_times
                     .insert(destination_node.uid);
             }
+
+            // Remove variables and errors (linear flow)
             self.variables.retain(|t| !consumed_tokens.contains(t));
             self.errors.retain(|t| !consumed_tokens.contains(t));
 
-            for token in &consumed_tokens {
-                if let Kind::Constant(_) = &*token.kind {
-                    self.constants_used_at_least_once.insert(token.uid);
-                }
-            }
             Consumed::AllTokens(edges)
         } else {
             Consumed::SomeTokens(unconsumed_tokens)
@@ -222,7 +237,7 @@ impl Flow {
                 documentation: Some("Artificial final node".to_string()),
                 consumes: vec![],
                 produces: vec![],
-                group: None, 
+                group: None,
             }),
             is_artificial_graph_start: false,
             is_artificial_graph_end: true,

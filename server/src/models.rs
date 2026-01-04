@@ -100,9 +100,9 @@ impl Token {
         }
     }
 
-    pub fn compare(&self, other: &Self) -> bool {
-        self.kind == other.kind
-    }
+    // pub fn compare(&self, other: &Self) -> bool {
+    //     self.kind == other.kind
+    // }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
