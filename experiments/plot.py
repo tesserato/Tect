@@ -190,7 +190,7 @@ def generate_graph(json_input_file: str, html_output_file: str = "architecture.h
 
         // --- 4. GRAPH INITIALIZATION ---
         const options = {{
-            physics: {{ solver: 'forceAtlas2Based', forceAtlas2Based: {{ gravitationalConstant: -100, springLength: 10, avoidOverlap: 1 }} }},
+            physics: {{ solver: 'forceAtlas2Based', forceAtlas2Based: {{ gravitationalConstant: -100, springLength: 10, avoidOverlap: 1, "damping": 0.75 }} }},
             interaction: {{ navigationButtons: true, keyboard: true }},
             configure: {{ enabled: true, container: controlsDiv, showButton: false }}
         }};
