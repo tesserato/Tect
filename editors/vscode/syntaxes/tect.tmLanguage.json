@@ -9,27 +9,41 @@
         },
         {
             "name": "keyword.control.tect",
-            "match": "\\b(data|error|function|for|in|match|break|group)\\b"
+            "match": "\\b(constant|variable|error|group)\\b"
         },
         {
-            "name": "entity.name.tag.group.tect",
-            "match": "@[a-z][a-zA-Z0-9_]*"
+            "comment": "Function definition with group prefix support",
+            "match": "\\b(function)\\s+([A-Z][a-zA-Z0-9_]*)\\b",
+            "captures": {
+                "1": {
+                    "name": "keyword.declaration.function.tect"
+                },
+                "2": {
+                    "name": "entity.name.function.tect"
+                }
+            }
         },
         {
+            "comment": "Generic Entity/Type highlighting (PascalCase)",
             "name": "entity.name.type.tect",
             "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
         },
         {
-            "name": "variable.other.tect",
-            "match": "\\b[a-z][a-zA-Z0-9_]*\\b"
+            "comment": "Flow steps (identifiers on their own, usually PascalCase)",
+            "name": "variable.other.member.tect",
+            "match": "\\b[A-Z][a-zA-Z0-9_]*\\b(?=\\s*(?:#|$))"
         },
         {
             "name": "keyword.operator.tect",
-            "match": "(->|=>|:|\\||=)"
+            "match": "(>|\\||,)"
         },
         {
-            "name": "constant.numeric.tect",
-            "match": "\\b[0-9]+\\b"
+            "name": "punctuation.section.brackets.tect",
+            "match": "(\\[|\\])"
+        },
+        {
+            "name": "punctuation.section.parameters.tect",
+            "match": "(\\(|\\))"
         }
     ],
     "scopeName": "source.tect"
