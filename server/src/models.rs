@@ -105,6 +105,8 @@ impl Token {
     // }
 }
 
+
+// Represents a node in the semantic graph - roughly corresponds to a function instance
 #[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub struct Node {
     pub uid: u32,
