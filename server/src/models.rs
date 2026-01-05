@@ -1,18 +1,12 @@
 //! # Tect Logical Models
 //!
-//! This module defines the core architectural entities of the Tect language.
-//! These structures are "logically pure"—they contain the semantic data and
-//! relationships required by the Flow Engine but remain decoupled from the
-//! physical source code (no Spans/Coordinates).
-//!
-//! Identity is managed via Unique Identifiers (UIDs) to allow for safe
-//! symbol renaming and stable graph references.
+//! This module defines the core architectural entities.
+//! UIDs are the source of truth for identity. Spans are handled by the Analyzer's SymbolTable.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-// --- ID Registry Logic ---
-
+// --- ID Registry ---
 macro_rules! define_id_registry {
     ($name:ident) => {
         mod $name {
@@ -24,22 +18,19 @@ macro_rules! define_id_registry {
         }
     };
 }
-
 define_id_registry!(token_id_registry);
 define_id_registry!(func_id_registry);
 define_id_registry!(type_id_registry);
 define_id_registry!(node_id_registry);
 
-// --- Core Enums ---
+// --- Core Logic ---
 
 /// Defines the cardinality of data moving through a contract.
 /// Used by the Engine to determine if a transformation represents
 /// a single operation or an iterative/collection operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd)]
 pub enum Cardinality {
-    /// A single instance of a type.
     Unitary,
-    /// A collection/set of instances of a type. Represented as `[Type]` in source.
     Collection,
 }
 
@@ -93,7 +84,6 @@ pub struct Error {
     pub documentation: Option<String>,
 }
 
-/// Polymorphic wrapper for architectural types.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "kind", content = "data")]
 pub enum Kind {
@@ -160,7 +150,6 @@ impl Function {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub uid: u32,
-    /// Reference to the underlying function contract.
     pub function: Arc<Function>,
     /// Metadata for engine-generated nodes.
     pub is_artificial_graph_start: bool,
@@ -180,23 +169,29 @@ impl Node {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
+// --- Graph Entities ---
+
+/// An Edge represents the movement of a specific Token between two Nodes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Edge {
-    pub origin_function: Arc<Function>,
-    pub destination_function: Arc<Function>,
+    /// UID of the node producing the token.
+    pub from_node_uid: u32,
+    /// UID of the node consuming the token.
+    pub to_node_uid: u32,
+    /// The specific token instance being passed.
     pub token: Token,
-    pub source: String,
-    pub target: String,
+    /// Semantic label (e.g. "data_flow", "error_branch").
     pub relation: String,
 }
 
-#[derive(Debug, Default, Serialize)]
+/// The final architectural representation produced by the Engine.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
 }
 
-// --- LSP Specific Models (Separated from Logic) ---
+// --- LSP Models ---
 
 /// Represents byte offsets in the source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
