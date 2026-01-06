@@ -18,21 +18,22 @@ pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
     pub constants: Vec<Token>,
-    pub token_to_initial_node: HashMap<Token, Arc<Node>>,
-    pub functions_called_multiple_times: HashSet<u32>,
-    pub constants_used_at_least_once: HashSet<u32>,
+    /// Maps Token UIDs to the origin Node.
+    pub token_to_origin_node: HashMap<u32, Arc<Node>>,
+    pub expanded_nodes: HashSet<u32>,
+    pub constants_used: HashSet<u32>,
 }
 
 impl TokenPool {
-    pub fn new(tokens: Vec<Token>, initial_node: Arc<Node>) -> Self {
+    pub fn new(initial_requirements: Vec<Token>, initial_node: Arc<Node>) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
         let mut constants = Vec::new();
-        let mut token_to_initial_node = HashMap::new();
+        let mut token_to_origin_node = HashMap::new();
 
-        for token in tokens {
-            token_to_initial_node.insert(token.clone(), initial_node.clone());
-            match &*token.kind {
+        for token in initial_requirements {
+            token_to_origin_node.insert(token.uid, initial_node.clone());
+            match &token.kind {
                 Kind::Variable(..) => variables.push(token),
                 Kind::Error(..) => errors.push(token),
                 Kind::Constant(..) => constants.push(token),
@@ -42,107 +43,87 @@ impl TokenPool {
             variables,
             errors,
             constants,
-            token_to_initial_node,
-            functions_called_multiple_times: HashSet::new(),
-            constants_used_at_least_once: HashSet::new(),
+            token_to_origin_node,
+            expanded_nodes: HashSet::new(),
+            constants_used: HashSet::new(),
         }
     }
 
-    pub fn produce(&mut self, tokens: Vec<Token>, initial_node: Arc<Node>) {
+    pub fn produce(&mut self, tokens: Vec<Token>, producer: Arc<Node>) {
+        let is_expanded = self.expanded_nodes.contains(&producer.uid);
         for mut token in tokens {
-            if self
-                .functions_called_multiple_times
-                .contains(&initial_node.uid)
-            {
+            if is_expanded {
                 token.cardinality = Cardinality::Collection;
             }
-            self.token_to_initial_node
-                .insert(token.clone(), initial_node.clone());
-            match &*token.kind {
+            self.token_to_origin_node
+                .insert(token.uid, producer.clone());
+            match &token.kind {
                 Kind::Variable(..) => self.variables.push(token),
                 Kind::Error(..) => self.errors.push(token),
                 Kind::Constant(..) => self.constants.push(token),
-                _ => {}
             };
         }
     }
 
-    pub fn try_to_consume(&mut self, tokens: Vec<Token>, destination_node: Arc<Node>) -> Consumed {
+    pub fn try_to_consume(&mut self, requirements: Vec<Token>, destination: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
-        let mut consumed_tokens: Vec<Token> = Vec::new();
-        let mut is_called_multiple_times = false;
+        // Owned Tokens ensure consistency during branch filtering
+        let mut consumed_in_step: Vec<Token> = Vec::new();
+        let mut trigger_expansion = false;
 
-        for requested_token in &tokens {
-            // Step 1: Find the first available match to create the Edge
-            let pool_to_check = match &*requested_token.kind {
+        for req in &requirements {
+            let pool = match &req.kind {
                 Kind::Variable(..) => &self.variables,
                 Kind::Error(..) => &self.errors,
                 Kind::Constant(..) => &self.constants,
             };
 
-            let mut matched_token: Option<Token> = None;
-            for available_token in pool_to_check {
-                if available_token.kind == requested_token.kind
-                    && !consumed_tokens.contains(available_token)
-                {
-                    matched_token = Some(available_token.clone());
-                    break;
-                }
-            }
+            let matched = pool
+                .iter()
+                .find(|t| t.kind == req.kind && !consumed_in_step.contains(t))
+                .cloned();
 
-            // Step 2: If a match was found, create the edge and mark ALL compatible constants
-            if let Some(available_token) = matched_token {
-                if let Some(node) = self.token_to_initial_node.get(&available_token) {
-                    if requested_token.cardinality == Cardinality::Unitary
-                        && available_token.cardinality == Cardinality::Collection
+            if let Some(t) = matched {
+                if let Some(origin) = self.token_to_origin_node.get(&t.uid) {
+                    if req.cardinality == Cardinality::Unitary
+                        && t.cardinality == Cardinality::Collection
                     {
-                        is_called_multiple_times = true;
+                        trigger_expansion = true;
                     }
 
                     edges.push(Edge {
-                        origin_function: node.function.clone(),
-                        destination_function: destination_node.function.clone(),
-                        token: available_token.clone(),
-                        source: node.function.name.clone(),
-                        target: destination_node.function.name.clone(),
+                        from_node_uid: origin.uid,
+                        to_node_uid: destination.uid,
+                        token: t.clone(),
                         relation: "data_flow".to_string(),
                     });
 
-                    consumed_tokens.push(available_token.clone());
-
-                    // Mark ALL compatible constants in the pool as used
-                    if matches!(&*available_token.kind, Kind::Constant(..)) {
-                        // We iterate through all constants in the pool
-                        for c in &self.constants {
-                            // If this constant in the pool is compatible with what we just used
-                            if c.kind == requested_token.kind {
-                                self.constants_used_at_least_once.insert(c.uid);
-                            }
-                        }
-                    }
+                    consumed_in_step.push(t);
                 }
             }
         }
 
-        let unconsumed_tokens: Vec<Token> = tokens
+        let missing: Vec<Token> = requirements
             .iter()
-            .filter(|req_token| !consumed_tokens.iter().any(|c| c.kind == req_token.kind))
+            .filter(|req| !consumed_in_step.iter().any(|c| c.kind == req.kind))
             .cloned()
             .collect();
 
-        if unconsumed_tokens.is_empty() {
-            if is_called_multiple_times {
-                self.functions_called_multiple_times
-                    .insert(destination_node.uid);
+        if missing.is_empty() {
+            if trigger_expansion {
+                self.expanded_nodes.insert(destination.uid);
             }
-
-            // Remove variables and errors (linear flow)
-            self.variables.retain(|t| !consumed_tokens.contains(t));
-            self.errors.retain(|t| !consumed_tokens.contains(t));
-
+            // Transition linear artifacts from pool to state history
+            for used in &consumed_in_step {
+                if matches!(used.kind, Kind::Constant(..)) {
+                    self.constants_used.insert(used.uid);
+                }
+            }
+            self.variables.retain(|t| !consumed_in_step.contains(t));
+            self.errors.retain(|t| !consumed_in_step.contains(t));
             Consumed::AllTokens(edges)
         } else {
-            Consumed::SomeTokens(unconsumed_tokens)
+            Consumed::SomeTokens(missing)
         }
     }
 
@@ -153,7 +134,7 @@ impl TokenPool {
             constants: self
                 .constants
                 .iter()
-                .filter(|c| !self.constants_used_at_least_once.contains(&c.uid))
+                .filter(|c| !self.constants_used.contains(&c.uid))
                 .cloned()
                 .collect(),
         }
@@ -161,135 +142,109 @@ impl TokenPool {
 }
 
 pub struct Flow {
-    uid_counter: u32,
     pub nodes: Vec<Arc<Node>>,
     pub edges: Vec<Edge>,
     pub pools: Vec<TokenPool>,
+    pub deduplicate_edges: bool,
 }
 
 impl Flow {
-    pub fn new() -> Self {
+    pub fn new(deduplicate_edges: bool) -> Self {
         Self {
-            uid_counter: 0,
             nodes: Vec::new(),
             edges: Vec::new(),
             pools: Vec::new(),
+            deduplicate_edges,
         }
     }
 
     pub fn process_flow(&mut self, functions: &[Arc<Function>]) -> (Vec<Arc<Node>>, Vec<Edge>) {
-        let initial_node = Arc::new(Node {
-            uid: 0,
-            function: Arc::new(Function {
-                name: "InitialNode".to_string(),
-                documentation: Some("Artificial initial node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-                group: None,
-            }),
-            is_artificial_graph_start: true,
-            is_artificial_graph_end: false,
-            is_artificial_error_termination: false,
-        });
+        let initial_node = Arc::new(Node::new_artificial(
+            "InitialNode".to_string(),
+            true,
+            false,
+            false,
+        ));
         self.nodes.push(initial_node.clone());
 
-        if let Some(first_func) = functions.first() {
-            self.pools.push(TokenPool::new(
-                first_func.consumes.clone(),
-                initial_node.clone(),
-            ));
+        if let Some(first) = functions.first() {
+            self.pools
+                .push(TokenPool::new(first.consumes.clone(), initial_node.clone()));
         }
 
         for function in functions {
-            self.uid_counter += 1;
-            let node = Arc::new(Node {
-                uid: self.uid_counter,
-                function: function.clone(),
-                is_artificial_graph_start: false,
-                is_artificial_graph_end: false,
-                is_artificial_error_termination: false,
-            });
+            let node = Arc::new(Node::new(function.clone()));
             self.nodes.push(node.clone());
 
-            let mut new_pools: Vec<TokenPool> = Vec::new();
+            let mut next_pools = Vec::new();
             for pool in &mut self.pools {
                 match pool.try_to_consume(function.consumes.clone(), node.clone()) {
                     Consumed::AllTokens(new_edges) => {
                         self.edges.extend(new_edges);
-                        for produced_tokens in &function.produces {
-                            let mut new_pool = pool.clone();
-                            new_pool.produce(produced_tokens.clone(), node.clone());
-                            new_pools.push(new_pool);
+
+                        if function.produces.is_empty() {
+                            // Sink/Transparent function support
+                            next_pools.push(pool.clone());
+                        } else {
+                            // Branching architectural possibilities
+                            for branch in &function.produces {
+                                let mut branched_pool = pool.clone();
+                                branched_pool.produce(branch.clone(), node.clone());
+                                next_pools.push(branched_pool);
+                            }
                         }
                     }
                     Consumed::SomeTokens(_) => {
-                        new_pools.push(pool.clone());
+                        next_pools.push(pool.clone());
                     }
                 }
             }
-            self.pools = new_pools;
+            self.pools = next_pools;
         }
 
-        let final_node = Arc::new(Node {
-            uid: self.uid_counter + 1,
-            function: Arc::new(Function {
-                name: "FinalNode".to_string(),
-                documentation: Some("Artificial final node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-                group: None,
-            }),
-            is_artificial_graph_start: false,
-            is_artificial_graph_end: true,
-            is_artificial_error_termination: false,
-        });
+        let final_node = Arc::new(Node::new_artificial(
+            "FinalNode".to_string(),
+            false,
+            true,
+            false,
+        ));
+        let fatal_node = Arc::new(Node::new_artificial(
+            "FatalErrors".to_string(),
+            false,
+            false,
+            true,
+        ));
         self.nodes.push(final_node.clone());
+        self.nodes.push(fatal_node.clone());
 
-        let fatal_error_node = Arc::new(Node {
-            uid: self.uid_counter + 2,
-            function: Arc::new(Function {
-                name: "FatalErrors".to_string(),
-                documentation: Some("Artificial error termination node".to_string()),
-                consumes: vec![],
-                produces: vec![],
-                group: None, // TODO: Consider grouping by error type
-            }),
-            is_artificial_graph_start: false,
-            is_artificial_graph_end: false,
-            is_artificial_error_termination: true,
-        });
-        self.nodes.push(fatal_error_node.clone());
-
-        for pool in &mut self.pools {
+        for pool in &self.pools {
             let leftovers = pool.get_leftover_tokens();
-            for token in leftovers
-                .variables
-                .into_iter()
-                .chain(leftovers.constants.into_iter())
-            {
-                if let Some(origin) = pool.token_to_initial_node.get(&token) {
+            for token in leftovers.variables.into_iter().chain(leftovers.constants) {
+                if let Some(origin) = pool.token_to_origin_node.get(&token.uid) {
                     self.edges.push(Edge {
-                        origin_function: origin.function.clone(),
-                        destination_function: final_node.function.clone(),
+                        from_node_uid: origin.uid,
+                        to_node_uid: final_node.uid,
                         token,
-                        source: origin.function.name.clone(),
-                        target: final_node.function.name.clone(),
                         relation: "terminal_flow".into(),
                     });
                 }
             }
             for err in leftovers.errors {
-                if let Some(origin) = pool.token_to_initial_node.get(&err) {
+                if let Some(origin) = pool.token_to_origin_node.get(&err.uid) {
                     self.edges.push(Edge {
-                        origin_function: origin.function.clone(),
-                        destination_function: fatal_error_node.function.clone(),
+                        from_node_uid: origin.uid,
+                        to_node_uid: fatal_node.uid,
                         token: err,
-                        source: origin.function.name.clone(),
-                        target: fatal_error_node.function.name.clone(),
                         relation: "error_flow".into(),
                     });
                 }
             }
+        }
+
+        if self.deduplicate_edges {
+            let mut seen = HashSet::new();
+            self.edges
+                .retain(|e| seen.insert((e.from_node_uid, e.to_node_uid, e.token.uid)));
         }
 
         (self.nodes.clone(), self.edges.clone())

@@ -11,6 +11,7 @@ mod engine;
 // mod graphviz;
 // mod html;
 // mod lsp;
+mod vis_js;
 mod models;
 mod test_engine;
 mod test_parser;

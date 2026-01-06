@@ -1,11 +1,3 @@
-//! # Tect Semantic Analyzer
-//!
-//! This module implements the two-pass analysis strategy:
-//! 1. **Discovery Pass**: Scans all `constant`, `variable`, `error`, `group`,
-//!    and `function` definitions to build the logical models and record definition spans.
-//! 2. **Reference Pass**: Scans function contracts and the `flow` section
-//!    to link usages to definitions and record occurrence spans.
-
 use crate::models::*;
 use anyhow::{Context, Result};
 use pest::iterators::Pair;
@@ -18,18 +10,11 @@ use std::sync::Arc;
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
-/// The Analyzer state.
-/// It holds the logical Arcs used by the Engine and the Symbol Table used by the LSP.
 pub struct TectAnalyzer {
-    /// Maps Symbol Name -> Logical Object (Engine use)
     pub registry_kinds: HashMap<String, Kind>,
     pub registry_groups: HashMap<String, Arc<Group>>,
     pub registry_functions: HashMap<String, Arc<Function>>,
-
-    /// Maps UID -> Source Location (LSP use)
     pub symbol_table: HashMap<u32, SymbolMetadata>,
-
-    /// The list of execution steps (Nodes) discovered in the flow.
     pub flow_nodes: Vec<Node>,
 }
 
@@ -44,7 +29,6 @@ impl TectAnalyzer {
         }
     }
 
-    /// Analyzes a Tect source string.
     pub fn analyze(&mut self, content: &str) -> Result<()> {
         let program = TectParser::parse(Rule::program, content)
             .context("Syntax Error")?
@@ -53,7 +37,6 @@ impl TectAnalyzer {
 
         let pairs: Vec<Pair<Rule>> = program.into_inner().collect();
 
-        // --- Pass 1: Discovery (Definitions) ---
         for pair in &pairs {
             match pair.as_rule() {
                 Rule::const_def => self.define_type(pair, "constant")?,
@@ -65,7 +48,6 @@ impl TectAnalyzer {
             }
         }
 
-        // --- Pass 2: Linking (Contracts & Flows) ---
         for pair in &pairs {
             match pair.as_rule() {
                 Rule::func_def => self.link_function_contracts(pair)?,
@@ -77,7 +59,6 @@ impl TectAnalyzer {
         Ok(())
     }
 
-    /// Internal: Maps a Pest span to our model Span.
     fn map_span(p: &Pair<Rule>) -> Span {
         let s = p.as_span();
         Span {
@@ -86,16 +67,14 @@ impl TectAnalyzer {
         }
     }
 
-    /// Logic: Records a symbol use in the SymbolTable for the LSP.
     fn record_occurrence(&mut self, uid: u32, span: Span) {
         if let Some(meta) = self.symbol_table.get_mut(&uid) {
             meta.occurrences.push(span);
         }
     }
 
-    /// Step: Parse `constant`, `variable`, or `error`.
     fn define_type(&mut self, pair: &Pair<Rule>, kw: &str) -> Result<()> {
-        let mut inner = pair.into_inner();
+        let mut inner = pair.clone().into_inner();
         let mut docs = Vec::new();
 
         while let Some(p) = inner.peek() {
@@ -123,35 +102,16 @@ impl TectAnalyzer {
             Some(docs.join("\n"))
         };
 
-        let uid: u32;
         let kind = match kw {
-            "constant" => {
-                let obj = Arc::new(Constant {
-                    uid: 0,
-                    name: name.clone(),
-                    documentation: doc_str,
-                });
-                uid = obj.uid; // Note: In real impl, assign UID in constructor
-                Kind::Constant(obj)
-            }
-            "variable" => {
-                let obj = Arc::new(Variable {
-                    uid: 0,
-                    name: name.clone(),
-                    documentation: doc_str,
-                });
-                uid = obj.uid;
-                Kind::Variable(obj)
-            }
-            _ => {
-                let obj = Arc::new(Error {
-                    uid: 0,
-                    name: name.clone(),
-                    documentation: doc_str,
-                });
-                uid = obj.uid;
-                Kind::Error(obj)
-            }
+            "constant" => Kind::Constant(Arc::new(Constant::new(name.clone(), doc_str))),
+            "variable" => Kind::Variable(Arc::new(Variable::new(name.clone(), doc_str))),
+            _ => Kind::Error(Arc::new(Error::new(name.clone(), doc_str))),
+        };
+
+        let uid = match &kind {
+            Kind::Constant(c) => c.uid,
+            Kind::Variable(v) => v.uid,
+            Kind::Error(e) => e.uid,
         };
 
         self.registry_kinds.insert(name, kind);
@@ -162,12 +122,11 @@ impl TectAnalyzer {
                 occurrences: Vec::new(),
             },
         );
-
         Ok(())
     }
 
     fn define_group(&mut self, pair: &Pair<Rule>) -> Result<()> {
-        let mut inner = pair.into_inner();
+        let mut inner = pair.clone().into_inner();
         let _kw = inner.next().unwrap();
         let name_token = inner.next().unwrap();
         let name = name_token.as_str().to_string();
@@ -184,9 +143,8 @@ impl TectAnalyzer {
         Ok(())
     }
 
-    /// Pass 1 for Functions: Create the object and register the UID.
     fn define_function_skeleton(&mut self, pair: &Pair<Rule>) -> Result<()> {
-        let mut inner = pair.into_inner();
+        let mut inner = pair.clone().into_inner();
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -210,7 +168,7 @@ impl TectAnalyzer {
         let name_token = inner.next().unwrap();
         let name = name_token.as_str().to_string();
 
-        let function = Arc::new(Function::new(name.clone(), None, group));
+        let function = Arc::new(Function::new_skeleton(name.clone(), group));
         self.symbol_table.insert(
             function.uid,
             SymbolMetadata {
@@ -222,37 +180,15 @@ impl TectAnalyzer {
         Ok(())
     }
 
-    /// Pass 2 for Functions: Fill in the inputs/outputs and record type occurrences.
-    fn link_function_contracts(&mut self, pair: &Pair<Rule>) -> Result<()> {
-        let mut inner = pair.into_inner();
-        // ... skip docs, group, kw, and name to get to logic ...
-        while let Some(p) = inner.next() {
-            if p.as_rule() == Rule::token_list {
-                // This is the input list
-                let func_name = pair
-                    .clone()
-                    .into_inner()
-                    .find(|p| p.as_rule() == Rule::ident)
-                    .unwrap()
-                    .as_str();
-                let func = self.registry_functions.get_mut(func_name).unwrap();
-                // Logic to map token_list to Vec<Token> and record occurrences...
-            }
-            // ... similar for func_outputs ...
-        }
+    fn link_function_contracts(&mut self, _pair: &Pair<Rule>) -> Result<()> {
         Ok(())
     }
 
-    /// Step: Convert a flow step into a Node instance.
     fn instantiate_node(&mut self, pair: &Pair<Rule>) -> Result<()> {
         let name = pair.as_str().trim();
         if let Some(func) = self.registry_functions.get(name) {
             let node = Node::new(func.clone());
-            // Record that this function was called here (for Find All References)
             self.record_occurrence(func.uid, Self::map_span(pair));
-
-            // Note: We also record the Node's own UID location if we want to
-            // find exactly where a specific execution step happened.
             self.symbol_table.insert(
                 node.uid,
                 SymbolMetadata {
@@ -260,7 +196,6 @@ impl TectAnalyzer {
                     occurrences: Vec::new(),
                 },
             );
-
             self.flow_nodes.push(node);
         }
         Ok(())
