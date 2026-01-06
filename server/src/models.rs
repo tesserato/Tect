@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use tower_lsp::lsp_types::Diagnostic;
 
 // --- ID Registry ---
 static GLOBAL_UID_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -108,6 +109,22 @@ impl Kind {
             Kind::Error(e) => e.uid,
         }
     }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Kind::Constant(c) => &c.name,
+            Kind::Variable(v) => &v.name,
+            Kind::Error(e) => &e.name,
+        }
+    }
+
+    pub fn docs(&self) -> Option<&str> {
+        match self {
+            Kind::Constant(c) => c.documentation.as_deref(),
+            Kind::Variable(v) => v.documentation.as_deref(),
+            Kind::Error(e) => e.documentation.as_deref(),
+        }
+    }
 }
 
 // --- Contract Entities ---
@@ -180,8 +197,24 @@ pub struct ProgramStructure {
     pub artifacts: HashMap<String, Kind>,
     pub groups: HashMap<String, Arc<Group>>,
     pub catalog: HashMap<String, Arc<Function>>,
-    pub flow: Vec<String>,
+    pub flow: Vec<FlowStep>,
     pub symbol_table: HashMap<u32, SymbolMetadata>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FlowStep {
+    pub function_name: String,
+    pub span: Span,
+}
+
+impl From<&str> for FlowStep {
+    fn from(s: &str) -> Self {
+        Self {
+            function_name: s.to_string(),
+            span: Span { start: 0, end: 0 },
+        }
+    }
 }
 
 // --- Flow Entities ---
@@ -251,6 +284,7 @@ pub struct Span {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolMetadata {
+    pub name: String,
     pub definition_span: Span,
     pub occurrences: Vec<Span>,
 }

@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
         Commands::Build { input, output } => {
             let content = fs::read_to_string(input)?;
             let mut analyzer = analyzer::TectAnalyzer::new();
-            let structure = analyzer.analyze(&content)?;
+            let structure = analyzer.analyze(&content);
             let mut flow = engine::Flow::new(true);
             let graph = flow.simulate(&structure);
 

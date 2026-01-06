@@ -1,7 +1,7 @@
 //! # Tect Semantic Analyzer
 //!
 //! Responsible for transforming raw Tect source code into a [ProgramStructure].
-//! Performs two passes: symbol discovery and contract linking.
+//! Performs two passes: symbol discovery and occurrence linking.
 
 use crate::models::*;
 use anyhow::{Context, Result};
@@ -9,6 +9,7 @@ use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;
 use std::sync::Arc;
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range};
 
 #[derive(Parser)]
 #[grammar = "tect.pest"]
@@ -21,46 +22,66 @@ impl TectAnalyzer {
         Self
     }
 
-    /// Primary entry point for analysis. Processes the string content into a structured IR.
-    pub fn analyze(&mut self, content: &str) -> Result<ProgramStructure> {
+    /// Analyzes source code. Returns the structure even on semantic errors,
+    /// collecting diagnostics along the way.
+    pub fn analyze(&mut self, content: &str) -> ProgramStructure {
         let mut structure = ProgramStructure::default();
-        let pairs = TectParser::parse(Rule::program, content)
-            .context("Syntax Error")?
-            .next()
-            .unwrap();
+
+        let parse_res = TectParser::parse(Rule::program, content);
+
+        let pairs = match parse_res {
+            Ok(mut p) => p.next().unwrap(),
+            Err(e) => {
+                structure.diagnostics.push(self.pest_error_to_diagnostic(e));
+                return structure;
+            }
+        };
+
         let statements: Vec<Pair<Rule>> = pairs.into_inner().collect();
 
-        // Pass 1: Global Discovery
-        // Identifies all constants, variables, groups, and function names.
+        // Pass 1: Global Discovery (Definitions)
         for pair in &statements {
             match pair.as_rule() {
-                Rule::const_def => self.define_type(pair, "constant", &mut structure)?,
-                Rule::var_def => self.define_type(pair, "variable", &mut structure)?,
-                Rule::err_def => self.define_type(pair, "error", &mut structure)?,
-                Rule::group_def => self.define_group(pair, &mut structure)?,
-                Rule::func_def => self.define_function_skeleton(pair, &mut structure)?,
+                Rule::const_def => self.define_type(pair, "constant", &mut structure),
+                Rule::var_def => self.define_type(pair, "variable", &mut structure),
+                Rule::err_def => self.define_type(pair, "error", &mut structure),
+                Rule::group_def => self.define_group(pair, &mut structure),
+                Rule::func_def => self.define_function_skeleton(pair, &mut structure),
                 _ => {}
             }
         }
 
-        // Pass 2: Linking Contracts & Flow
-        // Resolves the types consumed and produced by functions now that all symbols are known.
+        // Pass 2: Linking Contracts, Occurrences, and Flow
         for pair in &statements {
             match pair.as_rule() {
-                Rule::func_def => self.link_function_contracts(pair, &mut structure)?,
+                Rule::func_def => self.link_function_contracts(pair, &mut structure),
                 Rule::flow_step => {
                     let name = pair.as_str().trim();
                     if !name.is_empty() {
-                        structure.flow.push(name.to_string());
+                        let span = Self::map_span(pair);
+                        structure.flow.push(FlowStep {
+                            function_name: name.to_string(),
+                            span,
+                        });
+
+                        // Register occurrence of the function name
+                        if let Some(func) = structure.catalog.get(name) {
+                            self.add_occurrence(func.uid, span, &mut structure);
+                        } else {
+                            structure.diagnostics.push(self.semantic_error(
+                                span,
+                                format!("Undefined function: '{}'", name),
+                                content,
+                            ));
+                        }
                     }
                 }
                 _ => {}
             }
         }
-        Ok(structure)
+        structure
     }
 
-    /// Maps a Pest Span to our internal Span model.
     fn map_span(p: &Pair<Rule>) -> Span {
         let s = p.as_span();
         Span {
@@ -69,7 +90,12 @@ impl TectAnalyzer {
         }
     }
 
-    /// Captures leading doc comments from the parse stream.
+    fn add_occurrence(&self, uid: u32, span: Span, structure: &mut ProgramStructure) {
+        if let Some(meta) = structure.symbol_table.get_mut(&uid) {
+            meta.occurrences.push(span);
+        }
+    }
+
     fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
         let mut docs = Vec::new();
         while let Some(p) = inner.peek() {
@@ -91,13 +117,7 @@ impl TectAnalyzer {
         }
     }
 
-    /// Registers a basic data artifact (Constant, Variable, or Error).
-    fn define_type(
-        &mut self,
-        pair: &Pair<Rule>,
-        kw: &str,
-        structure: &mut ProgramStructure,
-    ) -> Result<()> {
+    fn define_type(&self, pair: &Pair<Rule>, kw: &str, structure: &mut ProgramStructure) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
@@ -110,19 +130,19 @@ impl TectAnalyzer {
             _ => Kind::Error(Arc::new(Error::new(name.clone(), doc_str))),
         };
 
+        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             kind.uid(),
             SymbolMetadata {
-                definition_span: Self::map_span(&name_p),
-                occurrences: Vec::new(),
+                name: name.clone(),
+                definition_span: span,
+                occurrences: vec![span],
             },
         );
         structure.artifacts.insert(name, kind);
-        Ok(())
     }
 
-    /// Registers an architectural group.
-    fn define_group(&mut self, pair: &Pair<Rule>, structure: &mut ProgramStructure) -> Result<()> {
+    fn define_group(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
@@ -130,62 +150,55 @@ impl TectAnalyzer {
         let name = name_p.as_str().to_string();
 
         let group = Arc::new(Group::new(name.clone(), doc_str));
+        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             group.uid,
             SymbolMetadata {
-                definition_span: Self::map_span(&name_p),
-                occurrences: Vec::new(),
+                name: name.clone(),
+                definition_span: span,
+                occurrences: vec![span],
             },
         );
         structure.groups.insert(name, group);
-        Ok(())
     }
 
-    /// Initializes a function entry in the catalog without resolving its contract.
-    fn define_function_skeleton(
-        &mut self,
-        pair: &Pair<Rule>,
-        structure: &mut ProgramStructure,
-    ) -> Result<()> {
+    fn define_function_skeleton(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
 
         let mut group = None;
         if let Some(p) = inner.peek() {
-            // Check for group prefix (an identifier before the 'function' keyword)
             if p.as_rule() == Rule::ident {
-                group = structure
-                    .groups
-                    .get(inner.next().unwrap().as_str())
-                    .cloned();
+                let g_name_p = inner.next().unwrap();
+                let g_name = g_name_p.as_str();
+                group = structure.groups.get(g_name).cloned();
+
+                // Track group occurrence in function header
+                if let Some(ref g) = group {
+                    self.add_occurrence(g.uid, Self::map_span(&g_name_p), structure);
+                }
             }
         }
 
-        let _kw = inner.next().unwrap(); // 'function'
+        let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
 
         let function = Arc::new(Function::new_skeleton(name.clone(), doc_str, group));
+        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             function.uid,
             SymbolMetadata {
-                definition_span: Self::map_span(&name_p),
-                occurrences: Vec::new(),
+                name: name.clone(),
+                definition_span: span,
+                occurrences: vec![span],
             },
         );
         structure.catalog.insert(name, function);
-        Ok(())
     }
 
-    /// Resolves input tokens and output branches for a specific function.
-    fn link_function_contracts(
-        &mut self,
-        pair: &Pair<Rule>,
-        structure: &mut ProgramStructure,
-    ) -> Result<()> {
+    fn link_function_contracts(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
         let mut inner = pair.clone().into_inner();
-
-        // Skip metadata already processed in skeleton pass
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -198,12 +211,11 @@ impl TectAnalyzer {
                 inner.next();
             }
         }
-        let _kw = inner.next(); // 'function'
+        let _kw = inner.next();
         let name = inner.next().unwrap().as_str();
 
         let mut consumes = Vec::new();
         if let Some(p) = inner.peek() {
-            // Input token list is now direct, no parentheses.
             if p.as_rule() == Rule::token_list {
                 consumes = self.resolve_tokens(inner.next().unwrap(), structure);
             }
@@ -222,27 +234,83 @@ impl TectAnalyzer {
             f.consumes = consumes;
             f.produces = produces;
         }
-        Ok(())
     }
 
-    /// Helper to resolve a list of raw identifiers into typed Tokens.
-    fn resolve_tokens(&self, pair: Pair<Rule>, structure: &ProgramStructure) -> Vec<Token> {
+    fn resolve_tokens(&self, pair: Pair<Rule>, structure: &mut ProgramStructure) -> Vec<Token> {
         let mut tokens = Vec::new();
         for t_pair in pair.into_inner() {
             let inner = t_pair.into_inner().next().unwrap();
-            let (name, card) = match inner.as_rule() {
-                Rule::collection => (
-                    inner.into_inner().next().unwrap().as_str(),
-                    Cardinality::Collection,
-                ),
-                _ => (inner.as_str(), Cardinality::Unitary),
+            let (name, card, span) = match inner.as_rule() {
+                Rule::collection => {
+                    let ident_p = inner.into_inner().next().unwrap();
+                    (
+                        ident_p.as_str(),
+                        Cardinality::Collection,
+                        Self::map_span(&ident_p),
+                    )
+                }
+                _ => (inner.as_str(), Cardinality::Unitary, Self::map_span(&inner)),
             };
+
             let kind =
                 structure.artifacts.get(name).cloned().unwrap_or_else(|| {
                     Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
                 });
+
+            // Register occurrence
+            self.add_occurrence(kind.uid(), span, structure);
             tokens.push(Token::new(kind, card));
         }
         tokens
+    }
+
+    fn pest_error_to_diagnostic(&self, e: pest::error::Error<Rule>) -> Diagnostic {
+        let (start, end) = match e.line_col {
+            pest::error::LineColLocation::Pos((l, c)) => (
+                Position::new(l as u32 - 1, c as u32 - 1),
+                Position::new(l as u32 - 1, c as u32),
+            ),
+            pest::error::LineColLocation::Span((ls, cs), (le, ce)) => (
+                Position::new(ls as u32 - 1, cs as u32 - 1),
+                Position::new(le as u32 - 1, ce as u32 - 1),
+            ),
+        };
+
+        Diagnostic {
+            range: Range::new(start, end),
+            severity: Some(DiagnosticSeverity::ERROR),
+            message: format!("Syntax error: {}", e.variant.message()),
+            ..Default::default()
+        }
+    }
+
+    fn semantic_error(&self, span: Span, msg: String, content: &str) -> Diagnostic {
+        let mut line = 0;
+        let mut col = 0;
+        let mut byte = 0;
+        let mut start_pos = Position::new(0, 0);
+
+        for c in content.chars() {
+            if byte == span.start {
+                start_pos = Position::new(line, col);
+            }
+            if byte == span.end {
+                return Diagnostic {
+                    range: Range::new(start_pos, Position::new(line, col)),
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    message: msg,
+                    ..Default::default()
+                };
+            }
+            if c == '\n' {
+                line += 1;
+                col = 0;
+            } else {
+                col += c.len_utf16() as u32;
+            }
+            byte += c.len_utf8();
+        }
+
+        Diagnostic::default()
     }
 }

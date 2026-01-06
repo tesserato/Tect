@@ -4,7 +4,6 @@ mod tests {
     use crate::models::*;
     use crate::vis_js;
     use std::fs;
-    use std::io::Write;
     use std::sync::Arc;
 
     #[test]

@@ -167,15 +167,15 @@ impl Flow {
         ));
         self.nodes.push(initial_node.clone());
 
-        if let Some(first_name) = structure.flow.first() {
-            if let Some(func) = structure.catalog.get(first_name) {
+        if let Some(first_step) = structure.flow.first() {
+            if let Some(func) = structure.catalog.get(&first_step.function_name) {
                 self.pools
                     .push(TokenPool::new(func.consumes.clone(), initial_node.clone()));
             }
         }
 
-        for func_name in &structure.flow {
-            let Some(func) = structure.catalog.get(func_name) else {
+        for step in &structure.flow {
+            let Some(func) = structure.catalog.get(&step.function_name) else {
                 continue;
             };
             let node = Arc::new(Node::new(func.clone()));

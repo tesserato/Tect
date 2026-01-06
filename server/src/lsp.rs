@@ -1,12 +1,10 @@
-//! # Tect Language Server Implementation
+//! # Tect Language Server Backend
 //!
-//! Provides architectural intelligence including Tooltips (Hover),
-//! Navigation (Go to Definition), and Context-Aware Canonical Formatting.
-//! The formatting engine respects user-defined block separation by detecting
-//! blank lines in the original source content.
+//! Orchestrates documentation tooltips, navigation, formatting, and advanced
+//! IDE features like Rename, Outline, and Inlay Hints.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
-use crate::models::{Kind, ProgramStructure, Span};
+use crate::models::{Kind, ProgramStructure, Span, SymbolMetadata};
 use dashmap::DashMap;
 use pest::Parser;
 use regex::Regex;
@@ -14,11 +12,8 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-/// State container for the Tect Language Server.
 pub struct Backend {
-    #[allow(dead_code)]
     pub client: Client,
-    /// Thread-safe map of document URLs to their source and analyzed metadata.
     pub document_state: DashMap<Url, (String, ProgramStructure)>,
 }
 
@@ -33,6 +28,18 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                rename_provider: Some(OneOf::Left(true)),
+                references_provider: Some(OneOf::Left(true)),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec![" ".to_string()]),
+                    ..Default::default()
+                }),
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec![" ".to_string()]),
+                    ..Default::default()
+                }),
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
             ..Default::default()
@@ -50,7 +57,6 @@ impl LanguageServer for Backend {
         }
     }
 
-    /// Renders documentation tooltips for architectural symbols.
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = &p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -59,19 +65,18 @@ impl LanguageServer for Backend {
             let (content, structure) = state.value();
             if let Some((word, range)) = Self::get_word_at(content, pos) {
                 let markdown = if let Some(kind) = structure.artifacts.get(&word) {
-                    let (lbl, docs) = match kind {
-                        Kind::Constant(c) => ("Constant", &c.documentation),
-                        Kind::Variable(v) => ("Variable", &v.documentation),
-                        Kind::Error(e) => ("Error", &e.documentation),
-                    };
                     format!(
                         "### {}: `{}`\n\n---\n\n{}",
-                        lbl,
+                        match kind {
+                            Kind::Constant(_) => "Constant",
+                            Kind::Variable(_) => "Variable",
+                            Kind::Error(_) => "Error",
+                        },
                         word,
-                        docs.as_deref().unwrap_or("*No documentation.*")
+                        kind.docs().unwrap_or("*No documentation.*")
                     )
                 } else if let Some(f) = structure.catalog.get(&word) {
-                    let group_line = f
+                    let group = f
                         .group
                         .as_ref()
                         .map(|g| format!("**Group**: `{}`\n\n", g.name))
@@ -79,7 +84,7 @@ impl LanguageServer for Backend {
                     format!(
                         "### Function: `{}`\n\n{}---\n\n{}",
                         word,
-                        group_line,
+                        group,
                         f.documentation.as_deref().unwrap_or("*No documentation.*")
                     )
                 } else if let Some(g) = structure.groups.get(&word) {
@@ -106,49 +111,209 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
-    /// Jumps to the exact line and column of a symbol's declaration.
     async fn goto_definition(
         &self,
         p: GotoDefinitionParams,
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         let uri = &p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
-
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
-                let uid = if let Some(k) = structure.artifacts.get(&word) {
-                    Some(k.uid())
-                } else if let Some(f) = structure.catalog.get(&word) {
-                    Some(f.uid)
-                } else if let Some(g) = structure.groups.get(&word) {
-                    Some(g.uid)
-                } else {
-                    None
-                };
-
-                if let Some(id) = uid {
-                    if let Some(meta) = structure.symbol_table.get(&id) {
-                        let range = Self::span_to_range(content, meta.definition_span);
-                        return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
-                            uri.clone(),
-                            range,
-                        ))));
-                    }
+                if let Some(meta) = self.find_meta(&word, structure) {
+                    return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                        uri.clone(),
+                        Self::span_to_range(content, meta.definition_span),
+                    ))));
                 }
             }
         }
         Ok(None)
     }
 
-    /// Canonicalizes the Tect document format.
-    /// Analyzes the gaps between tokens to preserve user-defined block separation
-    /// while standardizing internal indentation and keyword spacing.
+    async fn document_symbol(
+        &self,
+        p: DocumentSymbolParams,
+    ) -> LspResult<Option<DocumentSymbolResponse>> {
+        let uri = &p.text_document.uri;
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, structure) = state.value();
+            let mut symbols = Vec::new();
+
+            for kind in structure.artifacts.values() {
+                if let Some(meta) = structure.symbol_table.get(&kind.uid()) {
+                    symbols.push(self.make_symbol(
+                        kind.name(),
+                        SymbolKind::STRUCT,
+                        content,
+                        meta.definition_span,
+                    ));
+                }
+            }
+            for func in structure.catalog.values() {
+                if let Some(meta) = structure.symbol_table.get(&func.uid) {
+                    symbols.push(self.make_symbol(
+                        &func.name,
+                        SymbolKind::FUNCTION,
+                        content,
+                        meta.definition_span,
+                    ));
+                }
+            }
+            for group in structure.groups.values() {
+                if let Some(meta) = structure.symbol_table.get(&group.uid) {
+                    symbols.push(self.make_symbol(
+                        &group.name,
+                        SymbolKind::NAMESPACE,
+                        content,
+                        meta.definition_span,
+                    ));
+                }
+            }
+            return Ok(Some(DocumentSymbolResponse::Nested(symbols)));
+        }
+        Ok(None)
+    }
+
+    async fn rename(&self, p: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
+        let uri = &p.text_document_position.text_document.uri;
+        let pos = p.text_document_position.position;
+        let new_name = p.new_name;
+
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, structure) = state.value();
+            if let Some((word, _)) = Self::get_word_at(content, pos) {
+                if let Some(meta) = self.find_meta(&word, structure) {
+                    let edits = meta
+                        .occurrences
+                        .iter()
+                        .map(|s| TextEdit::new(Self::span_to_range(content, *s), new_name.clone()))
+                        .collect();
+                    let mut map = std::collections::HashMap::new();
+                    map.insert(uri.clone(), edits);
+                    return Ok(Some(WorkspaceEdit {
+                        changes: Some(map),
+                        ..Default::default()
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn references(&self, p: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
+        let uri = &p.text_document_position.text_document.uri;
+        let pos = p.text_document_position.position;
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, structure) = state.value();
+            if let Some((word, _)) = Self::get_word_at(content, pos) {
+                if let Some(meta) = self.find_meta(&word, structure) {
+                    return Ok(Some(
+                        meta.occurrences
+                            .iter()
+                            .map(|s| Location::new(uri.clone(), Self::span_to_range(content, *s)))
+                            .collect(),
+                    ));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn completion(&self, p: CompletionParams) -> LspResult<Option<CompletionResponse>> {
+        let uri = &p.text_document_position.text_document.uri;
+        if let Some(state) = self.document_state.get(uri) {
+            let (_, structure) = state.value();
+            let mut items = Vec::new();
+            for (name, kind) in &structure.artifacts {
+                items.push(CompletionItem {
+                    label: name.clone(),
+                    detail: Some("Artifact".into()),
+                    documentation: kind.docs().map(|d| Documentation::String(d.into())),
+                    kind: Some(CompletionItemKind::STRUCT),
+                    ..Default::default()
+                });
+            }
+            for (name, func) in &structure.catalog {
+                items.push(CompletionItem {
+                    label: name.clone(),
+                    detail: Some("Function".into()),
+                    documentation: func.documentation.clone().map(|d| Documentation::String(d)),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    ..Default::default()
+                });
+            }
+            return Ok(Some(CompletionResponse::Array(items)));
+        }
+        Ok(None)
+    }
+
+    async fn signature_help(&self, p: SignatureHelpParams) -> LspResult<Option<SignatureHelp>> {
+        let uri = &p.text_document_position_params.text_document.uri;
+        let pos = p.text_document_position_params.position;
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, structure) = state.value();
+            if let Some((word, _)) = Self::get_word_at(content, pos) {
+                if let Some(f) = structure.catalog.get(&word) {
+                    let sig = format!(
+                        "{}({})",
+                        f.name,
+                        f.consumes
+                            .iter()
+                            .map(|t| t.kind.name())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                    return Ok(Some(SignatureHelp {
+                        signatures: vec![SignatureInformation {
+                            label: sig,
+                            documentation: f
+                                .documentation
+                                .clone()
+                                .map(|d| Documentation::String(d)),
+                            parameters: None,
+                            active_parameter: None,
+                        }],
+                        active_signature: Some(0),
+                        active_parameter: Some(0),
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn inlay_hint(&self, p: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
+        let uri = &p.text_document.uri;
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, structure) = state.value();
+            let mut hints = Vec::new();
+            for step in &structure.flow {
+                if let Some(f) = structure.catalog.get(&step.function_name) {
+                    if let Some(ref g) = f.group {
+                        let range = Self::span_to_range(content, step.span);
+                        hints.push(InlayHint {
+                            position: range.end,
+                            label: InlayHintLabel::String(format!(" : {}", g.name)),
+                            kind: Some(InlayHintKind::TYPE),
+                            padding_left: Some(true),
+                            padding_right: None,
+                            data: None,
+                            tooltip: None,
+                            text_edits: None,
+                        });
+                    }
+                }
+            }
+            return Ok(Some(hints));
+        }
+        Ok(None)
+    }
+
     async fn formatting(&self, p: DocumentFormattingParams) -> LspResult<Option<Vec<TextEdit>>> {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
-
             let mut entities = Vec::new();
             let mut current_block = String::new();
             let mut last_rule = None;
@@ -159,28 +324,19 @@ impl LanguageServer for Backend {
                 for pair in program.into_inner() {
                     let span = pair.as_span();
                     let rule = rule_to_logic(pair.as_rule());
-
-                    // Detect if there was an empty line between the current and previous element.
-                    // We check the gap in the original source content.
                     let gap = &content[last_end_pos..span.start()];
-                    let has_empty_line_in_gap = gap.chars().filter(|&c| c == '\n').count() > 1;
+                    let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
 
-                    // If a blank line was present, or the entity type changed, flush the current sequence.
-                    if (has_empty_line_in_gap || last_rule != Some(rule))
-                        && !current_block.is_empty()
-                    {
+                    if (has_empty_line || last_rule != Some(rule)) && !current_block.is_empty() {
                         entities.push(current_block.trim_end().to_string());
                         current_block = String::new();
                     }
 
                     match pair.as_rule() {
-                        // Sequential entities: grouped together unless separated by a gap in the source.
                         Rule::comment | Rule::flow_step => {
                             current_block.push_str(pair.as_str().trim());
                             current_block.push_str("\n");
                         }
-
-                        // Atomic Definitions: Always treated as discrete blocks.
                         Rule::const_def
                         | Rule::var_def
                         | Rule::err_def
@@ -189,7 +345,6 @@ impl LanguageServer for Backend {
                             let mut formatted = String::new();
                             if pair.as_rule() == Rule::func_def {
                                 let mut inner = pair.clone().into_inner();
-                                // Attached documentation lines
                                 while let Some(p) = inner.peek() {
                                     if p.as_rule() == Rule::doc_line {
                                         formatted.push_str(inner.next().unwrap().as_str().trim());
@@ -198,19 +353,17 @@ impl LanguageServer for Backend {
                                         break;
                                     }
                                 }
-                                // Function Signature
-                                let mut header_parts = Vec::new();
+                                let mut hp = Vec::new();
                                 while let Some(p) = inner.peek() {
                                     if p.as_rule() == Rule::ident
                                         || p.as_rule() == Rule::kw_function
                                     {
-                                        header_parts.push(inner.next().unwrap().as_str().trim());
+                                        hp.push(inner.next().unwrap().as_str().trim());
                                     } else {
                                         break;
                                     }
                                 }
-                                formatted.push_str(&header_parts.join(" "));
-                                // Inputs (parentheses-less)
+                                formatted.push_str(&hp.join(" "));
                                 if let Some(p) = inner.peek() {
                                     if p.as_rule() == Rule::token_list {
                                         formatted.push_str(" ");
@@ -218,7 +371,6 @@ impl LanguageServer for Backend {
                                     }
                                 }
                                 formatted.push_str("\n");
-                                // Output Branches
                                 if let Some(p) = inner.next() {
                                     for out in p.into_inner() {
                                         formatted.push_str("    ");
@@ -233,21 +385,19 @@ impl LanguageServer for Backend {
                         }
                         _ => {}
                     }
-
                     last_rule = Some(rule);
                     last_end_pos = span.end();
                 }
             }
-
-            // Finalize trailing block
             if !current_block.is_empty() {
                 entities.push(current_block.trim_end().to_string());
             }
-
             if !entities.is_empty() {
                 let final_text = entities.join("\n\n") + "\n";
-                let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
-                return Ok(Some(vec![TextEdit::new(full_range, final_text)]));
+                return Ok(Some(vec![TextEdit::new(
+                    Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX)),
+                    final_text,
+                )]));
             }
         }
         Ok(None)
@@ -258,15 +408,12 @@ impl LanguageServer for Backend {
     }
 }
 
-/// Simple classification for formatting blocks.
 #[derive(PartialEq, Clone, Copy)]
 enum FormatterRule {
     Comment,
     Flow,
     Atomic,
 }
-
-/// Maps grammar rules to formatting categories.
 fn rule_to_logic(r: Rule) -> FormatterRule {
     match r {
         Rule::comment => FormatterRule::Comment,
@@ -276,42 +423,73 @@ fn rule_to_logic(r: Rule) -> FormatterRule {
 }
 
 impl Backend {
-    /// Re-analyzes the document on content changes.
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
-        if let Ok(structure) = analyzer.analyze(&content) {
-            self.document_state.insert(uri, (content, structure));
+        let structure = analyzer.analyze(&content);
+        self.client
+            .publish_diagnostics(uri.clone(), structure.diagnostics.clone(), None)
+            .await;
+        self.document_state.insert(uri, (content, structure));
+    }
+
+    fn find_meta<'a>(
+        &self,
+        word: &str,
+        structure: &'a ProgramStructure,
+    ) -> Option<&'a SymbolMetadata> {
+        if let Some(kind) = structure.artifacts.get(word) {
+            structure.symbol_table.get(&kind.uid())
+        } else if let Some(f) = structure.catalog.get(word) {
+            structure.symbol_table.get(&f.uid)
+        } else if let Some(g) = structure.groups.get(word) {
+            structure.symbol_table.get(&g.uid)
         } else {
-            self.document_state
-                .entry(uri)
-                .and_modify(|(old_content, _)| *old_content = content);
+            None
         }
     }
 
-    /// Maps a UTF-16 cursor position to an architectural identifier.
+    fn make_symbol(
+        &self,
+        name: &str,
+        kind: SymbolKind,
+        content: &str,
+        span: Span,
+    ) -> DocumentSymbol {
+        let range = Self::span_to_range(content, span);
+        #[allow(deprecated)]
+        DocumentSymbol {
+            name: name.to_string(),
+            detail: None,
+            kind,
+            tags: None,
+            range,
+            selection_range: range,
+            children: None,
+            deprecated: None,
+        }
+    }
+
     fn get_word_at(content: &str, pos: Position) -> Option<(String, Range)> {
         let line_str = content.lines().nth(pos.line as usize)?;
-
-        let mut utf16_offset = 0;
-        let mut byte_offset = 0;
+        let mut u16_off = 0;
+        let mut b_off = 0;
         for c in line_str.chars() {
-            if utf16_offset >= pos.character as usize {
+            if u16_off >= pos.character as usize {
                 break;
             }
-            utf16_offset += c.len_utf16();
-            byte_offset += c.len_utf8();
+            u16_off += c.len_utf16();
+            b_off += c.len_utf8();
         }
-
         let re = Regex::new(r"([a-zA-Z0-9_]+)").unwrap();
         for cap in re.find_iter(line_str) {
-            if byte_offset >= cap.start() && byte_offset <= cap.end() {
-                let start_utf16 = line_str[..cap.start()].encode_utf16().count() as u32;
-                let end_utf16 = line_str[..cap.end()].encode_utf16().count() as u32;
+            if b_off >= cap.start() && b_off <= cap.end() {
+                let s_u16 = line_str[..cap.start()].encode_utf16().count() as u32;
+                let e_u16 = line_str[..cap.end()].encode_utf16().count() as u32;
                 return Some((
                     cap.as_str().to_string(),
                     Range::new(
-                        Position::new(pos.line, start_utf16),
-                        Position::new(pos.line, end_utf16),
+                        Position::new(pos.line, s_u16),
+                        Position::new(pos.line, e_u16),
                     ),
                 ));
             }
@@ -319,31 +497,28 @@ impl Backend {
         None
     }
 
-    /// Maps a byte-offset Span to an LSP line/column range.
     fn span_to_range(content: &str, span: Span) -> Range {
-        let mut start_pos = Position::new(0, 0);
-        let mut end_pos = Position::new(0, 0);
-        let mut cur_byte = 0;
-        let mut line = 0;
-        let mut col_utf16 = 0;
-
+        let mut sp = Position::new(0, 0);
+        let mut ep = Position::new(0, 0);
+        let mut cb = 0;
+        let mut l = 0;
+        let mut c16 = 0;
         for c in content.chars() {
-            if cur_byte == span.start {
-                start_pos = Position::new(line, col_utf16);
+            if cb == span.start {
+                sp = Position::new(l, c16);
             }
-            if cur_byte == span.end {
-                end_pos = Position::new(line, col_utf16);
+            if cb == span.end {
+                ep = Position::new(l, c16);
                 break;
             }
-
             if c == '\n' {
-                line += 1;
-                col_utf16 = 0;
+                l += 1;
+                c16 = 0;
             } else {
-                col_utf16 += c.len_utf16() as u32;
+                c16 += c.len_utf16() as u32;
             }
-            cur_byte += c.len_utf8();
+            cb += c.len_utf8();
         }
-        Range::new(start_pos, end_pos)
+        Range::new(sp, ep)
     }
 }
