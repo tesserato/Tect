@@ -1,62 +1,72 @@
-// Horizontal whitespace only
+/// Horizontal whitespace (spaces and tabs)
 WHITESPACE = _{ " " | "\t" }
+
+/// Newline characters (supports Unix and Windows)
 ln         = _{ "\r\n" | "\n" }
 
-// Comments and Docs
+/// Single line comments starting with '#'
 comment  = @{ "#" ~ (!ln ~ ANY)* }
+
+/// Documentation lines (comments immediately preceding a definition)
 doc_line =  { comment ~ ln }
 
-// Identifiers
+/// Standard alphanumeric identifier starting with a letter
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-// Keywords
+// --- Keywords ---
 kw_constant = { "constant" }
 kw_variable = { "variable" }
 kw_error    = { "error" }
 kw_group    = { "group" }
 kw_function = { "function" }
 
-// Tokens (Unitary vs Collection)
+// --- Tokens ---
 token      = { collection | unitary }
 collection = { "[" ~ ident ~ "]" }
 unitary    = { ident }
 
-// ------------------------------------------------------------
-// Definitions
-// ------------------------------------------------------------
+// --- Definitions ---
 
+/// Global constant definition
 const_def = { doc_line* ~ kw_constant ~ ident }
+
+/// Global variable definition
 var_def   = { doc_line* ~ kw_variable ~ ident }
+
+/// Architectural error definition
 err_def   = { doc_line* ~ kw_error ~ ident }
+
+/// Logical group definition
 group_def = { doc_line* ~ kw_group ~ ident }
 
+/// Comma-separated list of tokens (arguments/results)
 token_list = { token ~ ("," ~ token)* }
 
-// An output line starts with > or | followed by a list of tokens
+/// A single output branch (starts with > for primary or | for alternate)
 output_line = { (">" | "|") ~ token_list }
 
-// Function Definition
-// Supports: [Group] function Name Inputs \n > Outputs \n | Branches
-// Parentheses are no longer required for function inputs.
+/// Function Contract Definition
+/// Syntax: [Group] function Name Input1, Input2...
+/// Note: Parentheses are excluded to match the simplified Tect specification.
 func_def = {
     doc_line* ~
     (!kw_function ~ ident)? ~ // Optional Group Prefix
     kw_function ~
     ident ~                   // Function Name
-    token_list? ~             // Optional Inputs (no parens)
+    token_list? ~             // Input Arguments (no parens)
     (ln | WHITESPACE)* ~
     func_outputs
 }
 
+/// The block of output branches associated with a function
 func_outputs = { output_line ~ ((ln | WHITESPACE)* ~ output_line)* }
 
-// ------------------------------------------------------------
-// Flow (Execution)
-// ------------------------------------------------------------
+// --- Flow ---
 
-// A flow step is just the name of a function to be executed
+/// An execution step referencing a function name
 flow_step = { !keyword ~ ident }
 
+/// Keywords reserved by the language to avoid identifier collisions
 keyword = {
     kw_constant
   | kw_variable
@@ -65,10 +75,9 @@ keyword = {
   | kw_function
 }
 
-// ------------------------------------------------------------
-// Main Program Structure
-// ------------------------------------------------------------
+// --- Root ---
 
+/// Top-level statement types
 statement = _{
     const_def
   | var_def
@@ -80,4 +89,5 @@ statement = _{
   | ln
 }
 
+/// The complete Tect source file entry point
 program = { SOI ~ (statement)* ~ EOI }

@@ -96,13 +96,13 @@ Environment function ProcessCLI InitialCommand
     |  PathToConfig
 
 # **Load Config**
-# Reads the configuration file from disk and hydrates the 
+# Reads the configuration file from disk and hydrates the
 # global Settings object.
 Environment function LoadConfig PathToConfig
     > Settings
 
 # **Load Templates**
-# Locates and compiles the Handlebars templates from the 
+# Locates and compiles the Handlebars templates from the
 # directory specified in the settings.
 function LoadTemplates Settings
     > Templates
@@ -126,7 +126,7 @@ Rendering function RenderHTMLIndex [Article], Settings
     > HTMLIndex
 
 # **Render HTML Articles**
-# Combines a single article with the site templates to produce 
+# Combines a single article with the site templates to produce
 # the final standalone HTML file.
 Rendering function RenderHTMLArticles Article, Templates, Settings
     > HTMLarticle

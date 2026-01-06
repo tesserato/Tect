@@ -1,7 +1,9 @@
-//! # Tect Language Server Backend
+//! # Tect Language Server Implementation
 //!
-//! Orchestrates documentation tooltips, navigation, and formatting.
-//! Implements standard LSP traits for communication with editors like VS Code.
+//! Provides architectural intelligence including Tooltips (Hover),
+//! Navigation (Go to Definition), and Context-Aware Canonical Formatting.
+//! The formatting engine respects user-defined block separation by detecting
+//! blank lines in the original source content.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
 use crate::models::{Kind, ProgramStructure, Span};
@@ -12,9 +14,11 @@ use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
+/// State container for the Tect Language Server.
 pub struct Backend {
     #[allow(dead_code)]
     pub client: Client,
+    /// Thread-safe map of document URLs to their source and analyzed metadata.
     pub document_state: DashMap<Url, (String, ProgramStructure)>,
 }
 
@@ -46,7 +50,7 @@ impl LanguageServer for Backend {
         }
     }
 
-    /// Provides interactive tooltips for types and functions.
+    /// Renders documentation tooltips for architectural symbols.
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = &p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -102,7 +106,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
-    /// Navigates the user to the definition of the symbol under the cursor.
+    /// Jumps to the exact line and column of a symbol's declaration.
     async fn goto_definition(
         &self,
         p: GotoDefinitionParams,
@@ -137,85 +141,113 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
-    /// Reformats the document to comply with Tect style standards.
+    /// Canonicalizes the Tect document format.
+    /// Analyzes the gaps between tokens to preserve user-defined block separation
+    /// while standardizing internal indentation and keyword spacing.
     async fn formatting(&self, p: DocumentFormattingParams) -> LspResult<Option<Vec<TextEdit>>> {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
-            let mut formatted = String::new();
+
+            let mut entities = Vec::new();
+            let mut current_block = String::new();
+            let mut last_rule = None;
+            let mut last_end_pos = 0;
 
             if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
                 let program = pairs.next().unwrap();
                 for pair in program.into_inner() {
+                    let span = pair.as_span();
+                    let rule = rule_to_logic(pair.as_rule());
+
+                    // Detect if there was an empty line between the current and previous element.
+                    // We check the gap in the original source content.
+                    let gap = &content[last_end_pos..span.start()];
+                    let has_empty_line_in_gap = gap.chars().filter(|&c| c == '\n').count() > 1;
+
+                    // If a blank line was present, or the entity type changed, flush the current sequence.
+                    if (has_empty_line_in_gap || last_rule != Some(rule))
+                        && !current_block.is_empty()
+                    {
+                        entities.push(current_block.trim_end().to_string());
+                        current_block = String::new();
+                    }
+
                     match pair.as_rule() {
-                        Rule::const_def | Rule::var_def | Rule::err_def | Rule::group_def => {
-                            formatted.push_str("\n");
-                            formatted.push_str(pair.as_str().trim());
-                            formatted.push_str("\n");
+                        // Sequential entities: grouped together unless separated by a gap in the source.
+                        Rule::comment | Rule::flow_step => {
+                            current_block.push_str(pair.as_str().trim());
+                            current_block.push_str("\n");
                         }
-                        Rule::func_def => {
-                            formatted.push_str("\n");
-                            let mut inner = pair.clone().into_inner();
 
-                            // 1. Process Documentation
-                            while let Some(p) = inner.peek() {
-                                if p.as_rule() == Rule::doc_line {
-                                    formatted.push_str(inner.next().unwrap().as_str().trim());
-                                    formatted.push_str("\n");
-                                } else {
-                                    break;
+                        // Atomic Definitions: Always treated as discrete blocks.
+                        Rule::const_def
+                        | Rule::var_def
+                        | Rule::err_def
+                        | Rule::group_def
+                        | Rule::func_def => {
+                            let mut formatted = String::new();
+                            if pair.as_rule() == Rule::func_def {
+                                let mut inner = pair.clone().into_inner();
+                                // Attached documentation lines
+                                while let Some(p) = inner.peek() {
+                                    if p.as_rule() == Rule::doc_line {
+                                        formatted.push_str(inner.next().unwrap().as_str().trim());
+                                        formatted.push_str("\n");
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            }
-
-                            // 2. Process Group, keyword, and Name
-                            let mut header_parts = Vec::new();
-                            while let Some(p) = inner.peek() {
-                                if p.as_rule() == Rule::ident || p.as_rule() == Rule::kw_function {
-                                    header_parts.push(inner.next().unwrap().as_str().trim());
-                                } else {
-                                    break;
+                                // Function Signature
+                                let mut header_parts = Vec::new();
+                                while let Some(p) = inner.peek() {
+                                    if p.as_rule() == Rule::ident
+                                        || p.as_rule() == Rule::kw_function
+                                    {
+                                        header_parts.push(inner.next().unwrap().as_str().trim());
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            }
-                            formatted.push_str(&header_parts.join(" "));
-
-                            // 3. Process Inputs (no parens)
-                            if let Some(p) = inner.peek() {
-                                if p.as_rule() == Rule::token_list {
-                                    formatted.push_str(" ");
-                                    formatted.push_str(inner.next().unwrap().as_str().trim());
+                                formatted.push_str(&header_parts.join(" "));
+                                // Inputs (parentheses-less)
+                                if let Some(p) = inner.peek() {
+                                    if p.as_rule() == Rule::token_list {
+                                        formatted.push_str(" ");
+                                        formatted.push_str(inner.next().unwrap().as_str().trim());
+                                    }
                                 }
-                            }
-                            formatted.push_str("\n");
-
-                            // 4. Process Outputs
-                            if let Some(p) = inner.next() {
-                                for out in p.into_inner() {
-                                    formatted.push_str("    ");
-                                    formatted.push_str(out.as_str().trim());
-                                    formatted.push_str("\n");
+                                formatted.push_str("\n");
+                                // Output Branches
+                                if let Some(p) = inner.next() {
+                                    for out in p.into_inner() {
+                                        formatted.push_str("    ");
+                                        formatted.push_str(out.as_str().trim());
+                                        formatted.push_str("\n");
+                                    }
                                 }
+                            } else {
+                                formatted = pair.as_str().trim().to_string();
                             }
-                        }
-                        Rule::flow_step => {
-                            formatted.push_str(pair.as_str().trim());
-                            formatted.push_str("\n");
-                        }
-                        Rule::comment => {
-                            formatted.push_str(pair.as_str().trim());
-                            formatted.push_str("\n");
+                            entities.push(formatted.trim_end().to_string());
                         }
                         _ => {}
                     }
+
+                    last_rule = Some(rule);
+                    last_end_pos = span.end();
                 }
             }
 
-            if !formatted.is_empty() {
-                // Return a single edit that replaces the entire document.
+            // Finalize trailing block
+            if !current_block.is_empty() {
+                entities.push(current_block.trim_end().to_string());
+            }
+
+            if !entities.is_empty() {
+                let final_text = entities.join("\n\n") + "\n";
                 let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
-                return Ok(Some(vec![TextEdit::new(
-                    full_range,
-                    formatted.trim_start().to_string(),
-                )]));
+                return Ok(Some(vec![TextEdit::new(full_range, final_text)]));
             }
         }
         Ok(None)
@@ -226,53 +258,91 @@ impl LanguageServer for Backend {
     }
 }
 
+/// Simple classification for formatting blocks.
+#[derive(PartialEq, Clone, Copy)]
+enum FormatterRule {
+    Comment,
+    Flow,
+    Atomic,
+}
+
+/// Maps grammar rules to formatting categories.
+fn rule_to_logic(r: Rule) -> FormatterRule {
+    match r {
+        Rule::comment => FormatterRule::Comment,
+        Rule::flow_step => FormatterRule::Flow,
+        _ => FormatterRule::Atomic,
+    }
+}
+
 impl Backend {
-    /// Re-analyzes the document and updates the internal state.
+    /// Re-analyzes the document on content changes.
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
         if let Ok(structure) = analyzer.analyze(&content) {
             self.document_state.insert(uri, (content, structure));
         } else {
-            // Keep content but skip IR update if syntax is invalid.
             self.document_state
                 .entry(uri)
                 .and_modify(|(old_content, _)| *old_content = content);
         }
     }
 
-    /// Identifies the word and range at a specific cursor position.
+    /// Maps a UTF-16 cursor position to an architectural identifier.
     fn get_word_at(content: &str, pos: Position) -> Option<(String, Range)> {
-        let lines: Vec<&str> = content.lines().collect();
-        let line = lines.get(pos.line as usize)?;
+        let line_str = content.lines().nth(pos.line as usize)?;
+
+        let mut utf16_offset = 0;
+        let mut byte_offset = 0;
+        for c in line_str.chars() {
+            if utf16_offset >= pos.character as usize {
+                break;
+            }
+            utf16_offset += c.len_utf16();
+            byte_offset += c.len_utf8();
+        }
+
         let re = Regex::new(r"([a-zA-Z0-9_]+)").unwrap();
-        for cap in re.find_iter(line) {
-            if pos.character >= cap.start() as u32 && pos.character <= cap.end() as u32 {
-                let range = Range::new(
-                    Position::new(pos.line, cap.start() as u32),
-                    Position::new(pos.line, cap.end() as u32),
-                );
-                return Some((cap.as_str().to_string(), range));
+        for cap in re.find_iter(line_str) {
+            if byte_offset >= cap.start() && byte_offset <= cap.end() {
+                let start_utf16 = line_str[..cap.start()].encode_utf16().count() as u32;
+                let end_utf16 = line_str[..cap.end()].encode_utf16().count() as u32;
+                return Some((
+                    cap.as_str().to_string(),
+                    Range::new(
+                        Position::new(pos.line, start_utf16),
+                        Position::new(pos.line, end_utf16),
+                    ),
+                ));
             }
         }
         None
     }
 
-    /// Translates a byte-offset Span into a line/character Range.
+    /// Maps a byte-offset Span to an LSP line/column range.
     fn span_to_range(content: &str, span: Span) -> Range {
         let mut start_pos = Position::new(0, 0);
         let mut end_pos = Position::new(0, 0);
-        let mut current_offset = 0;
+        let mut cur_byte = 0;
+        let mut line = 0;
+        let mut col_utf16 = 0;
 
-        for (i, line) in content.lines().enumerate() {
-            let line_len = line.len() + 1; // +1 for normalized \n
-            if current_offset <= span.start && span.start < current_offset + line_len {
-                start_pos = Position::new(i as u32, (span.start - current_offset) as u32);
+        for c in content.chars() {
+            if cur_byte == span.start {
+                start_pos = Position::new(line, col_utf16);
             }
-            if current_offset <= span.end && span.end <= current_offset + line_len {
-                end_pos = Position::new(i as u32, (span.end - current_offset) as u32);
+            if cur_byte == span.end {
+                end_pos = Position::new(line, col_utf16);
                 break;
             }
-            current_offset += line_len;
+
+            if c == '\n' {
+                line += 1;
+                col_utf16 = 0;
+            } else {
+                col_utf16 += c.len_utf16() as u32;
+            }
+            cur_byte += c.len_utf8();
         }
         Range::new(start_pos, end_pos)
     }
