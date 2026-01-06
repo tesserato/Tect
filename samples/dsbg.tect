@@ -7,57 +7,77 @@
 # ------------------------------------------------------------
 
 # **Settings**
-# The global configuration object.
+# The global configuration object for the generator.
+# Contains:
+# - `source_dir`: Path to markdown files
+# - `build_dir`: Path for output
+# - `site_url`: Canonical URL
 constant Settings
 
 # **Templates**
 # The registry of HTML templates used for rendering.
+# *Note: Requires a valid handlebars setup.*
 constant Templates
 
 # **Source File**
-# A raw input file from the source directory.
+# A raw input file from the filesystem.
+# This represents a single `.md` file before processing.
 constant SourceFile
 
 # **Article**
-# The processed data structure containing content and metadata.
+# The processed data structure.
+# Contains the parsed markdown body and extracted front-matter metadata 
+# such as **title**, **date**, and **tags**.
 constant Article
 
 # **Initial Command**
-# Raw input from the CLI.
+# Raw input from the CLI arguments.
+# Represents the user's intent (e.g., `build`, `watch`).
 variable InitialCommand
 
 # **Path To Config**
-# The resolved location of the config file.
+# The resolved location of the configuration file.
+# Defaults to `./tect.toml` if not provided.
 variable PathToConfig
 
 # **HTML Article**
-# The final article HTML string.
+# The final rendered HTML string for a single blog post.
 variable HTMLarticle
 
 # **HTML Index**
-# The final index HTML string.
+# The final generated index page containing the list of all articles.
 variable HTMLIndex
 
 # **Success Report**
-# A final summary of operations.
+# A final summary of the operations performed.
+# Includes timing data and the count of files written.
 variable SuccessReport
 
 # **File System Error**
 # Triggered when IO operations fail.
+# common causes:
+# 1. *Permission Denied*
+# 2. *Disk Full*
+# 3. *Path Not Found*
 error FileSystemError
 
-# Group definitions
+# ------------------------------------------------------------
+# Group Definitions
+# ------------------------------------------------------------
 
 # **Environment Group**
 # Setup and configuration phase.
+# Handles the transition from CLI input to internal settings.
 group Environment
 
 # **Ingestion Group**
 # Reading data from the physical world.
+# Focuses on filesystem discovery.
 group Ingestion
 
 # **Rendering Group**
 # Generating the presentation layer.
+# Transforms pure data into user-facing HTML.
 group Rendering
 
 # **IO Group**
@@ -69,44 +89,56 @@ group IO
 # ------------------------------------------------------------
 
 # **Process CLI**
+# Parses the command line arguments provided by the user.
+# Returns the global settings and the specific config path found.
 Environment function ProcessCLI(InitialCommand)
     > Settings
     |  PathToConfig
 
 # **Load Config**
+# Reads the configuration file from disk and hydrates the 
+# global Settings object.
 Environment function LoadConfig(PathToConfig)
     > Settings
 
 # **Load Templates**
-# This function is utility-focused and remains ungrouped.
+# Locates and compiles the Handlebars templates from the 
+# directory specified in the settings.
 function LoadTemplates(Settings)
     > Templates
 
 # **Scan File System**
+# Recursively walks the source directory to find markdown files.
+# Returns a collection of `SourceFile` or a collection of errors.
 Ingestion function ScanFS(Settings)
     > [SourceFile]
     |  [FileSystemError]
 
 # **Parse Markdown**
-# Core logic often stands alone without a specific group.
+# Extracts metadata and converts markdown content to HTML fragments.
 function ParseMarkdown(SourceFile)
     > Article
     |  FileSystemError
 
 # **Render HTML Index**
+# Aggregates all processed articles to generate the main listing page.
 Rendering function RenderHTMLIndex([Article], Settings)
     > HTMLIndex
 
 # **Render HTML Articles**
+# Combines a single article with the site templates to produce 
+# the final standalone HTML file.
 Rendering function RenderHTMLArticles(Article, Templates, Settings)
     > HTMLarticle
 
 # **Write Index To Disk**
+# Saves the generated index page to the output directory.
 IO function WriteIndexToDisk(HTMLIndex)
     > SuccessReport
     |  FileSystemError
 
 # **Write Articles To Disk**
+# Saves individual article HTML files to their respective paths.
 IO function WriteArticlesToDisk(HTMLarticle)
     > SuccessReport
     |  FileSystemError
