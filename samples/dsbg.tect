@@ -91,55 +91,55 @@ group IO
 # **Process CLI**
 # Parses the command line arguments provided by the user.
 # Returns the global settings and the specific config path found.
-Environment function ProcessCLI(InitialCommand)
+Environment function ProcessCLI InitialCommand
     > Settings
     |  PathToConfig
 
 # **Load Config**
 # Reads the configuration file from disk and hydrates the 
 # global Settings object.
-Environment function LoadConfig(PathToConfig)
+Environment function LoadConfig PathToConfig
     > Settings
 
 # **Load Templates**
 # Locates and compiles the Handlebars templates from the 
 # directory specified in the settings.
-function LoadTemplates(Settings)
+function LoadTemplates Settings
     > Templates
 
 # **Scan File System**
 # Recursively walks the source directory to find markdown files.
 # Returns a collection of `SourceFile` or a collection of errors.
-Ingestion function ScanFS(Settings)
+Ingestion function ScanFS Settings
     > [SourceFile]
     |  [FileSystemError]
 
 # **Parse Markdown**
 # Extracts metadata and converts markdown content to HTML fragments.
-function ParseMarkdown(SourceFile)
+function ParseMarkdown SourceFile
     > Article
     |  FileSystemError
 
 # **Render HTML Index**
 # Aggregates all processed articles to generate the main listing page.
-Rendering function RenderHTMLIndex([Article], Settings)
+Rendering function RenderHTMLIndex [Article], Settings
     > HTMLIndex
 
 # **Render HTML Articles**
 # Combines a single article with the site templates to produce 
 # the final standalone HTML file.
-Rendering function RenderHTMLArticles(Article, Templates, Settings)
+Rendering function RenderHTMLArticles Article, Templates, Settings
     > HTMLarticle
 
 # **Write Index To Disk**
 # Saves the generated index page to the output directory.
-IO function WriteIndexToDisk(HTMLIndex)
+IO function WriteIndexToDisk HTMLIndex
     > SuccessReport
     |  FileSystemError
 
 # **Write Articles To Disk**
 # Saves individual article HTML files to their respective paths.
-IO function WriteArticlesToDisk(HTMLarticle)
+IO function WriteArticlesToDisk HTMLarticle
     > SuccessReport
     |  FileSystemError
 

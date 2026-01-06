@@ -108,14 +108,6 @@ impl Kind {
             Kind::Error(e) => e.uid,
         }
     }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Kind::Constant(c) => &c.name,
-            Kind::Variable(v) => &v.name,
-            Kind::Error(e) => &e.name,
-        }
-    }
 }
 
 // --- Contract Entities ---
@@ -136,8 +128,6 @@ impl Token {
         }
     }
 }
-
-// --- Function Entity ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {

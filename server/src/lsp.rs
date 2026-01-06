@@ -1,7 +1,6 @@
 //! # Tect Language Server Backend
 //!
-//! Orchestrates documentation tooltips, navigation, formatting,
-//! and semantic highlighting.
+//! Orchestrates documentation tooltips, navigation, and formatting.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
 use crate::models::{Kind, ProgramStructure, Span};
@@ -29,37 +28,6 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 document_formatting_provider: Some(OneOf::Left(true)),
-                semantic_tokens_provider: Some(
-                    SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
-                        SemanticTokensRegistrationOptions {
-                            text_document_registration_options: TextDocumentRegistrationOptions {
-                                document_selector: Some(vec![DocumentFilter {
-                                    language: Some("tect".to_string()),
-                                    scheme: Some("file".to_string()),
-                                    pattern: None,
-                                }]),
-                            },
-                            semantic_tokens_options: SemanticTokensOptions {
-                                work_done_progress_options: WorkDoneProgressOptions {
-                                    work_done_progress: None,
-                                },
-                                legend: SemanticTokensLegend {
-                                    token_types: vec![
-                                        SemanticTokenType::KEYWORD,   // 0
-                                        SemanticTokenType::TYPE,      // 1
-                                        SemanticTokenType::FUNCTION,  // 2
-                                        SemanticTokenType::VARIABLE,  // 3
-                                        SemanticTokenType::DECORATOR, // 4
-                                    ],
-                                    token_modifiers: vec![],
-                                },
-                                range: Some(false),
-                                full: Some(SemanticTokensFullOptions::Bool(true)),
-                            },
-                            static_registration_options: StaticRegistrationOptions { id: None },
-                        },
-                    ),
-                ),
                 ..Default::default()
             },
             ..Default::default()
@@ -155,7 +123,9 @@ impl LanguageServer for Backend {
                 if let Some(id) = uid {
                     if let Some(meta) = structure.symbol_table.get(&id) {
                         let mut range = Self::span_to_range(content, meta.definition_span);
+                        // Jump to column 0 for clean definitions
                         range.start.character = 0;
+                        range.end.character = 0;
                         return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                             uri.clone(),
                             range,
@@ -173,8 +143,10 @@ impl LanguageServer for Backend {
             let (content, _) = state.value();
             let mut formatted = String::new();
 
-            if let Ok(pairs) = TectParser::parse(Rule::program, content) {
-                for pair in pairs.flatten() {
+            // Reconstruct the file iterating only top-level statements to avoid nested duplication
+            if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
+                let program = pairs.next().unwrap();
+                for pair in program.into_inner() {
                     match pair.as_rule() {
                         Rule::const_def | Rule::var_def | Rule::err_def | Rule::group_def => {
                             formatted.push_str("\n");
@@ -183,14 +155,36 @@ impl LanguageServer for Backend {
                         }
                         Rule::func_def => {
                             formatted.push_str("\n");
-                            let lines: Vec<&str> = pair.as_str().lines().collect();
-                            if let Some(first) = lines.first() {
-                                formatted.push_str(first.trim());
+                            let mut inner = pair.clone().into_inner();
+                            // Collect docs separately to handle indentation of the logic block
+                            let mut docs = Vec::new();
+                            while let Some(p) = inner.peek() {
+                                if p.as_rule() == Rule::doc_line {
+                                    docs.push(inner.next().unwrap().as_str().trim());
+                                } else {
+                                    break;
+                                }
+                            }
+                            for d in docs {
+                                formatted.push_str(d);
                                 formatted.push_str("\n");
-                                for line in lines.iter().skip(1) {
-                                    formatted.push_str("    ");
+                            }
+
+                            // Group and Func line
+                            let mut line = String::new();
+                            while let Some(p) = inner.next() {
+                                if p.as_rule() == Rule::func_outputs {
                                     formatted.push_str(line.trim());
                                     formatted.push_str("\n");
+                                    for out in p.into_inner() {
+                                        formatted.push_str("    ");
+                                        formatted.push_str(out.as_str().trim());
+                                        formatted.push_str("\n");
+                                    }
+                                    break;
+                                } else {
+                                    line.push_str(p.as_str());
+                                    line.push_str(" ");
                                 }
                             }
                         }
@@ -211,80 +205,11 @@ impl LanguageServer for Backend {
                 let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
                 return Ok(Some(vec![TextEdit::new(
                     full_range,
-                    formatted.trim().to_string() + "\n",
+                    formatted.trim_start().to_string(),
                 )]));
             }
         }
         Ok(None)
-    }
-
-    async fn semantic_tokens_full(
-        &self,
-        p: SemanticTokensParams,
-    ) -> LspResult<Option<SemanticTokensResult>> {
-        let uri = &p.text_document.uri;
-        let Some(state) = self.document_state.get(uri) else {
-            return Ok(None);
-        };
-        let (content, structure) = state.value();
-
-        let mut tokens = Vec::new();
-        let (mut last_line, mut last_char) = (0, 0);
-
-        if let Ok(pairs) = TectParser::parse(Rule::program, content) {
-            for pair in pairs.flatten() {
-                let token_type = match pair.as_rule() {
-                    Rule::kw_constant
-                    | Rule::kw_variable
-                    | Rule::kw_error
-                    | Rule::kw_group
-                    | Rule::kw_function => Some(0),
-                    Rule::ident => {
-                        let word = pair.as_str();
-                        if structure.artifacts.contains_key(word) {
-                            Some(1)
-                        } else if structure.catalog.contains_key(word) {
-                            Some(2)
-                        } else if structure.groups.contains_key(word) {
-                            Some(4)
-                        } else {
-                            Some(3)
-                        }
-                    }
-                    _ => None,
-                };
-
-                if let Some(idx) = token_type {
-                    let span = pair.as_span();
-                    let (line, col) = span.start_pos().line_col();
-                    let line = line as u32 - 1;
-                    let col = col as u32 - 1;
-
-                    let delta_line = line - last_line;
-                    let delta_start = if delta_line == 0 {
-                        col - last_char
-                    } else {
-                        col
-                    };
-
-                    tokens.push(SemanticToken {
-                        delta_line,
-                        delta_start,
-                        length: span.as_str().len() as u32,
-                        token_type: idx,
-                        token_modifiers_bitset: 0,
-                    });
-
-                    last_line = line;
-                    last_char = col;
-                }
-            }
-        }
-
-        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-            result_id: None,
-            data: tokens,
-        })))
     }
 
     async fn shutdown(&self) -> LspResult<()> {

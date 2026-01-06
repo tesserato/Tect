@@ -1,7 +1,6 @@
 //! # Tect Semantic Analyzer
 //!
 //! Responsible for transforming raw Tect source code into a [ProgramStructure].
-//! Performs two passes: Discovery (Symbols) and Resolution (Linking).
 
 use crate::models::*;
 use anyhow::{Context, Result};
@@ -41,7 +40,7 @@ impl TectAnalyzer {
             }
         }
 
-        // Pass 2: Link Contracts & Resolve Flow
+        // Pass 2: Linking Contracts & Flow
         for pair in &statements {
             match pair.as_rule() {
                 Rule::func_def => self.link_function_contracts(pair, &mut structure)?,
@@ -65,6 +64,9 @@ impl TectAnalyzer {
         }
     }
 
+    /// Captures leading doc comments.
+    /// Joins with Markdown "Hard Break" (two spaces + newline) to ensure
+    /// visual line breaks in tooltips match source code lines.
     fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
         let mut docs = Vec::new();
         while let Some(p) = inner.peek() {
@@ -223,7 +225,6 @@ impl TectAnalyzer {
                 ),
                 _ => (inner.as_str(), Cardinality::Unitary),
             };
-
             let kind =
                 structure.artifacts.get(name).cloned().unwrap_or_else(|| {
                     Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
