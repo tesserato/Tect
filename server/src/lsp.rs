@@ -64,7 +64,6 @@ impl LanguageServer for Backend {
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, range)) = Self::get_word_at(content, pos) {
-                // Keyword Tooltips
                 let kw_doc = match word.as_str() {
                     "constant" => Some("Defines an immutable global architectural artifact."),
                     "variable" => Some("Defines a mutable or stateful architectural artifact."),
@@ -84,7 +83,6 @@ impl LanguageServer for Backend {
                     }));
                 }
 
-                // Symbol Tooltips
                 let markdown = if let Some(kind) = structure.artifacts.get(&word) {
                     format!(
                         "### {}: `{}`\n\n---\n\n{}",
@@ -162,7 +160,6 @@ impl LanguageServer for Backend {
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             let mut symbols = Vec::new();
-
             for kind in structure.artifacts.values() {
                 if let Some(meta) = structure.symbol_table.get(&kind.uid()) {
                     symbols.push(self.make_symbol(
@@ -202,7 +199,6 @@ impl LanguageServer for Backend {
         let uri = &p.text_document_position.text_document.uri;
         let pos = p.text_document_position.position;
         let new_name = p.new_name;
-
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
@@ -308,11 +304,10 @@ impl LanguageServer for Backend {
                     let range = Self::span_to_range(content, step.span);
                     let signature = Self::format_signature(f);
                     let label = if let Some(ref g) = f.group {
-                        format!("  {}  {}", g.name, signature)
+                        format!("{} {}", g.name, signature)
                     } else {
-                        format!("  {}", signature)
+                        format!("{}", signature)
                     };
-
                     hints.push(InlayHint {
                         position: range.end,
                         label: InlayHintLabel::String(label),
@@ -334,26 +329,25 @@ impl LanguageServer for Backend {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
-            let mut entities = Vec::new();
-            let mut current_block = String::new();
-            let mut last_rule = None;
-            let mut last_end_pos = 0;
-
             let parsed = match TectParser::parse(Rule::program, content) {
                 Ok(mut p) => p.next().unwrap(),
                 Err(_) => return Ok(None),
             };
+
+            let mut entities = Vec::new();
+            let mut current_block = String::new();
+            let mut last_rule = None;
+            let mut last_end_pos = 0;
 
             for pair in parsed.into_inner() {
                 let rule_raw = pair.as_rule();
                 let span = pair.as_span();
                 let rule_logic = rule_to_logic(rule_raw);
 
-                // Detect empty lines in source
+                // Detect whitespace gaps to preserve separation
                 let gap = &content[last_end_pos..span.start()];
                 let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
 
-                // Group sequences (comments/flow) unless separated by gap or type change
                 if (has_empty_line || last_rule != Some(rule_logic)) && !current_block.is_empty() {
                     entities.push(current_block.trim_end().to_string());
                     current_block.clear();
@@ -373,16 +367,15 @@ impl LanguageServer for Backend {
                         let mut formatted = String::new();
                         if pair.as_rule() == Rule::func_def {
                             let mut inner = pair.clone().into_inner();
-                            let mut last_pos = None;
+                            let mut last_inner_pos = None;
 
-                            // 1. Documentation lines
+                            // 1. Docs
                             while let Some(p) = inner.peek() {
                                 let pos = p.as_span().start();
-                                if last_pos == Some(pos) {
+                                if last_inner_pos == Some(pos) {
                                     break;
                                 }
-                                last_pos = Some(pos);
-
+                                last_inner_pos = Some(pos);
                                 if p.as_rule() == Rule::doc_line {
                                     formatted.push_str(inner.next().unwrap().as_str().trim());
                                     formatted.push('\n');
@@ -391,7 +384,7 @@ impl LanguageServer for Backend {
                                 }
                             }
 
-                            // 2. Signature Header
+                            // 2. Header (Group, keyword, Name, Inputs)
                             let mut header = Vec::new();
                             while let Some(p) = inner.peek() {
                                 if matches!(
@@ -408,22 +401,22 @@ impl LanguageServer for Backend {
                                 formatted.push('\n');
                             }
 
-                            // 3. Branches
+                            // 3. Branches (func_outputs)
                             if let Some(p) = inner.next() {
                                 for child in p.into_inner() {
                                     if child.as_rule() == Rule::output_line {
+                                        let raw = child.as_str().trim();
+                                        let symbol = if raw.starts_with('>') { ">" } else { "|" };
                                         let mut parts = child.into_inner();
-                                        let sym = parts.next().map(|s| s.as_str()).unwrap_or(">");
                                         let tokens =
                                             parts.next().map(|t| t.as_str().trim()).unwrap_or("");
-                                        formatted.push_str(&format!("    {} {}\n", sym, tokens));
+                                        formatted.push_str(&format!("    {} {}\n", symbol, tokens));
                                     }
                                 }
                             }
                         } else {
                             formatted = pair.as_str().trim().to_string();
                         }
-
                         let cleaned = formatted.trim_end();
                         if !cleaned.is_empty() {
                             entities.push(cleaned.to_string());
@@ -437,7 +430,6 @@ impl LanguageServer for Backend {
             if !current_block.is_empty() {
                 entities.push(current_block.trim_end().to_string());
             }
-
             if !entities.is_empty() {
                 let final_text = entities.join("\n\n") + "\n";
                 let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));

@@ -93,7 +93,7 @@ group IO
 # Returns the global settings and the specific config path found.
 Environment function ProcessCLI InitialCommand
     > Settings
-    |  PathToConfig
+    | PathToConfig
 
 # **Load Config**
 # Reads the configuration file from disk and hydrates the
@@ -112,13 +112,13 @@ function LoadTemplates Settings
 # Returns a collection of `SourceFile` or a collection of errors.
 Ingestion function ScanFS Settings
     > [SourceFile]
-    |  [FileSystemError]
+    | [FileSystemError]
 
 # **Parse Markdown**
 # Extracts metadata and converts markdown content to HTML fragments.
 function ParseMarkdown SourceFile
     > Article
-    |  FileSystemError
+    | FileSystemError
 
 # **Render HTML Index**
 # Aggregates all processed articles to generate the main listing page.
@@ -135,13 +135,13 @@ Rendering function RenderHTMLArticles Article, Templates, Settings
 # Saves the generated index page to the output directory.
 IO function WriteIndexToDisk HTMLIndex
     > SuccessReport
-    |  FileSystemError
+    | FileSystemError
 
 # **Write Articles To Disk**
 # Saves individual article HTML files to their respective paths.
 IO function WriteArticlesToDisk HTMLarticle
     > SuccessReport
-    |  FileSystemError
+    | FileSystemError
 
 # ------------------------------------------------------------
 # The Flow (Execution Pipeline)
