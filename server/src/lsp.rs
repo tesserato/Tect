@@ -1,27 +1,24 @@
 //! # Tect Language Server Backend
 //!
-//! Orchestrates documentation tooltips and navigation.
-//! Implements "Last Known Good" state persistence for fluid editing.
+//! Orchestrates documentation tooltips, navigation, and formatting.
 
-use crate::analyzer::TectAnalyzer;
+use crate::analyzer::{Rule, TectAnalyzer, TectParser};
 use crate::models::{Kind, ProgramStructure, Span};
 use dashmap::DashMap;
+use pest::Parser;
 use regex::Regex;
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-/// The implementation of the Tect Language Server backend.
 pub struct Backend {
     #[allow(dead_code)]
     pub client: Client,
-    /// Persistent storage for document state: (CurrentBuffer, LastSuccessfulBlueprint).
     pub document_state: DashMap<Url, (String, ProgramStructure)>,
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    /// Negotiates capabilities with the VS Code client upon connection.
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -29,8 +26,8 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::FULL,
                 )),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                // Enable "Go to Definition" support
                 definition_provider: Some(OneOf::Left(true)),
+                document_formatting_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
             ..Default::default()
@@ -48,7 +45,6 @@ impl LanguageServer for Backend {
         }
     }
 
-    /// Provides architectural context for symbols under the cursor.
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = &p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -104,7 +100,6 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
-    /// Resolves the source location of a symbol for "Go to Definition".
     async fn goto_definition(
         &self,
         p: GotoDefinitionParams,
@@ -115,7 +110,6 @@ impl LanguageServer for Backend {
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
-                // Lookup UID based on the word under cursor
                 let uid = if let Some(k) = structure.artifacts.get(&word) {
                     Some(k.uid())
                 } else if let Some(f) = structure.catalog.get(&word) {
@@ -128,7 +122,8 @@ impl LanguageServer for Backend {
 
                 if let Some(id) = uid {
                     if let Some(meta) = structure.symbol_table.get(&id) {
-                        let range = Self::span_to_range(content, meta.definition_span);
+                        let mut range = Self::span_to_range(content, meta.definition_span);
+                        range.start.character = 0; // Jump to start of line as requested
                         return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                             uri.clone(),
                             range,
@@ -140,27 +135,74 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    async fn formatting(&self, p: DocumentFormattingParams) -> LspResult<Option<Vec<TextEdit>>> {
+        let uri = &p.text_document.uri;
+        if let Some(state) = self.document_state.get(uri) {
+            let (content, _) = state.value();
+            let mut formatted = String::new();
+
+            if let Ok(pairs) = TectParser::parse(Rule::program, content) {
+                for pair in pairs.flatten() {
+                    match pair.as_rule() {
+                        Rule::const_def | Rule::var_def | Rule::err_def | Rule::group_def => {
+                            formatted.push_str("\n");
+                            formatted.push_str(pair.as_str().trim());
+                            formatted.push_str("\n");
+                        }
+                        Rule::func_def => {
+                            formatted.push_str("\n");
+                            let lines: Vec<&str> = pair.as_str().lines().collect();
+                            if let Some(first) = lines.first() {
+                                formatted.push_str(first.trim());
+                                formatted.push_str("\n");
+                                for line in lines.iter().skip(1) {
+                                    formatted.push_str("    ");
+                                    formatted.push_str(line.trim());
+                                    formatted.push_str("\n");
+                                }
+                            }
+                        }
+                        Rule::flow_step => {
+                            formatted.push_str(pair.as_str().trim());
+                            formatted.push_str("\n");
+                        }
+                        Rule::comment => {
+                            formatted.push_str(pair.as_str().trim());
+                            formatted.push_str("\n");
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if !formatted.is_empty() {
+                let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
+                return Ok(Some(vec![TextEdit::new(
+                    full_range,
+                    formatted.trim().to_string() + "\n",
+                )]));
+            }
+        }
+        Ok(None)
+    }
+
     async fn shutdown(&self) -> LspResult<()> {
         Ok(())
     }
 }
 
 impl Backend {
-    /// Incremental analysis handler.
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
         if let Ok(structure) = analyzer.analyze(&content) {
-            // Update cache only on success (LKG strategy)
             self.document_state.insert(uri, (content, structure));
         } else {
-            // Update buffer but keep old IR for navigation/tooltips
             self.document_state
                 .entry(uri)
                 .and_modify(|(old_content, _)| *old_content = content);
         }
     }
 
-    /// Helper: extracts the identifier at a specific text position.
     fn get_word_at(content: &str, pos: Position) -> Option<(String, Range)> {
         let lines: Vec<&str> = content.lines().collect();
         let line = lines.get(pos.line as usize)?;
@@ -177,14 +219,13 @@ impl Backend {
         None
     }
 
-    /// Helper: converts byte offsets to an LSP-compatible Range.
     fn span_to_range(content: &str, span: Span) -> Range {
         let mut start_pos = Position::new(0, 0);
         let mut end_pos = Position::new(0, 0);
         let mut current_offset = 0;
 
         for (i, line) in content.lines().enumerate() {
-            let line_len = line.len() + 1; // +1 for newline character
+            let line_len = line.len() + 1;
             if current_offset <= span.start && span.start < current_offset + line_len {
                 start_pos = Position::new(i as u32, (span.start - current_offset) as u32);
             }

@@ -2,9 +2,6 @@
 //!
 //! This module defines the core architectural entities and the
 //! [ProgramStructure] Intermediate Representation (IR).
-//!
-//! UIDs are strictly encapsulated and assigned automatically upon
-//! construction to ensure global uniqueness within the process.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -111,6 +108,14 @@ impl Kind {
             Kind::Error(e) => e.uid,
         }
     }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Kind::Constant(c) => &c.name,
+            Kind::Variable(v) => &v.name,
+            Kind::Error(e) => &e.name,
+        }
+    }
 }
 
 // --- Contract Entities ---
@@ -131,6 +136,8 @@ impl Token {
         }
     }
 }
+
+// --- Function Entity ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
@@ -178,18 +185,16 @@ impl Function {
 
 // --- Intermediate Representation ---
 
-/// The decoupled Intermediate Representation (IR) of a Tect architecture.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProgramStructure {
     pub artifacts: HashMap<String, Kind>,
     pub groups: HashMap<String, Arc<Group>>,
     pub catalog: HashMap<String, Arc<Function>>,
     pub flow: Vec<String>,
-    /// Navigation table mapping entity UIDs to source code locations.
     pub symbol_table: HashMap<u32, SymbolMetadata>,
 }
 
-// --- Flow Entities (Instances) ---
+// --- Flow Entities ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
