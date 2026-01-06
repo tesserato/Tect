@@ -4,7 +4,7 @@
 //! IDE features like Rename, Outline, and Inlay Hints.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
-use crate::models::{Kind, ProgramStructure, Span, SymbolMetadata};
+use crate::models::{Cardinality, Function, Kind, ProgramStructure, Span, SymbolMetadata, Token};
 use dashmap::DashMap;
 use pest::Parser;
 use regex::Regex;
@@ -64,6 +64,27 @@ impl LanguageServer for Backend {
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, range)) = Self::get_word_at(content, pos) {
+                // 1. Check for Language Keywords
+                let kw_doc = match word.as_str() {
+                    "constant" => Some("Defines an immutable global architectural artifact."),
+                    "variable" => Some("Defines a mutable or stateful architectural artifact."),
+                    "error" => Some("Defines an architectural error state or exception branch."),
+                    "group" => Some("Organizes functions into logical architectural layers or modules."),
+                    "function" => Some("Defines an architectural contract with specific inputs and result branches."),
+                    _ => None,
+                };
+
+                if let Some(doc) = kw_doc {
+                    return Ok(Some(Hover {
+                        contents: HoverContents::Markup(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: format!("### Keyword: `{}`\n\n---\n\n{}", word, doc),
+                        }),
+                        range: Some(range),
+                    }));
+                }
+
+                // 2. Check for Symbols
                 let markdown = if let Some(kind) = structure.artifacts.get(&word) {
                     format!(
                         "### {}: `{}`\n\n---\n\n{}",
@@ -81,10 +102,12 @@ impl LanguageServer for Backend {
                         .as_ref()
                         .map(|g| format!("**Group**: `{}`\n\n", g.name))
                         .unwrap_or_default();
+                    let signature = format!("**Signature**: `{}`\n\n", Self::format_signature(f));
                     format!(
-                        "### Function: `{}`\n\n{}---\n\n{}",
+                        "### Function: `{}`\n\n{}{}---\n\n{}",
                         word,
                         group,
+                        signature,
                         f.documentation.as_deref().unwrap_or("*No documentation.*")
                     )
                 } else if let Some(g) = structure.groups.get(&word) {
@@ -255,15 +278,7 @@ impl LanguageServer for Backend {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
                 if let Some(f) = structure.catalog.get(&word) {
-                    let sig = format!(
-                        "{}({})",
-                        f.name,
-                        f.consumes
-                            .iter()
-                            .map(|t| t.kind.name())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    );
+                    let sig = format!("{}: {}", f.name, Self::format_signature(f));
                     return Ok(Some(SignatureHelp {
                         signatures: vec![SignatureInformation {
                             label: sig,
@@ -292,9 +307,10 @@ impl LanguageServer for Backend {
                 if let Some(f) = structure.catalog.get(&step.function_name) {
                     if let Some(ref g) = f.group {
                         let range = Self::span_to_range(content, step.span);
+                        let signature = Self::format_signature(f);
                         hints.push(InlayHint {
                             position: range.end,
-                            label: InlayHintLabel::String(format!(" : {}", g.name)),
+                            label: InlayHintLabel::String(format!(" : {}: {}", g.name, signature)),
                             kind: Some(InlayHintKind::TYPE),
                             padding_left: Some(true),
                             padding_right: None,
@@ -520,5 +536,36 @@ impl Backend {
             cb += c.len_utf8();
         }
         Range::new(sp, ep)
+    }
+
+    fn format_signature(f: &Function) -> String {
+        let inputs = f
+            .consumes
+            .iter()
+            .map(|t| Self::format_token(t))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let outputs = f
+            .produces
+            .iter()
+            .map(|branch| {
+                branch
+                    .iter()
+                    .map(|t| Self::format_token(t))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+
+        format!("{} -> {}", inputs, outputs)
+    }
+
+    fn format_token(t: &Token) -> String {
+        match t.cardinality {
+            Cardinality::Collection => format!("[{}]", t.kind.name()),
+            Cardinality::Unitary => t.kind.name().to_string(),
+        }
     }
 }
