@@ -3,6 +3,8 @@
 //! Generates a high-fidelity interactive HTML visualization.
 //! Includes specific CSS and JS overrides for dark-theme configuration
 //! controls and scroll position persistence.
+//!
+//! Edge labels are configured to be plain white without borders or strokes.
 
 use crate::models::{Cardinality, Graph, Kind};
 use serde::Serialize;
@@ -29,6 +31,8 @@ struct VisFont {
     color: String,
     size: u32,
     face: String,
+    #[serde(rename = "strokeWidth")]
+    stroke_width: u32,
 }
 
 #[derive(Serialize)]
@@ -103,6 +107,7 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
                 color: "#ffffff".into(),
                 size: 14,
                 face: "sans-serif".into(),
+                stroke_width: 0,
             },
         });
     }
@@ -134,9 +139,10 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
             dashes: matches!(e.token.kind, Kind::Constant(_)),
             arrows: "to".into(),
             font: VisFont {
-                color: "#e0e0e0".into(),
+                color: "#ffffff".into(), // Plain white as requested
                 size: 11,
                 face: "monospace".into(),
+                stroke_width: 0, // Remove outlines/borders
             },
         });
     }
@@ -243,7 +249,7 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
             shape: 'box', 
             margin: 10, 
             color: {{ background: '#fbbf24', border: '#fff' }}, 
-            font: {{ color: '#000', size: 16, face: 'sans-serif' }} 
+            font: {{ color: '#000', size: 16, face: 'sans-serif', strokeWidth: 0 }} 
         }}
     }});
 

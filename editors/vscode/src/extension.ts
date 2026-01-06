@@ -26,10 +26,19 @@ export function activate(context: ExtensionContext) {
 
     console.log(`Tect: Starting Language Server from: ${serverModule}`);
 
-    // Configuration for launching the server process via stdio
+    // Configuration for launching the server process via stdio.
+    // Explicitly passing 'serve' to match the Rust CLI subcommand.
     const serverOptions: ServerOptions = {
-        run: { command: serverModule, transport: TransportKind.stdio },
-        debug: { command: serverModule, transport: TransportKind.stdio }
+        run: {
+            command: serverModule,
+            args: ['serve'],
+            transport: TransportKind.stdio
+        },
+        debug: {
+            command: serverModule,
+            args: ['serve'],
+            transport: TransportKind.stdio
+        }
     };
 
     // Client-side configuration: watch .tect files and handle synchronization
