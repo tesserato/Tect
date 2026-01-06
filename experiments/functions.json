@@ -221,12 +221,12 @@
         "group": null
     },
     {
-        "uid": 41,
+        "uid": 37,
         "name": "RenderHTMLArticles",
         "documentation": "Renders articles into HTML using templates",
         "consumes": [
             {
-                "uid": 37,
+                "uid": 33,
                 "kind": {
                     "Constant": {
                         "uid": 10,
@@ -237,7 +237,7 @@
                 "cardinality": "Unitary"
             },
             {
-                "uid": 38,
+                "uid": 34,
                 "kind": {
                     "Constant": {
                         "uid": 8,
@@ -246,6 +246,55 @@
                     }
                 },
                 "cardinality": "Unitary"
+            },
+            {
+                "uid": 35,
+                "kind": {
+                    "Constant": {
+                        "uid": 7,
+                        "name": "Settings",
+                        "documentation": "The loaded settings from the config file"
+                    }
+                },
+                "cardinality": "Unitary"
+            }
+        ],
+        "produces": [
+            [
+                {
+                    "uid": 36,
+                    "kind": {
+                        "Variable": {
+                            "uid": 11,
+                            "name": "HTMLarticle",
+                            "documentation": "The final article HTML string ready to be written to disk"
+                        }
+                    },
+                    "cardinality": "Unitary"
+                }
+            ]
+        ],
+        "group": {
+            "uid": 3,
+            "name": "Rendering",
+            "documentation": null
+        }
+    },
+    {
+        "uid": 41,
+        "name": "RenderHTMLIndex",
+        "documentation": "Renders the index page into HTML using templates",
+        "consumes": [
+            {
+                "uid": 38,
+                "kind": {
+                    "Constant": {
+                        "uid": 10,
+                        "name": "Article",
+                        "documentation": "The processed data structure containing markdown content and metadata"
+                    }
+                },
+                "cardinality": "Collection"
             },
             {
                 "uid": 39,
@@ -265,55 +314,6 @@
                     "uid": 40,
                     "kind": {
                         "Variable": {
-                            "uid": 11,
-                            "name": "HTMLarticle",
-                            "documentation": "The final article HTML string ready to be written to disk"
-                        }
-                    },
-                    "cardinality": "Unitary"
-                }
-            ]
-        ],
-        "group": {
-            "uid": 3,
-            "name": "Rendering",
-            "documentation": null
-        }
-    },
-    {
-        "uid": 36,
-        "name": "RenderHTMLIndex",
-        "documentation": "Renders the index page into HTML using templates",
-        "consumes": [
-            {
-                "uid": 33,
-                "kind": {
-                    "Constant": {
-                        "uid": 10,
-                        "name": "Article",
-                        "documentation": "The processed data structure containing markdown content and metadata"
-                    }
-                },
-                "cardinality": "Collection"
-            },
-            {
-                "uid": 34,
-                "kind": {
-                    "Constant": {
-                        "uid": 7,
-                        "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
-                    }
-                },
-                "cardinality": "Unitary"
-            }
-        ],
-        "produces": [
-            [
-                {
-                    "uid": 35,
-                    "kind": {
-                        "Variable": {
                             "uid": 12,
                             "name": "HTMLIndex",
                             "documentation": "The final index HTML string ready to be written to disk"
@@ -330,68 +330,17 @@
         }
     },
     {
-        "uid": 49,
+        "uid": 45,
         "name": "WriteArticlesToDisk",
         "documentation": "Writes HTML files to disk",
-        "consumes": [
-            {
-                "uid": 46,
-                "kind": {
-                    "Variable": {
-                        "uid": 11,
-                        "name": "HTMLarticle",
-                        "documentation": "The final article HTML string ready to be written to disk"
-                    }
-                },
-                "cardinality": "Unitary"
-            }
-        ],
-        "produces": [
-            [
-                {
-                    "uid": 47,
-                    "kind": {
-                        "Variable": {
-                            "uid": 14,
-                            "name": "SuccessReport",
-                            "documentation": "A final summary of the operations performed during the run"
-                        }
-                    },
-                    "cardinality": "Unitary"
-                }
-            ],
-            [
-                {
-                    "uid": 48,
-                    "kind": {
-                        "Error": {
-                            "uid": 13,
-                            "name": "FileSystemError",
-                            "documentation": "Triggered when a file cannot be read from or written to the disk"
-                        }
-                    },
-                    "cardinality": "Unitary"
-                }
-            ]
-        ],
-        "group": {
-            "uid": 4,
-            "name": "IO",
-            "documentation": null
-        }
-    },
-    {
-        "uid": 45,
-        "name": "WriteIndexToDisk",
-        "documentation": "Writes the index HTML file to disk",
         "consumes": [
             {
                 "uid": 42,
                 "kind": {
                     "Variable": {
-                        "uid": 12,
-                        "name": "HTMLIndex",
-                        "documentation": "The final index HTML string ready to be written to disk"
+                        "uid": 11,
+                        "name": "HTMLarticle",
+                        "documentation": "The final article HTML string ready to be written to disk"
                     }
                 },
                 "cardinality": "Unitary"
@@ -414,6 +363,57 @@
             [
                 {
                     "uid": 44,
+                    "kind": {
+                        "Error": {
+                            "uid": 13,
+                            "name": "FileSystemError",
+                            "documentation": "Triggered when a file cannot be read from or written to the disk"
+                        }
+                    },
+                    "cardinality": "Unitary"
+                }
+            ]
+        ],
+        "group": {
+            "uid": 4,
+            "name": "IO",
+            "documentation": null
+        }
+    },
+    {
+        "uid": 49,
+        "name": "WriteIndexToDisk",
+        "documentation": "Writes the index HTML file to disk",
+        "consumes": [
+            {
+                "uid": 46,
+                "kind": {
+                    "Variable": {
+                        "uid": 12,
+                        "name": "HTMLIndex",
+                        "documentation": "The final index HTML string ready to be written to disk"
+                    }
+                },
+                "cardinality": "Unitary"
+            }
+        ],
+        "produces": [
+            [
+                {
+                    "uid": 47,
+                    "kind": {
+                        "Variable": {
+                            "uid": 14,
+                            "name": "SuccessReport",
+                            "documentation": "A final summary of the operations performed during the run"
+                        }
+                    },
+                    "cardinality": "Unitary"
+                }
+            ],
+            [
+                {
+                    "uid": 48,
                     "kind": {
                         "Error": {
                             "uid": 13,

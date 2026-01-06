@@ -1,3 +1,8 @@
+//! # Tect Logic Engine
+//!
+//! Orchestrates the architectural simulation by consuming a [ProgramStructure].
+//! It tracks the movement of tokens through pools and handles branching.
+
 use crate::models::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -18,7 +23,6 @@ pub struct TokenPool {
     pub variables: Vec<Token>,
     pub errors: Vec<Token>,
     pub constants: Vec<Token>,
-    /// Maps Token UIDs to the origin Node.
     pub token_to_origin_node: HashMap<u32, Arc<Node>>,
     pub expanded_nodes: HashSet<u32>,
     pub constants_used: HashSet<u32>,
@@ -67,7 +71,6 @@ impl TokenPool {
 
     pub fn try_to_consume(&mut self, requirements: Vec<Token>, destination: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
-        // Owned Tokens ensure consistency during branch filtering
         let mut consumed_in_step: Vec<Token> = Vec::new();
         let mut trigger_expansion = false;
 
@@ -90,14 +93,12 @@ impl TokenPool {
                     {
                         trigger_expansion = true;
                     }
-
                     edges.push(Edge {
                         from_node_uid: origin.uid,
                         to_node_uid: destination.uid,
                         token: t.clone(),
                         relation: "data_flow".to_string(),
                     });
-
                     consumed_in_step.push(t);
                 }
             }
@@ -113,7 +114,6 @@ impl TokenPool {
             if trigger_expansion {
                 self.expanded_nodes.insert(destination.uid);
             }
-            // Transition linear artifacts from pool to state history
             for used in &consumed_in_step {
                 if matches!(used.kind, Kind::Constant(..)) {
                     self.constants_used.insert(used.uid);
@@ -158,7 +158,7 @@ impl Flow {
         }
     }
 
-    pub fn process_flow(&mut self, functions: &[Arc<Function>]) -> (Vec<Arc<Node>>, Vec<Edge>) {
+    pub fn simulate(&mut self, structure: &ProgramStructure) -> Graph {
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
             true,
@@ -167,27 +167,29 @@ impl Flow {
         ));
         self.nodes.push(initial_node.clone());
 
-        if let Some(first) = functions.first() {
-            self.pools
-                .push(TokenPool::new(first.consumes.clone(), initial_node.clone()));
+        if let Some(first_name) = structure.flow.first() {
+            if let Some(func) = structure.catalog.get(first_name) {
+                self.pools
+                    .push(TokenPool::new(func.consumes.clone(), initial_node.clone()));
+            }
         }
 
-        for function in functions {
-            let node = Arc::new(Node::new(function.clone()));
+        for func_name in &structure.flow {
+            let Some(func) = structure.catalog.get(func_name) else {
+                continue;
+            };
+            let node = Arc::new(Node::new(func.clone()));
             self.nodes.push(node.clone());
 
             let mut next_pools = Vec::new();
             for pool in &mut self.pools {
-                match pool.try_to_consume(function.consumes.clone(), node.clone()) {
+                match pool.try_to_consume(func.consumes.clone(), node.clone()) {
                     Consumed::AllTokens(new_edges) => {
                         self.edges.extend(new_edges);
-
-                        if function.produces.is_empty() {
-                            // Sink/Transparent function support
+                        if func.produces.is_empty() {
                             next_pools.push(pool.clone());
                         } else {
-                            // Branching architectural possibilities
-                            for branch in &function.produces {
+                            for branch in &func.produces {
                                 let mut branched_pool = pool.clone();
                                 branched_pool.produce(branch.clone(), node.clone());
                                 next_pools.push(branched_pool);
@@ -247,6 +249,9 @@ impl Flow {
                 .retain(|e| seen.insert((e.from_node_uid, e.to_node_uid, e.token.uid)));
         }
 
-        (self.nodes.clone(), self.edges.clone())
+        Graph {
+            nodes: self.nodes.iter().map(|n| (**n).clone()).collect(),
+            edges: self.edges.clone(),
+        }
     }
 }

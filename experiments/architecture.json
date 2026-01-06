@@ -268,12 +268,12 @@
         {
             "uid": 57,
             "function": {
-                "uid": 41,
+                "uid": 37,
                 "name": "RenderHTMLArticles",
                 "documentation": "Renders articles into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 37,
+                        "uid": 33,
                         "kind": {
                             "Constant": {
                                 "uid": 10,
@@ -284,7 +284,7 @@
                         "cardinality": "Unitary"
                     },
                     {
-                        "uid": 38,
+                        "uid": 34,
                         "kind": {
                             "Constant": {
                                 "uid": 8,
@@ -295,7 +295,7 @@
                         "cardinality": "Unitary"
                     },
                     {
-                        "uid": 39,
+                        "uid": 35,
                         "kind": {
                             "Constant": {
                                 "uid": 7,
@@ -309,7 +309,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 40,
+                            "uid": 36,
                             "kind": {
                                 "Variable": {
                                     "uid": 11,
@@ -334,12 +334,12 @@
         {
             "uid": 58,
             "function": {
-                "uid": 36,
+                "uid": 41,
                 "name": "RenderHTMLIndex",
                 "documentation": "Renders the index page into HTML using templates",
                 "consumes": [
                     {
-                        "uid": 33,
+                        "uid": 38,
                         "kind": {
                             "Constant": {
                                 "uid": 10,
@@ -350,7 +350,7 @@
                         "cardinality": "Collection"
                     },
                     {
-                        "uid": 34,
+                        "uid": 39,
                         "kind": {
                             "Constant": {
                                 "uid": 7,
@@ -364,7 +364,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 35,
+                            "uid": 40,
                             "kind": {
                                 "Variable": {
                                     "uid": 12,
@@ -389,12 +389,12 @@
         {
             "uid": 59,
             "function": {
-                "uid": 49,
+                "uid": 45,
                 "name": "WriteArticlesToDisk",
                 "documentation": "Writes HTML files to disk",
                 "consumes": [
                     {
-                        "uid": 46,
+                        "uid": 42,
                         "kind": {
                             "Variable": {
                                 "uid": 11,
@@ -408,7 +408,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 47,
+                            "uid": 43,
                             "kind": {
                                 "Variable": {
                                     "uid": 14,
@@ -421,7 +421,7 @@
                     ],
                     [
                         {
-                            "uid": 48,
+                            "uid": 44,
                             "kind": {
                                 "Error": {
                                     "uid": 13,
@@ -446,12 +446,12 @@
         {
             "uid": 60,
             "function": {
-                "uid": 45,
+                "uid": 49,
                 "name": "WriteIndexToDisk",
                 "documentation": "Writes the index HTML file to disk",
                 "consumes": [
                     {
-                        "uid": 42,
+                        "uid": 46,
                         "kind": {
                             "Variable": {
                                 "uid": 12,
@@ -465,7 +465,7 @@
                 "produces": [
                     [
                         {
-                            "uid": 43,
+                            "uid": 47,
                             "kind": {
                                 "Variable": {
                                     "uid": 14,
@@ -478,7 +478,7 @@
                     ],
                     [
                         {
-                            "uid": 44,
+                            "uid": 48,
                             "kind": {
                                 "Error": {
                                     "uid": 13,
@@ -758,7 +758,7 @@
             "from_node_uid": 57,
             "to_node_uid": 59,
             "token": {
-                "uid": 40,
+                "uid": 36,
                 "kind": {
                     "Variable": {
                         "uid": 11,
@@ -774,7 +774,7 @@
             "from_node_uid": 58,
             "to_node_uid": 60,
             "token": {
-                "uid": 35,
+                "uid": 40,
                 "kind": {
                     "Variable": {
                         "uid": 12,
@@ -790,7 +790,7 @@
             "from_node_uid": 59,
             "to_node_uid": 62,
             "token": {
-                "uid": 47,
+                "uid": 43,
                 "kind": {
                     "Variable": {
                         "uid": 14,
@@ -806,7 +806,7 @@
             "from_node_uid": 60,
             "to_node_uid": 62,
             "token": {
-                "uid": 43,
+                "uid": 47,
                 "kind": {
                     "Variable": {
                         "uid": 14,
@@ -822,7 +822,7 @@
             "from_node_uid": 60,
             "to_node_uid": 64,
             "token": {
-                "uid": 44,
+                "uid": 48,
                 "kind": {
                     "Error": {
                         "uid": 13,
@@ -838,7 +838,7 @@
             "from_node_uid": 59,
             "to_node_uid": 64,
             "token": {
-                "uid": 48,
+                "uid": 44,
                 "kind": {
                     "Error": {
                         "uid": 13,
