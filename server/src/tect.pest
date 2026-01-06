@@ -36,13 +36,14 @@ token_list = { token ~ ("," ~ token)* }
 output_line = { (">" | "|") ~ token_list }
 
 // Function Definition
-// Supports: [Group] function Name(Inputs) \n > Outputs \n | Branches
+// Supports: [Group] function Name Inputs \n > Outputs \n | Branches
+// Parentheses are no longer required for function inputs.
 func_def = {
     doc_line* ~
-    (!kw_function ~ ident)? ~ // Optional Group Prefix (must not be the word 'function')
+    (!kw_function ~ ident)? ~ // Optional Group Prefix
     kw_function ~
     ident ~                   // Function Name
-    "(" ~ token_list? ~ ")" ~
+    token_list? ~             // Optional Inputs (no parens)
     (ln | WHITESPACE)* ~
     func_outputs
 }

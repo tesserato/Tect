@@ -1,6 +1,7 @@
 //! # Tect Language Server Backend
 //!
 //! Orchestrates documentation tooltips, navigation, and formatting.
+//! Implements standard LSP traits for communication with editors like VS Code.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
 use crate::models::{Kind, ProgramStructure, Span};
@@ -45,6 +46,7 @@ impl LanguageServer for Backend {
         }
     }
 
+    /// Provides interactive tooltips for types and functions.
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
         let uri = &p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
@@ -100,6 +102,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Navigates the user to the definition of the symbol under the cursor.
     async fn goto_definition(
         &self,
         p: GotoDefinitionParams,
@@ -122,10 +125,7 @@ impl LanguageServer for Backend {
 
                 if let Some(id) = uid {
                     if let Some(meta) = structure.symbol_table.get(&id) {
-                        let mut range = Self::span_to_range(content, meta.definition_span);
-                        // Jump to column 0 for clean definitions
-                        range.start.character = 0;
-                        range.end.character = 0;
+                        let range = Self::span_to_range(content, meta.definition_span);
                         return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                             uri.clone(),
                             range,
@@ -137,13 +137,13 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Reformats the document to comply with Tect style standards.
     async fn formatting(&self, p: DocumentFormattingParams) -> LspResult<Option<Vec<TextEdit>>> {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
             let mut formatted = String::new();
 
-            // Reconstruct the file iterating only top-level statements to avoid nested duplication
             if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
                 let program = pairs.next().unwrap();
                 for pair in program.into_inner() {
@@ -156,35 +156,43 @@ impl LanguageServer for Backend {
                         Rule::func_def => {
                             formatted.push_str("\n");
                             let mut inner = pair.clone().into_inner();
-                            // Collect docs separately to handle indentation of the logic block
-                            let mut docs = Vec::new();
+
+                            // 1. Process Documentation
                             while let Some(p) = inner.peek() {
                                 if p.as_rule() == Rule::doc_line {
-                                    docs.push(inner.next().unwrap().as_str().trim());
+                                    formatted.push_str(inner.next().unwrap().as_str().trim());
+                                    formatted.push_str("\n");
                                 } else {
                                     break;
                                 }
                             }
-                            for d in docs {
-                                formatted.push_str(d);
-                                formatted.push_str("\n");
-                            }
 
-                            // Group and Func line
-                            let mut line = String::new();
-                            while let Some(p) = inner.next() {
-                                if p.as_rule() == Rule::func_outputs {
-                                    formatted.push_str(line.trim());
-                                    formatted.push_str("\n");
-                                    for out in p.into_inner() {
-                                        formatted.push_str("    ");
-                                        formatted.push_str(out.as_str().trim());
-                                        formatted.push_str("\n");
-                                    }
-                                    break;
+                            // 2. Process Group, keyword, and Name
+                            let mut header_parts = Vec::new();
+                            while let Some(p) = inner.peek() {
+                                if p.as_rule() == Rule::ident || p.as_rule() == Rule::kw_function {
+                                    header_parts.push(inner.next().unwrap().as_str().trim());
                                 } else {
-                                    line.push_str(p.as_str());
-                                    line.push_str(" ");
+                                    break;
+                                }
+                            }
+                            formatted.push_str(&header_parts.join(" "));
+
+                            // 3. Process Inputs (no parens)
+                            if let Some(p) = inner.peek() {
+                                if p.as_rule() == Rule::token_list {
+                                    formatted.push_str(" ");
+                                    formatted.push_str(inner.next().unwrap().as_str().trim());
+                                }
+                            }
+                            formatted.push_str("\n");
+
+                            // 4. Process Outputs
+                            if let Some(p) = inner.next() {
+                                for out in p.into_inner() {
+                                    formatted.push_str("    ");
+                                    formatted.push_str(out.as_str().trim());
+                                    formatted.push_str("\n");
                                 }
                             }
                         }
@@ -202,6 +210,7 @@ impl LanguageServer for Backend {
             }
 
             if !formatted.is_empty() {
+                // Return a single edit that replaces the entire document.
                 let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
                 return Ok(Some(vec![TextEdit::new(
                     full_range,
@@ -218,17 +227,20 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
+    /// Re-analyzes the document and updates the internal state.
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
         if let Ok(structure) = analyzer.analyze(&content) {
             self.document_state.insert(uri, (content, structure));
         } else {
+            // Keep content but skip IR update if syntax is invalid.
             self.document_state
                 .entry(uri)
                 .and_modify(|(old_content, _)| *old_content = content);
         }
     }
 
+    /// Identifies the word and range at a specific cursor position.
     fn get_word_at(content: &str, pos: Position) -> Option<(String, Range)> {
         let lines: Vec<&str> = content.lines().collect();
         let line = lines.get(pos.line as usize)?;
@@ -245,13 +257,14 @@ impl Backend {
         None
     }
 
+    /// Translates a byte-offset Span into a line/character Range.
     fn span_to_range(content: &str, span: Span) -> Range {
         let mut start_pos = Position::new(0, 0);
         let mut end_pos = Position::new(0, 0);
         let mut current_offset = 0;
 
         for (i, line) in content.lines().enumerate() {
-            let line_len = line.len() + 1;
+            let line_len = line.len() + 1; // +1 for normalized \n
             if current_offset <= span.start && span.start < current_offset + line_len {
                 start_pos = Position::new(i as u32, (span.start - current_offset) as u32);
             }

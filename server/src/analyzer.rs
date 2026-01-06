@@ -1,6 +1,7 @@
 //! # Tect Semantic Analyzer
 //!
 //! Responsible for transforming raw Tect source code into a [ProgramStructure].
+//! Performs two passes: symbol discovery and contract linking.
 
 use crate::models::*;
 use anyhow::{Context, Result};
@@ -20,6 +21,7 @@ impl TectAnalyzer {
         Self
     }
 
+    /// Primary entry point for analysis. Processes the string content into a structured IR.
     pub fn analyze(&mut self, content: &str) -> Result<ProgramStructure> {
         let mut structure = ProgramStructure::default();
         let pairs = TectParser::parse(Rule::program, content)
@@ -29,6 +31,7 @@ impl TectAnalyzer {
         let statements: Vec<Pair<Rule>> = pairs.into_inner().collect();
 
         // Pass 1: Global Discovery
+        // Identifies all constants, variables, groups, and function names.
         for pair in &statements {
             match pair.as_rule() {
                 Rule::const_def => self.define_type(pair, "constant", &mut structure)?,
@@ -41,6 +44,7 @@ impl TectAnalyzer {
         }
 
         // Pass 2: Linking Contracts & Flow
+        // Resolves the types consumed and produced by functions now that all symbols are known.
         for pair in &statements {
             match pair.as_rule() {
                 Rule::func_def => self.link_function_contracts(pair, &mut structure)?,
@@ -56,6 +60,7 @@ impl TectAnalyzer {
         Ok(structure)
     }
 
+    /// Maps a Pest Span to our internal Span model.
     fn map_span(p: &Pair<Rule>) -> Span {
         let s = p.as_span();
         Span {
@@ -64,9 +69,7 @@ impl TectAnalyzer {
         }
     }
 
-    /// Captures leading doc comments.
-    /// Joins with Markdown "Hard Break" (two spaces + newline) to ensure
-    /// visual line breaks in tooltips match source code lines.
+    /// Captures leading doc comments from the parse stream.
     fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
         let mut docs = Vec::new();
         while let Some(p) = inner.peek() {
@@ -88,6 +91,7 @@ impl TectAnalyzer {
         }
     }
 
+    /// Registers a basic data artifact (Constant, Variable, or Error).
     fn define_type(
         &mut self,
         pair: &Pair<Rule>,
@@ -117,6 +121,7 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    /// Registers an architectural group.
     fn define_group(&mut self, pair: &Pair<Rule>, structure: &mut ProgramStructure) -> Result<()> {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
@@ -136,6 +141,7 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    /// Initializes a function entry in the catalog without resolving its contract.
     fn define_function_skeleton(
         &mut self,
         pair: &Pair<Rule>,
@@ -146,6 +152,7 @@ impl TectAnalyzer {
 
         let mut group = None;
         if let Some(p) = inner.peek() {
+            // Check for group prefix (an identifier before the 'function' keyword)
             if p.as_rule() == Rule::ident {
                 group = structure
                     .groups
@@ -154,7 +161,7 @@ impl TectAnalyzer {
             }
         }
 
-        let _kw = inner.next().unwrap();
+        let _kw = inner.next().unwrap(); // 'function'
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
 
@@ -170,12 +177,15 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    /// Resolves input tokens and output branches for a specific function.
     fn link_function_contracts(
         &mut self,
         pair: &Pair<Rule>,
         structure: &mut ProgramStructure,
     ) -> Result<()> {
         let mut inner = pair.clone().into_inner();
+
+        // Skip metadata already processed in skeleton pass
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -188,11 +198,12 @@ impl TectAnalyzer {
                 inner.next();
             }
         }
-        let _kw = inner.next();
+        let _kw = inner.next(); // 'function'
         let name = inner.next().unwrap().as_str();
 
         let mut consumes = Vec::new();
         if let Some(p) = inner.peek() {
+            // Input token list is now direct, no parentheses.
             if p.as_rule() == Rule::token_list {
                 consumes = self.resolve_tokens(inner.next().unwrap(), structure);
             }
@@ -214,6 +225,7 @@ impl TectAnalyzer {
         Ok(())
     }
 
+    /// Helper to resolve a list of raw identifiers into typed Tokens.
     fn resolve_tokens(&self, pair: Pair<Rule>, structure: &ProgramStructure) -> Vec<Token> {
         let mut tokens = Vec::new();
         for t_pair in pair.into_inner() {
