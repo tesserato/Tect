@@ -64,7 +64,7 @@ impl LanguageServer for Backend {
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             if let Some((word, range)) = Self::get_word_at(content, pos) {
-                // 1. Check for Language Keywords
+                // Keyword Tooltips
                 let kw_doc = match word.as_str() {
                     "constant" => Some("Defines an immutable global architectural artifact."),
                     "variable" => Some("Defines a mutable or stateful architectural artifact."),
@@ -84,7 +84,7 @@ impl LanguageServer for Backend {
                     }));
                 }
 
-                // 2. Check for Symbols
+                // Symbol Tooltips
                 let markdown = if let Some(kind) = structure.artifacts.get(&word) {
                     format!(
                         "### {}: `{}`\n\n---\n\n{}",
@@ -305,20 +305,24 @@ impl LanguageServer for Backend {
             let mut hints = Vec::new();
             for step in &structure.flow {
                 if let Some(f) = structure.catalog.get(&step.function_name) {
-                    if let Some(ref g) = f.group {
-                        let range = Self::span_to_range(content, step.span);
-                        let signature = Self::format_signature(f);
-                        hints.push(InlayHint {
-                            position: range.end,
-                            label: InlayHintLabel::String(format!(" : {}: {}", g.name, signature)),
-                            kind: Some(InlayHintKind::TYPE),
-                            padding_left: Some(true),
-                            padding_right: None,
-                            data: None,
-                            tooltip: None,
-                            text_edits: None,
-                        });
-                    }
+                    let range = Self::span_to_range(content, step.span);
+                    let signature = Self::format_signature(f);
+                    let label = if let Some(ref g) = f.group {
+                        format!("  {}  {}", g.name, signature)
+                    } else {
+                        format!("  {}", signature)
+                    };
+
+                    hints.push(InlayHint {
+                        position: range.end,
+                        label: InlayHintLabel::String(label),
+                        kind: Some(InlayHintKind::TYPE),
+                        padding_left: Some(true),
+                        padding_right: None,
+                        data: None,
+                        tooltip: None,
+                        text_edits: None,
+                    });
                 }
             }
             return Ok(Some(hints));
@@ -335,85 +339,109 @@ impl LanguageServer for Backend {
             let mut last_rule = None;
             let mut last_end_pos = 0;
 
-            if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
-                let program = pairs.next().unwrap();
-                for pair in program.into_inner() {
-                    let span = pair.as_span();
-                    let rule = rule_to_logic(pair.as_rule());
-                    let gap = &content[last_end_pos..span.start()];
-                    let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
+            let parsed = match TectParser::parse(Rule::program, content) {
+                Ok(mut p) => p.next().unwrap(),
+                Err(_) => return Ok(None),
+            };
 
-                    if (has_empty_line || last_rule != Some(rule)) && !current_block.is_empty() {
-                        entities.push(current_block.trim_end().to_string());
-                        current_block = String::new();
-                    }
+            for pair in parsed.into_inner() {
+                let rule_raw = pair.as_rule();
+                let span = pair.as_span();
+                let rule_logic = rule_to_logic(rule_raw);
 
-                    match pair.as_rule() {
-                        Rule::comment | Rule::flow_step => {
-                            current_block.push_str(pair.as_str().trim());
-                            current_block.push_str("\n");
-                        }
-                        Rule::const_def
-                        | Rule::var_def
-                        | Rule::err_def
-                        | Rule::group_def
-                        | Rule::func_def => {
-                            let mut formatted = String::new();
-                            if pair.as_rule() == Rule::func_def {
-                                let mut inner = pair.clone().into_inner();
-                                while let Some(p) = inner.peek() {
-                                    if p.as_rule() == Rule::doc_line {
-                                        formatted.push_str(inner.next().unwrap().as_str().trim());
-                                        formatted.push_str("\n");
-                                    } else {
-                                        break;
-                                    }
-                                }
-                                let mut hp = Vec::new();
-                                while let Some(p) = inner.peek() {
-                                    if p.as_rule() == Rule::ident
-                                        || p.as_rule() == Rule::kw_function
-                                    {
-                                        hp.push(inner.next().unwrap().as_str().trim());
-                                    } else {
-                                        break;
-                                    }
-                                }
-                                formatted.push_str(&hp.join(" "));
-                                if let Some(p) = inner.peek() {
-                                    if p.as_rule() == Rule::token_list {
-                                        formatted.push_str(" ");
-                                        formatted.push_str(inner.next().unwrap().as_str().trim());
-                                    }
-                                }
-                                formatted.push_str("\n");
-                                if let Some(p) = inner.next() {
-                                    for out in p.into_inner() {
-                                        formatted.push_str("    ");
-                                        formatted.push_str(out.as_str().trim());
-                                        formatted.push_str("\n");
-                                    }
-                                }
-                            } else {
-                                formatted = pair.as_str().trim().to_string();
-                            }
-                            entities.push(formatted.trim_end().to_string());
-                        }
-                        _ => {}
-                    }
-                    last_rule = Some(rule);
-                    last_end_pos = span.end();
+                // Detect empty lines in source
+                let gap = &content[last_end_pos..span.start()];
+                let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
+
+                // Group sequences (comments/flow) unless separated by gap or type change
+                if (has_empty_line || last_rule != Some(rule_logic)) && !current_block.is_empty() {
+                    entities.push(current_block.trim_end().to_string());
+                    current_block.clear();
                 }
+
+                match rule_logic {
+                    FormatterRule::Comment | FormatterRule::Flow => {
+                        current_block.push_str(pair.as_str().trim());
+                        current_block.push('\n');
+                    }
+                    FormatterRule::Atomic => {
+                        if !current_block.is_empty() {
+                            entities.push(current_block.trim_end().to_string());
+                            current_block.clear();
+                        }
+
+                        let mut formatted = String::new();
+                        if pair.as_rule() == Rule::func_def {
+                            let mut inner = pair.clone().into_inner();
+                            let mut last_pos = None;
+
+                            // 1. Documentation lines
+                            while let Some(p) = inner.peek() {
+                                let pos = p.as_span().start();
+                                if last_pos == Some(pos) {
+                                    break;
+                                }
+                                last_pos = Some(pos);
+
+                                if p.as_rule() == Rule::doc_line {
+                                    formatted.push_str(inner.next().unwrap().as_str().trim());
+                                    formatted.push('\n');
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            // 2. Signature Header
+                            let mut header = Vec::new();
+                            while let Some(p) = inner.peek() {
+                                if matches!(
+                                    p.as_rule(),
+                                    Rule::ident | Rule::kw_function | Rule::token_list
+                                ) {
+                                    header.push(inner.next().unwrap().as_str().trim());
+                                } else {
+                                    break;
+                                }
+                            }
+                            if !header.is_empty() {
+                                formatted.push_str(&header.join(" "));
+                                formatted.push('\n');
+                            }
+
+                            // 3. Branches
+                            if let Some(p) = inner.next() {
+                                for child in p.into_inner() {
+                                    if child.as_rule() == Rule::output_line {
+                                        let mut parts = child.into_inner();
+                                        let sym = parts.next().map(|s| s.as_str()).unwrap_or(">");
+                                        let tokens =
+                                            parts.next().map(|t| t.as_str().trim()).unwrap_or("");
+                                        formatted.push_str(&format!("    {} {}\n", sym, tokens));
+                                    }
+                                }
+                            }
+                        } else {
+                            formatted = pair.as_str().trim().to_string();
+                        }
+
+                        let cleaned = formatted.trim_end();
+                        if !cleaned.is_empty() {
+                            entities.push(cleaned.to_string());
+                        }
+                    }
+                }
+                last_rule = Some(rule_logic);
+                last_end_pos = span.end();
             }
+
             if !current_block.is_empty() {
                 entities.push(current_block.trim_end().to_string());
             }
+
             if !entities.is_empty() {
                 let final_text = entities.join("\n\n") + "\n";
-                return Ok(Some(vec![TextEdit::new(
-                    Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX)),
-                    final_text,
-                )]));
+                let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
+                return Ok(Some(vec![TextEdit::new(full_range, final_text)]));
             }
         }
         Ok(None)
@@ -542,23 +570,21 @@ impl Backend {
         let inputs = f
             .consumes
             .iter()
-            .map(|t| Self::format_token(t))
+            .map(Self::format_token)
             .collect::<Vec<_>>()
             .join(", ");
-
         let outputs = f
             .produces
             .iter()
             .map(|branch| {
                 branch
                     .iter()
-                    .map(|t| Self::format_token(t))
+                    .map(Self::format_token)
                     .collect::<Vec<_>>()
                     .join(", ")
             })
             .collect::<Vec<_>>()
             .join(" | ");
-
         format!("{} -> {}", inputs, outputs)
     }
 
