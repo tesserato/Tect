@@ -1,22 +1,32 @@
 {
     "name": "tect-vscode",
-    "displayName": "Tect Architecture",
+    "displayName": "Tect Language Support",
+    "description": "Architectural modeling and flow analysis for the Tect DSL.",
     "version": "0.1.0",
     "publisher": "tect-lang",
     "engines": {
         "vscode": "^1.75.0"
     },
+    "categories": [
+        "Programming Languages",
+        "Linters"
+    ],
     "activationEvents": [
         "onLanguage:tect"
     ],
-    "main": "./out/extension.js",
+    "main": "./src/extension.js",
     "contributes": {
         "languages": [
             {
                 "id": "tect",
+                "aliases": [
+                    "Tect",
+                    "tect"
+                ],
                 "extensions": [
                     ".tect"
-                ]
+                ],
+                "configuration": "./language-configuration.json"
             }
         ],
         "grammars": [
@@ -26,46 +36,35 @@
                 "path": "./syntaxes/tect.tmLanguage.json"
             }
         ],
+        "configuration": {
+            "type": "object",
+            "title": "Tect",
+            "properties": {
+                "tect.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VS Code and the Tect language server."
+                }
+            }
+        },
         "semanticTokenTypes": [
             {
-                "id": "keyword"
-            },
-            {
-                "id": "type"
-            },
-            {
-                "id": "function"
-            },
-            {
-                "id": "variable"
-            },
-            {
-                "id": "enum"
+                "id": "tectGroup",
+                "description": "Architectural group identifiers."
             }
         ],
         "semanticTokenScopes": [
             {
                 "language": "tect",
                 "scopes": {
-                    "keyword": [
-                        "keyword.control.tect"
-                    ],
-                    "type": [
-                        "entity.name.type.tect",
-                        "support.type.tect"
-                    ],
-                    "function": [
-                        "entity.name.function.tect",
-                        "support.function.tect"
-                    ],
-                    "variable": [
-                        "variable.other.readwrite.tect",
-                        "variable.parameter.tect"
-                    ],
-                    "enum": [
-                        "entity.name.error.tect",
-                        "markup.bold",
-                        "constant.language.tect"
+                    "tectGroup": [
+                        "entity.name.section.tect"
                     ]
                 }
             }
@@ -80,8 +79,8 @@
         "vscode-languageclient": "^8.1.0"
     },
     "devDependencies": {
-        "@types/node": "^16.11.7",
+        "@types/node": "16.x",
         "@types/vscode": "^1.75.0",
-        "typescript": "^4.9.4"
+        "typescript": "^4.9.5"
     }
 }

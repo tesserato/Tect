@@ -65,9 +65,6 @@ impl TectAnalyzer {
         }
     }
 
-    /// Resolves documentation comments.
-    /// Uses the Markdown "Hard Line Break" (two spaces + newline) to preserve user formatting
-    /// without relying on ad-hoc regex checks.
     fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
         let mut docs = Vec::new();
         while let Some(p) = inner.peek() {
@@ -171,14 +168,12 @@ impl TectAnalyzer {
         Ok(())
     }
 
-    /// The Linking Phase: Resolves identifier names into logical Kinds/Tokens.
     fn link_function_contracts(
         &mut self,
         pair: &Pair<Rule>,
         structure: &mut ProgramStructure,
     ) -> Result<()> {
         let mut inner = pair.clone().into_inner();
-        // Skip docs
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -186,13 +181,11 @@ impl TectAnalyzer {
                 break;
             }
         }
-        // Skip group
         if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::ident {
                 inner.next();
             }
         }
-        // Skip kw and name
         let _kw = inner.next();
         let name = inner.next().unwrap().as_str();
 
@@ -231,7 +224,6 @@ impl TectAnalyzer {
                 _ => (inner.as_str(), Cardinality::Unitary),
             };
 
-            // Link to existing artifact or create a virtual Variable if undefined
             let kind =
                 structure.artifacts.get(name).cloned().unwrap_or_else(|| {
                     Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
