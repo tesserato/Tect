@@ -4,13 +4,24 @@
 //! IDE features like Rename, Outline, and Inlay Hints.
 
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
+use crate::engine::Flow;
 use crate::models::{Cardinality, Function, Kind, ProgramStructure, Span, SymbolMetadata, Token};
+use crate::vis_js::{self, VisData};
 use dashmap::DashMap;
 use pest::Parser;
 use regex::Regex;
-use tower_lsp::jsonrpc::Result as LspResult;
+use serde_json::Value;
+use tower_lsp::jsonrpc::{Error as LspError, Result as LspResult};
+use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
+
+/// Marker for the custom "Analysis Finished" notification.
+pub enum AnalysisFinished {}
+impl Notification for AnalysisFinished {
+    type Params = Value;
+    const METHOD: &'static str = "tect/analysisFinished";
+}
 
 pub struct Backend {
     pub client: Client,
@@ -308,6 +319,7 @@ impl LanguageServer for Backend {
                     } else {
                         format!("{}", signature)
                     };
+
                     hints.push(InlayHint {
                         position: range.end,
                         label: InlayHintLabel::String(label),
@@ -329,22 +341,21 @@ impl LanguageServer for Backend {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
-            let parsed = match TectParser::parse(Rule::program, content) {
-                Ok(mut p) => p.next().unwrap(),
-                Err(_) => return Ok(None),
-            };
-
             let mut entities = Vec::new();
             let mut current_block = String::new();
             let mut last_rule = None;
             let mut last_end_pos = 0;
+
+            let parsed = match TectParser::parse(Rule::program, content) {
+                Ok(mut p) => p.next().unwrap(),
+                Err(_) => return Ok(None),
+            };
 
             for pair in parsed.into_inner() {
                 let rule_raw = pair.as_rule();
                 let span = pair.as_span();
                 let rule_logic = rule_to_logic(rule_raw);
 
-                // Detect whitespace gaps to preserve separation
                 let gap = &content[last_end_pos..span.start()];
                 let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
 
@@ -369,7 +380,6 @@ impl LanguageServer for Backend {
                             let mut inner = pair.clone().into_inner();
                             let mut last_inner_pos = None;
 
-                            // 1. Docs
                             while let Some(p) = inner.peek() {
                                 let pos = p.as_span().start();
                                 if last_inner_pos == Some(pos) {
@@ -384,7 +394,6 @@ impl LanguageServer for Backend {
                                 }
                             }
 
-                            // 2. Header (Group, keyword, Name, Inputs)
                             let mut header = Vec::new();
                             while let Some(p) = inner.peek() {
                                 if matches!(
@@ -401,7 +410,6 @@ impl LanguageServer for Backend {
                                 formatted.push('\n');
                             }
 
-                            // 3. Branches (func_outputs)
                             if let Some(p) = inner.next() {
                                 for child in p.into_inner() {
                                     if child.as_rule() == Rule::output_line {
@@ -459,13 +467,34 @@ fn rule_to_logic(r: Rule) -> FormatterRule {
 }
 
 impl Backend {
+    pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
+        let uri_str = params
+            .get("uri")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| LspError::invalid_params("Missing 'uri' parameter"))?;
+        let uri = Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI"))?;
+
+        if let Some(state) = self.document_state.get(&uri) {
+            let (_, structure) = state.value();
+            let mut flow = Flow::new(true);
+            let graph = flow.simulate(structure);
+            return Ok(vis_js::produce_vis_data(&graph));
+        }
+        Err(LspError::internal_error())
+    }
+
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
         let structure = analyzer.analyze(&content);
         self.client
             .publish_diagnostics(uri.clone(), structure.diagnostics.clone(), None)
             .await;
-        self.document_state.insert(uri, (content, structure));
+        self.document_state
+            .insert(uri.clone(), (content, structure));
+
+        self.client
+            .send_notification::<AnalysisFinished>(serde_json::json!({ "uri": uri.to_string() }))
+            .await;
     }
 
     fn find_meta<'a>(

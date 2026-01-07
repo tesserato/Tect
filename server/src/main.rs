@@ -13,39 +13,28 @@ mod test_engine;
 mod test_parser;
 mod vis_js;
 
-/// The primary entry point for the Tect toolset.
 #[derive(ClapParser)]
 #[command(author, version, about)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
-
-    /// Standard flag passed by Language Clients for stdio transport.
-    /// Marked as global so it can appear after subcommands.
     #[arg(long, global = true)]
     stdio: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Compiles a .tect file into a graph visualization.
     Build {
-        /// The architectural source file.
         input: PathBuf,
-        /// Output path (.html for interactive, .json for raw data).
         #[arg(short, long)]
         output: PathBuf,
     },
-    /// Starts the Tect Language Server.
     Serve,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-
-    // Determine command: prioritize the stdio flag (standard LSP behavior)
-    // or the explicit 'serve' subcommand, otherwise fallback to default.
     let cmd = if cli.stdio {
         Commands::Serve
     } else {
@@ -66,10 +55,13 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Serve => {
-            let (service, socket) = LspService::new(|client| lsp::Backend {
+            let (service, socket) = LspService::build(|client| lsp::Backend {
                 client,
                 document_state: DashMap::new(),
-            });
+            })
+            // Register custom request handler
+            .custom_method("tect/getGraph", lsp::Backend::get_visual_graph)
+            .finish();
 
             Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)
                 .serve(service)

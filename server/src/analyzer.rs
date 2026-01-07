@@ -4,7 +4,6 @@
 //! Performs two passes: symbol discovery and occurrence linking.
 
 use crate::models::*;
-use anyhow::{Context, Result};
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;

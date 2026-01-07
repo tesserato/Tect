@@ -1,20 +1,20 @@
 {
-    "name": "tect-vscode",
-    "displayName": "Tect Language Support",
-    "description": "Architectural modeling and flow analysis for the Tect DSL.",
-    "version": "0.1.0",
+    "name": "tect",
+    "displayName": "Tect Architecture Language",
+    "description": "Architectural Specification Language & Visualizer",
+    "version": "0.0.1",
     "publisher": "tect-lang",
     "engines": {
         "vscode": "^1.75.0"
     },
     "categories": [
         "Programming Languages",
-        "Linters"
+        "Visualization"
     ],
     "activationEvents": [
         "onLanguage:tect"
     ],
-    "main": "./src/extension.js",
+    "main": "./out/extension.js",
     "contributes": {
         "languages": [
             {
@@ -25,8 +25,7 @@
                 ],
                 "extensions": [
                     ".tect"
-                ],
-                "configuration": "./language-configuration.json"
+                ]
             }
         ],
         "grammars": [
@@ -36,44 +35,30 @@
                 "path": "./syntaxes/tect.tmLanguage.json"
             }
         ],
-        "configuration": {
-            "type": "object",
-            "title": "Tect",
-            "properties": {
-                "tect.trace.server": {
-                    "scope": "window",
-                    "type": "string",
-                    "enum": [
-                        "off",
-                        "messages",
-                        "verbose"
-                    ],
-                    "default": "off",
-                    "description": "Traces the communication between VS Code and the Tect language server."
-                }
-            }
-        },
-        "semanticTokenTypes": [
+        "commands": [
             {
-                "id": "tectGroup",
-                "description": "Architectural group identifiers."
+                "command": "tect.openPreview",
+                "title": "Tect: Open Architecture Preview",
+                "icon": "$(graph)",
+                "category": "Tect"
             }
         ],
-        "semanticTokenScopes": [
-            {
-                "language": "tect",
-                "scopes": {
-                    "tectGroup": [
-                        "entity.name.section.tect"
-                    ]
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "tect.openPreview",
+                    "group": "navigation",
+                    "when": "resourceLangId == tect"
                 }
-            }
-        ]
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./"
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts"
     },
     "dependencies": {
         "vscode-languageclient": "^8.1.0"

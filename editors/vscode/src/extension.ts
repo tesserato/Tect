@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
-import { workspace, ExtensionContext } from 'vscode';
+import * as vscode from 'vscode';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -10,67 +10,151 @@ import {
 
 let client: LanguageClient;
 
-/**
- * Entry point for the VS Code extension. 
- * Orchestrates binary discovery and Language Client lifecycle.
- */
-export function activate(context: ExtensionContext) {
-    // Platform-specific binary discovery (LSP is written in Rust)
+export function activate(context: vscode.ExtensionContext) {
+    // 1. Register command IMMEDIATELY to prevent "Command not found" errors
+    context.subscriptions.push(
+        vscode.commands.registerCommand('tect.openPreview', () => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor) {
+                TectPreviewPanel.createOrShow(context.extensionUri, editor.document.uri);
+            }
+        })
+    );
+
+    // 2. Setup LSP
     const isWindows = os.platform() === 'win32';
     const binaryName = isWindows ? 'tect.exe' : 'tect';
+    const serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', binaryName));
 
-    // Discovery logic: Looks in the target/debug folder relative to the extension
-    const serverModule = context.asAbsolutePath(
-        path.join('..', '..', 'target', 'debug', binaryName)
-    );
-
-    console.log(`Tect: Starting Language Server from: ${serverModule}`);
-
-    // Configuration for launching the server process via stdio.
-    // Explicitly passing 'serve' to match the Rust CLI subcommand.
     const serverOptions: ServerOptions = {
-        run: {
-            command: serverModule,
-            args: ['serve'],
-            transport: TransportKind.stdio
-        },
-        debug: {
-            command: serverModule,
-            args: ['serve'],
-            transport: TransportKind.stdio
-        }
+        run: { command: serverModule, args: ['serve'], transport: TransportKind.stdio },
+        debug: { command: serverModule, args: ['serve'], transport: TransportKind.stdio }
     };
 
-    // Client-side configuration: watch .tect files and handle synchronization
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
-        synchronize: {
-            fileEvents: workspace.createFileSystemWatcher('**/*.tect')
-        }
+        synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') }
     };
 
-    // Instantiate and launch the Language Client
-    client = new LanguageClient(
-        'tectServer',
-        'Tect Language Server',
-        serverOptions,
-        clientOptions
-    );
+    client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
 
-    // Start the client and log connectivity status
     client.start().then(() => {
-        console.log('Tect: Language Server connected successfully.');
-    }).catch((err) => {
-        console.error('Tect: Failed to establish server connection:', err);
+        console.log("Tect LSP: Started");
+        client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
+            TectPreviewPanel.updateIfExists(params.uri);
+        });
+    }).catch(err => {
+        vscode.window.showErrorMessage(`Failed to start Tect Language Server: ${err}`);
     });
 }
 
-/**
- * Cleanly terminates the Language Client connection upon extension deactivation.
- */
 export function deactivate(): Thenable<void> | undefined {
-    if (!client) {
-        return undefined;
+    return client ? client.stop() : undefined;
+}
+
+class TectPreviewPanel {
+    public static currentPanel: TectPreviewPanel | undefined;
+    private readonly _panel: vscode.WebviewPanel;
+    private _disposables: vscode.Disposable[] = [];
+
+    public static createOrShow(extensionUri: vscode.Uri, uri: vscode.Uri) {
+        if (TectPreviewPanel.currentPanel) {
+            TectPreviewPanel.currentPanel._panel.reveal(vscode.ViewColumn.Two);
+            return;
+        }
+
+        const panel = vscode.window.createWebviewPanel(
+            'tectPreview',
+            'Tect Architecture',
+            vscode.ViewColumn.Two,
+            { enableScripts: true, retainContextWhenHidden: true }
+        );
+
+        TectPreviewPanel.currentPanel = new TectPreviewPanel(panel, extensionUri, uri);
     }
-    return client.stop();
+
+    public static async updateIfExists(uri: string) {
+        if (TectPreviewPanel.currentPanel) {
+            TectPreviewPanel.currentPanel.update();
+        }
+    }
+
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private _uri: vscode.Uri) {
+        this._panel = panel;
+        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.webview.html = this._getHtmlForWebview();
+        this.update();
+    }
+
+    public async update() {
+        if (!client) return;
+        try {
+            const visData = await client.sendRequest("tect/getGraph", { uri: this._uri.toString() });
+            this._panel.webview.postMessage({ command: 'update', data: visData });
+        } catch (e) {
+            console.error("Failed to fetch graph data", e);
+        }
+    }
+
+    private _getHtmlForWebview(): string {
+        return `
+            <!DOCTYPE html>
+            <html style="color-scheme: dark;">
+            <head>
+                <meta charset="utf-8">
+                <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+                <style>
+                    body { background-color: #0b0e14; color: #e0e0e0; margin: 0; padding: 0; overflow: hidden; height: 100vh; font-family: sans-serif; }
+                    #mynetwork { width: 100%; height: 100vh; }
+                </style>
+            </head>
+            <body>
+                <div id="mynetwork"></div>
+                <script>
+                    const container = document.getElementById('mynetwork');
+                    let network = null;
+                    let nodes = new vis.DataSet([]);
+                    let edges = new vis.DataSet([]);
+
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        if (message.command === 'update' && message.data) {
+                            const data = message.data;
+                            
+                            // Update datasets
+                            nodes.clear();
+                            edges.clear();
+                            nodes.add(data.nodes);
+                            edges.add(data.edges);
+
+                            if (!network) {
+                                const options = {
+                                    physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -100, springLength: 10 } },
+                                    interaction: { hover: true, navigationButtons: true }
+                                };
+                                network = new vis.Network(container, { nodes, edges }, options);
+                                
+                                // Auto-cluster
+                                data.groups.forEach(g => {
+                                    network.cluster({
+                                        joinCondition: (n) => n.clusterGroup === g,
+                                        clusterNodeProperties: { label: g, shape: 'box', color: '#fbbf24', font: { color: '#000' } }
+                                    });
+                                });
+                            }
+                        }
+                    });
+                </script>
+            </body>
+            </html>`;
+    }
+
+    public dispose() {
+        TectPreviewPanel.currentPanel = undefined;
+        this._panel.dispose();
+        while (this._disposables.length) {
+            const x = this._disposables.pop();
+            if (x) x.dispose();
+        }
+    }
 }
