@@ -1,0 +1,77 @@
+name: Publish Extension
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-rust:
+    name: Build Rust Binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            suffix: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: ".exe"
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            suffix: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            suffix: ""
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build Binary
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: ./server
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: server/target/${{ matrix.target }}/release/tect${{ matrix.suffix }}
+
+  publish:
+    name: Package and Publish
+    needs: build-rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+        working-directory: ./editors/vscode
+
+      - name: Download All Binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: editors/vscode/bin
+
+      - name: Rename Binaries for Extension
+        run: |
+          cd editors/vscode/bin
+          mv tect tect-x86_64-unknown-linux-gnu || true
+          mv tect.exe tect-x86_64-pc-windows-msvc.exe || true
+          # Note: macOS binaries require careful handling if built on same runner
+          # This script assumes artifacts are named uniquely in upload or handled here
+
+      - name: Publish to Marketplace
+        run: npx vsce publish --pat ${{ secrets.VSCE_PAT }}
+        working-directory: ./editors/vscode

@@ -11,7 +11,6 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    // 1. Register command IMMEDIATELY to prevent "Command not found" errors
     context.subscriptions.push(
         vscode.commands.registerCommand('tect.openPreview', () => {
             const editor = vscode.window.activeTextEditor;
@@ -21,10 +20,25 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // 2. Setup LSP
-    const isWindows = os.platform() === 'win32';
-    const binaryName = isWindows ? 'tect.exe' : 'tect';
-    const serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', binaryName));
+    // --- Production Binary Discovery ---
+    const platform = os.platform(); // 'win32', 'linux', 'darwin'
+    const arch = os.arch();         // 'x64', 'arm64'
+    
+    let binaryName: string;
+    if (platform === 'win32') {
+        binaryName = 'tect-x86_64-pc-windows-msvc.exe';
+    } else if (platform === 'darwin') {
+        binaryName = arch === 'arm64' ? 'tect-aarch64-apple-darwin' : 'tect-x86_64-apple-darwin';
+    } else {
+        binaryName = 'tect-x86_64-unknown-linux-gnu';
+    }
+
+    // During development, fall back to target/debug if bin/ doesn't exist
+    let serverModule = context.asAbsolutePath(path.join('bin', binaryName));
+    if (process.env.VSCODE_DEBUG_MODE === 'true' || !require('fs').existsSync(serverModule)) {
+        const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
+        serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
+    }
 
     const serverOptions: ServerOptions = {
         run: { command: serverModule, args: ['serve'], transport: TransportKind.stdio },
@@ -39,12 +53,9 @@ export function activate(context: vscode.ExtensionContext) {
     client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
 
     client.start().then(() => {
-        console.log("Tect LSP: Started");
         client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
             TectPreviewPanel.updateIfExists(params.uri);
         });
-    }).catch(err => {
-        vscode.window.showErrorMessage(`Failed to start Tect Language Server: ${err}`);
     });
 }
 

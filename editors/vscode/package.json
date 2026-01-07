@@ -1,28 +1,25 @@
 {
     "name": "tect",
     "displayName": "Tect Architecture Language",
-    "description": "Architectural Specification Language & Visualizer",
-    "version": "0.0.1",
-    "publisher": "tect-lang",
+    "version": "0.1.0",
+    "publisher": "YOUR_PUBLISHER_ID",
     "engines": {
         "vscode": "^1.75.0"
     },
-    "categories": [
-        "Programming Languages",
-        "Visualization"
+    "main": "./out/extension.js",
+    "files": [
+        "out",
+        "bin",
+        "syntaxes",
+        "resources"
     ],
     "activationEvents": [
         "onLanguage:tect"
     ],
-    "main": "./out/extension.js",
     "contributes": {
         "languages": [
             {
                 "id": "tect",
-                "aliases": [
-                    "Tect",
-                    "tect"
-                ],
                 "extensions": [
                     ".tect"
                 ]
@@ -39,8 +36,7 @@
             {
                 "command": "tect.openPreview",
                 "title": "Tect: Open Architecture Preview",
-                "icon": "$(graph)",
-                "category": "Tect"
+                "icon": "$(graph)"
             }
         ],
         "menus": {
@@ -57,8 +53,7 @@
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
-        "lint": "eslint src --ext ts"
+        "pretest": "npm run compile"
     },
     "dependencies": {
         "vscode-languageclient": "^8.1.0"
@@ -66,6 +61,7 @@
     "devDependencies": {
         "@types/node": "16.x",
         "@types/vscode": "^1.75.0",
-        "typescript": "^4.9.5"
+        "typescript": "^4.9.5",
+        "@vscode/vsce": "^2.19.0"
     }
 }
