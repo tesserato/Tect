@@ -37,20 +37,24 @@ jobs:
               run: cargo build --release --target ${{ matrix.target }}
               working-directory: ./server
 
+            # This step ensures we find the binary regardless of Cargo's target folder logic
+            - name: Stage Binary
+              shell: bash
+              run: |
+                  mkdir -p staging
+                  find server/target -name "tect${{ matrix.suffix }}" -path "*/release/*" -exec cp {} staging/tect-bin${{ matrix.suffix }} \;
+
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
               with:
-                  # v4 requires unique names for matrix uploads
                   name: tect-${{ matrix.target }}
-                  path: server/target/${{ matrix.target }}/release/tect${{ matrix.suffix }}
+                  path: staging/tect-bin${{ matrix.suffix }}
                   if-no-files-found: error
 
     publish:
         name: Package and Publish
         needs: build-rust
         runs-on: ubuntu-latest
-        # Optional: ensure this only runs if tagged from main
-        # if: github.event.base_ref == 'refs/heads/main'
         steps:
             - uses: actions/checkout@v4
 
@@ -69,19 +73,24 @@ jobs:
             - name: Download All Binaries
               uses: actions/download-artifact@v4
               with:
-                  path: editors/vscode/bin
-                  # This downloads all artifacts into subdirectories named after the artifact
+                  path: editors/vscode/bin-temp
                   pattern: tect-*
-                  merge-multiple: true
+                  merge-multiple: false # Keep in subfolders to identify which is which
 
-            - name: Rename Binaries for Extension
+            - name: Flatten and Rename Binaries
               run: |
-                  cd editors/vscode/bin
-                  # Ensure the names match exactly what extension.ts looks for
-                  mv tect tect-x86_64-unknown-linux-gnu || true
-                  mv tect.exe tect-x86_64-pc-windows-msvc.exe || true
-                  # List files for debugging in Action logs
-                  ls -R
+                  # Move and rename binaries to match extension.ts discovery logic
+                  cp editors/vscode/bin-temp/tect-x86_64-unknown-linux-gnu/tect-bin editors/vscode/bin/tect-x86_64-unknown-linux-gnu
+                  cp editors/vscode/bin-temp/tect-x86_64-pc-windows-msvc/tect-bin.exe editors/vscode/bin/tect-x86_64-pc-windows-msvc.exe
+                  cp editors/vscode/bin-temp/tect-x86_64-apple-darwin/tect-bin editors/vscode/bin/tect-x86_64-apple-darwin
+                  cp editors/vscode/bin-temp/tect-aarch64-apple-darwin/tect-bin editors/vscode/bin/tect-aarch64-apple-darwin
+
+                  # Clean up temp folder
+                  rm -rf editors/vscode/bin-temp
+
+                  # Debug output
+                  echo "Final bundled binaries:"
+                  ls -R editors/vscode/bin
 
             - name: Publish to Marketplace
               run: npx vsce publish --pat ${{ secrets.VSCE_PAT }}
