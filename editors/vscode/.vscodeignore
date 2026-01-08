@@ -1,0 +1,10 @@
+.vscode/**
+.vscode-test/**
+out/test/**
+src/**
+.gitignore
+.vscodeignore
+tsconfig.json
+!out/*.js
+!bin/**
+!syntaxes/**
