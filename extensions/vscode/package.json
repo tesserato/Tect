@@ -8,6 +8,10 @@
         "vscode": "^1.75.0"
     },
     "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/tesserato/Tect/issues"
+    },
+
     "repository": {
         "type": "git",
         "url": "https://github.com/tesserato/Tect"

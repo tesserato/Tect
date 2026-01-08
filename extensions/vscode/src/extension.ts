@@ -58,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine("Path A failed. Attempting Path B (Dev/Fallback)...");
         const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
         // Adjust this path if your folder structure is different
-        // Current assumption: extension.js is in /editors/vscode/out/
+        // Current assumption: extension.js is in /extensions/vscode/out/
         // Target is /target/debug/
         serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
         exists = fs.existsSync(serverModule);
