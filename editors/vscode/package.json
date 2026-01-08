@@ -16,11 +16,11 @@
         "Programming Languages",
         "Visualization"
     ],
-    "main": "./out/extension.js",
+    "main": "out/extension.js",
     "files": [
-        "out",
-        "bin",
-        "syntaxes"
+        "out/*",
+        "bin/*",
+        "syntaxes/*"
     ],
     "activationEvents": [
         "onLanguage:tect"
