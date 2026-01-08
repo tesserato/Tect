@@ -31,3 +31,6 @@ editors/vscode/out/extension.js
 *.html
 experiments/lib
 DRAFT.md
+extensions/vscode/node_modules
+extensions/vscode/package-lock.json
+extensions/vscode/out

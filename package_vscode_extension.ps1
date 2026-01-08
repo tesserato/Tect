@@ -1,4 +1,4 @@
-cd "./editors/vscode"
+cd "./extensions/vscode"
 npx @vscode/vsce ls
 npm install
 npm run compile
