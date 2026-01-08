@@ -1,0 +1,142 @@
+# ============================================================
+# Tect Architecture Specification (Self-Model)
+#
+# This file models the data flow of the Tect Compiler, 
+# Language Server, and VS Code Extension.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Data Definitions
+# ------------------------------------------------------------
+
+# **Raw Source**
+# The `.tect` file content modified by the user in the editor.
+variable RawSource
+
+# **Program Structure (IR)**
+# The Intermediate Representation produced by the Analyzer.
+# Corresponds to `struct ProgramStructure` in `server/src/models.rs`.
+variable ProgramStructure
+
+# **Simulated Graph**
+# The final logical graph produced by the Engine after processing flows.
+# Corresponds to `struct Graph` in `server/src/models.rs`.
+variable SimulatedGraph
+
+# **Visualization Payload**
+# The JSON data structure formatted for Vis.js network visualization.
+# Corresponds to `struct VisData` in `server/src/vis_js.rs`.
+variable VisPayload
+
+# **Interactive Preview**
+# The rendered HTML/JS webview displayed inside VS Code.
+variable InteractivePreview
+
+# **Static HTML File**
+# The output file generated when using the CLI `build` command.
+constant StaticHTML
+
+# **Syntax Error**
+# Produced when `pest` fails to parse the grammar or `analyzer.rs` 
+# finds undefined symbols.
+error SyntaxError
+
+# **LSP Diagnostics**
+# Error markers sent back to the editor to underline issues.
+variable LSPDiagnostics
+
+# ------------------------------------------------------------
+# 2. Group Definitions
+# ------------------------------------------------------------
+
+# **Client (VS Code)**
+# The TypeScript extension handling UI and process management.
+# Source: `extensions/vscode/src/extension.ts`
+group Client
+
+# **Compiler Frontend**
+# The Rust logic for parsing and symbol resolution.
+# Source: `server/src/analyzer.rs`
+group Frontend
+
+# **Logic Engine**
+# The Rust logic for token simulation and graph generation.
+# Source: `server/src/engine.rs`
+group Engine
+
+# **Presentation Layer**
+# The logic for formatting output (JSON/HTML).
+# Source: `server/src/vis_js.rs`
+group Presentation
+
+# ------------------------------------------------------------
+# 3. Function Contracts
+# ------------------------------------------------------------
+
+# **User Edit**
+# The user types into the editor. The Client captures these changes
+# via `didChange` events.
+Client function UserEdit
+    > RawSource
+
+# **Analyze Source**
+# The Analyzer parses the raw text. 
+# It produces valid IR or a set of syntax errors.
+# *Impl: `TectAnalyzer::analyze`*
+Frontend function Analyze RawSource
+    > ProgramStructure
+    | SyntaxError
+
+# **Report Diagnostics**
+# Converts syntax errors into LSP Diagnostics to be shown in the editor.
+# *Impl: `lsp.rs` publish_diagnostics*
+Client function ReportDiagnostics SyntaxError
+    > LSPDiagnostics
+
+# **Simulate Flow**
+# The Engine consumes the IR, moves tokens through pools, and
+# generates the final node/edge graph.
+# *Impl: `Flow::simulate`*
+Engine function Simulate ProgramStructure
+    > SimulatedGraph
+
+# **Generate Vis Data**
+# Converts the raw graph into styling-rich JSON for Vis.js.
+# *Impl: `vis_js::produce_vis_data`*
+Presentation function GenerateVisData SimulatedGraph
+    > VisPayload
+
+# **Render Webview**
+# The Extension receives the JSON payload via custom LSP Request
+# and updates the Webview panel.
+# *Impl: `TectPreviewPanel.update`*
+Client function RenderWebview VisPayload
+    > InteractivePreview
+
+# **Generate Static HTML**
+# Used by the CLI. Wraps the VisPayload in a standalone HTML template.
+# *Impl: `vis_js::generate_interactive_html`*
+Presentation function GenerateStaticHTML SimulatedGraph
+    > StaticHTML
+
+# ------------------------------------------------------------
+# 4. Architectural Flow (The Live Preview Pipeline)
+# ------------------------------------------------------------
+
+# 1. User types code
+UserEdit
+
+# 2. Rust Server analyzes it
+Analyze
+
+# 3. (Branch) If errors, report them to VS Code
+ReportDiagnostics
+
+# 4. If valid, the Engine simulates the architecture
+Simulate
+
+# 5. Convert to Visual JSON
+GenerateVisData
+
+# 6. Send to VS Code to render the graph
+RenderWebview
