@@ -202,6 +202,17 @@ class TectPreviewPanel {
                     let nodes = new vis.DataSet([]);
                     let edges = new vis.DataSet([]);
 
+                    // Define clustering helper
+                    const clusterBy = (groupName) => ({
+                        joinCondition: (n) => n.clusterGroup === groupName,
+                        clusterNodeProperties: { 
+                            label: groupName, 
+                            shape: 'box', 
+                            color: '#fbbf24', 
+                            font: { color: '#000' } 
+                        }
+                    });
+
                     window.addEventListener('message', event => {
                         const message = event.data;
                         if (message.command === 'update' && message.data) {
@@ -222,10 +233,23 @@ class TectPreviewPanel {
                                 
                                 // Auto-cluster
                                 data.groups.forEach(g => {
-                                    network.cluster({
-                                        joinCondition: (n) => n.clusterGroup === g,
-                                        clusterNodeProperties: { label: g, shape: 'box', color: '#fbbf24', font: { color: '#000' } }
-                                    });
+                                    network.cluster(clusterBy(g));
+                                });
+
+                                // Event: Double click to expand/collapse groups
+                                network.on("doubleClick", (params) => {
+                                    if (params.nodes.length > 0) {
+                                        const nodeId = params.nodes[0];
+                                        if (network.isCluster(nodeId)) {
+                                            network.openCluster(nodeId);
+                                        } else {
+                                            // Optional: Double clicking a node inside a group re-collapses it
+                                            const node = nodes.get(nodeId);
+                                            if (node && node.clusterGroup) {
+                                                network.cluster(clusterBy(node.clusterGroup));
+                                            }
+                                        }
+                                    }
                                 });
                             }
                         }
