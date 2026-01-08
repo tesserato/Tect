@@ -37,3 +37,4 @@ extensions/vscode/out
 extensions/vscode/bin
 *.vsix
 extensions/vscode/LICENSE
+extensions/vscode/dist
