@@ -7,12 +7,20 @@
     "engines": {
         "vscode": "^1.75.0"
     },
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/tesserato/Tect"
+    },
+    "categories": [
+        "Programming Languages",
+        "Visualization"
+    ],
     "main": "./out/extension.js",
     "files": [
         "out",
         "bin",
-        "syntaxes",
-        "resources"
+        "syntaxes"
     ],
     "activationEvents": [
         "onLanguage:tect"
@@ -21,6 +29,10 @@
         "languages": [
             {
                 "id": "tect",
+                "aliases": [
+                    "Tect",
+                    "tect"
+                ],
                 "extensions": [
                     ".tect"
                 ]
@@ -37,7 +49,8 @@
             {
                 "command": "tect.openPreview",
                 "title": "Tect: Open Architecture Preview",
-                "icon": "$(graph)"
+                "icon": "$(graph)",
+                "category": "Tect"
             }
         ],
         "menus": {
