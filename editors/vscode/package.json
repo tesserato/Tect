@@ -1,8 +1,9 @@
 {
     "name": "tect",
     "displayName": "Tect Architecture Language",
-    "version": "0.1.0",
-    "publisher": "YOUR_PUBLISHER_ID",
+    "description": "Architectural Specification Language & Visualizer",
+    "version": "0.0.0",
+    "publisher": "tesserato",
     "engines": {
         "vscode": "^1.75.0"
     },
