@@ -13,7 +13,7 @@ $instruction = @"
 
 CodeWeaver -clipboard `
     -instruction $instruction `
-    -include "^server/src,^experiments,^samples,^Cargo.toml,^editors/vscode/src,^editors/vscode/syntaxes" `
-    -ignore "^experiments/lib" `
+    -include "^server/src,^experiments,^samples,^Cargo.toml,^editors/vscode,^editors/vscode/syntaxes" `
+    -ignore "^experiments/lib,^editors/vscode/node_modules" `
     -output "codebase.md" `
     -excluded-paths-file "codebase_excluded_paths.txt" 

@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import {
     LanguageClient,
@@ -11,6 +12,10 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
+    // 1. Create Output Channel for Debugging
+    const outputChannel = vscode.window.createOutputChannel("Tect Language Server");
+    outputChannel.appendLine("Tect extension activating...");
+
     context.subscriptions.push(
         vscode.commands.registerCommand('tect.openPreview', () => {
             const editor = vscode.window.activeTextEditor;
@@ -23,7 +28,9 @@ export function activate(context: vscode.ExtensionContext) {
     // --- Production Binary Discovery ---
     const platform = os.platform(); // 'win32', 'linux', 'darwin'
     const arch = os.arch();         // 'x64', 'arm64'
-    
+
+    outputChannel.appendLine(`Platform: ${platform}, Arch: ${arch}`);
+
     let binaryName: string;
     if (platform === 'win32') {
         binaryName = 'tect-x86_64-pc-windows-msvc.exe';
@@ -33,11 +40,33 @@ export function activate(context: vscode.ExtensionContext) {
         binaryName = 'tect-x86_64-unknown-linux-gnu';
     }
 
-    // During development, fall back to target/debug if bin/ doesn't exist
+    // 2. Resolve Binary Path
     let serverModule = context.asAbsolutePath(path.join('bin', binaryName));
-    if (process.env.VSCODE_DEBUG_MODE === 'true' || !require('fs').existsSync(serverModule)) {
+    outputChannel.appendLine(`Looking for binary at: ${serverModule}`);
+
+    // During development, fall back to target/debug if bin/ doesn't exist
+    if (process.env.VSCODE_DEBUG_MODE === 'true' || !fs.existsSync(serverModule)) {
+        outputChannel.appendLine("Binary not found in bin/ or debug mode enabled. Attempting fallback...");
         const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
         serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
+        outputChannel.appendLine(`Fallback path: ${serverModule}`);
+    }
+
+    // 3. Final Existence Check
+    if (!fs.existsSync(serverModule)) {
+        const msg = `Critical: Server binary not found at ${serverModule}`;
+        outputChannel.appendLine(msg);
+        vscode.window.showErrorMessage(msg);
+        return;
+    }
+
+    // Ensure executable permissions on Unix-like systems
+    if (platform !== 'win32') {
+        try {
+            fs.chmodSync(serverModule, '755');
+        } catch (e) {
+            outputChannel.appendLine(`Warning: Failed to chmod binary: ${e}`);
+        }
     }
 
     const serverOptions: ServerOptions = {
@@ -47,15 +76,22 @@ export function activate(context: vscode.ExtensionContext) {
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
-        synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') }
+        synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') },
+        // Pass output channel to client to capture process stdout/stderr
+        outputChannel: outputChannel
     };
 
     client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
 
+    outputChannel.appendLine("Starting Language Client...");
     client.start().then(() => {
+        outputChannel.appendLine("Language Client started successfully.");
         client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
             TectPreviewPanel.updateIfExists(params.uri);
         });
+    }).catch(e => {
+        outputChannel.appendLine(`Error starting client: ${e}`);
+        vscode.window.showErrorMessage("Failed to start Tect Language Server. Check output for details.");
     });
 }
 
