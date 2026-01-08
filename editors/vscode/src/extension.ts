@@ -6,15 +6,21 @@ import {
     LanguageClient,
     LanguageClientOptions,
     ServerOptions,
-    TransportKind
+    TransportKind,
+    RevealOutputChannelOn
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    // 1. Create Output Channel for Debugging
+    // 1. Create and FORCE SHOW the Output Channel
     const outputChannel = vscode.window.createOutputChannel("Tect Language Server");
-    outputChannel.appendLine("Tect extension activating...");
+    outputChannel.show(true); // Bring to front
+    outputChannel.appendLine("------------------------------------------------");
+    outputChannel.appendLine(`[${new Date().toISOString()}] Extension activate() called.`);
+
+    // 2. Show a visible popup to confirm activation event fired
+    vscode.window.showInformationMessage("Tect Extension is activating!");
 
     context.subscriptions.push(
         vscode.commands.registerCommand('tect.openPreview', () => {
@@ -26,10 +32,11 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // --- Production Binary Discovery ---
-    const platform = os.platform(); // 'win32', 'linux', 'darwin'
-    const arch = os.arch();         // 'x64', 'arm64'
+    const platform = os.platform();
+    const arch = os.arch();
 
-    outputChannel.appendLine(`Platform: ${platform}, Arch: ${arch}`);
+    outputChannel.appendLine(`Environment: Platform=${platform}, Arch=${arch}`);
+    outputChannel.appendLine(`Extension Path: ${context.extensionPath}`);
 
     let binaryName: string;
     if (platform === 'win32') {
@@ -40,59 +47,91 @@ export function activate(context: vscode.ExtensionContext) {
         binaryName = 'tect-x86_64-unknown-linux-gnu';
     }
 
-    // 2. Resolve Binary Path
+    // --- Resolve Binary Path ---
+    // 1. Try production path (inside extension folder)
     let serverModule = context.asAbsolutePath(path.join('bin', binaryName));
-    outputChannel.appendLine(`Looking for binary at: ${serverModule}`);
+    let exists = fs.existsSync(serverModule);
+    outputChannel.appendLine(`Checking Path A (Production): "${serverModule}" -> Exists: ${exists}`);
 
-    // During development, fall back to target/debug if bin/ doesn't exist
-    if (process.env.VSCODE_DEBUG_MODE === 'true' || !fs.existsSync(serverModule)) {
-        outputChannel.appendLine("Binary not found in bin/ or debug mode enabled. Attempting fallback...");
+    // 2. Try development fallback (relative to source)
+    if (!exists) {
+        outputChannel.appendLine("Path A failed. Attempting Path B (Dev/Fallback)...");
         const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
+        // Adjust this path if your folder structure is different
+        // Current assumption: extension.js is in /editors/vscode/out/
+        // Target is /target/debug/
         serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
-        outputChannel.appendLine(`Fallback path: ${serverModule}`);
+        exists = fs.existsSync(serverModule);
+        outputChannel.appendLine(`Checking Path B (Dev): "${serverModule}" -> Exists: ${exists}`);
     }
 
-    // 3. Final Existence Check
-    if (!fs.existsSync(serverModule)) {
-        const msg = `Critical: Server binary not found at ${serverModule}`;
+    // 3. Final Critical Check
+    if (!exists) {
+        const msg = `CRITICAL: Tect Server binary NOT found. Searched for: ${binaryName}`;
         outputChannel.appendLine(msg);
         vscode.window.showErrorMessage(msg);
         return;
     }
 
-    // Ensure executable permissions on Unix-like systems
+    outputChannel.appendLine(`Resolved Server Binary: ${serverModule}`);
+
+    // --- Permissions Check (Linux/Mac) ---
     if (platform !== 'win32') {
         try {
             fs.chmodSync(serverModule, '755');
+            outputChannel.appendLine("Permissions: chmod 755 applied successfully.");
         } catch (e) {
-            outputChannel.appendLine(`Warning: Failed to chmod binary: ${e}`);
+            outputChannel.appendLine(`Permissions Warning: Failed to chmod binary: ${e}`);
         }
     }
 
+    // --- Server Options ---
     const serverOptions: ServerOptions = {
         run: { command: serverModule, args: ['serve'], transport: TransportKind.stdio },
         debug: { command: serverModule, args: ['serve'], transport: TransportKind.stdio }
     };
 
+    // --- Client Options ---
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
         synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') },
-        // Pass output channel to client to capture process stdout/stderr
-        outputChannel: outputChannel
+        outputChannel: outputChannel,
+        revealOutputChannelOn: RevealOutputChannelOn.Info, // Show on info/error
+        initializationOptions: {},
+        errorHandler: {
+            error: (error, message, count) => {
+                outputChannel.appendLine(`LSP Error: ${error} | ${message}`);
+                return { action: 1 }; // Shutdown
+            },
+            closed: () => {
+                outputChannel.appendLine("LSP Connection Closed unexpectedly.");
+                return { action: 1 }; // Do not restart
+            }
+        }
     };
 
-    client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
+    // --- Start Client ---
+    try {
+        client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
 
-    outputChannel.appendLine("Starting Language Client...");
-    client.start().then(() => {
-        outputChannel.appendLine("Language Client started successfully.");
-        client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
-            TectPreviewPanel.updateIfExists(params.uri);
+        outputChannel.appendLine("Starting LanguageClient...");
+        client.start().then(() => {
+            outputChannel.appendLine(">>> LanguageClient Promise Resolved: Connection Established.");
+            vscode.window.setStatusBarMessage("Tect Server: Active", 3000);
+
+            client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
+                outputChannel.appendLine(`Analysis finished for: ${params.uri}`);
+                TectPreviewPanel.updateIfExists(params.uri);
+            });
+        }).catch(err => {
+            outputChannel.appendLine(`!!! LanguageClient Start Failed: ${err}`);
+            vscode.window.showErrorMessage(`Tect Server failed to start: ${err}`);
         });
-    }).catch(e => {
-        outputChannel.appendLine(`Error starting client: ${e}`);
-        vscode.window.showErrorMessage("Failed to start Tect Language Server. Check output for details.");
-    });
+
+    } catch (e) {
+        outputChannel.appendLine(`Exception during client creation: ${e}`);
+        vscode.window.showErrorMessage(`Tect Extension Error: ${e}`);
+    }
 }
 
 export function deactivate(): Thenable<void> | undefined {
