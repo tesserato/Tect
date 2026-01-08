@@ -41,10 +41,16 @@ jobs:
               shell: bash
               run: |
                   mkdir -p staging
-                  # Robust search for the binary in Workspace root 'target'
-                  # Looks for the name 'tect' inside any folder named 'release'
-                  BIN_PATH=$(find target -type f -name "tect${{ matrix.suffix }}" | grep "/release/" | head -n 1)
-                  if [ -z "$BIN_PATH" ]; then echo "Binary not found"; exit 1; fi
+                  # Use case-insensitive search (-iname) to find 'Tect' or 'tect'
+                  # Filters for paths containing '/release/' to skip build metadata
+                  BIN_PATH=$(find target -type f -iname "tect${{ matrix.suffix }}" | grep "/release/" | head -n 1)
+
+                  if [ -z "$BIN_PATH" ]; then 
+                    echo "::error::Executable not found in target directory. Check package name in Cargo.toml."
+                    exit 1 
+                  fi
+
+                  echo "Found binary at: $BIN_PATH"
                   cp "$BIN_PATH" staging/tect-bin${{ matrix.suffix }}
 
             - name: Upload Artifact
@@ -82,14 +88,14 @@ jobs:
 
             - name: Flatten and Rename Binaries
               run: |
-                  # Copy to final names expected by extension.ts discovery logic
+                  # Map downloaded artifacts to the production names expected by extension.ts
                   cp editors/vscode/bin-temp/tect-x86_64-unknown-linux-gnu/tect-bin editors/vscode/bin/tect-x86_64-unknown-linux-gnu
                   cp editors/vscode/bin-temp/tect-x86_64-pc-windows-msvc/tect-bin.exe editors/vscode/bin/tect-x86_64-pc-windows-msvc.exe
                   cp editors/vscode/bin-temp/tect-x86_64-apple-darwin/tect-bin editors/vscode/bin/tect-x86_64-apple-darwin
                   cp editors/vscode/bin-temp/tect-aarch64-apple-darwin/tect-bin editors/vscode/bin/tect-aarch64-apple-darwin
 
                   rm -rf editors/vscode/bin-temp
-                  echo "Packaging following binaries:"
+                  echo "Listing final bundled binaries:"
                   ls -l editors/vscode/bin
 
             - name: Publish to Marketplace
