@@ -26,13 +26,13 @@ categories = [
 
 [dependencies]
 tower-lsp = "0.20.0"
-tokio = { version = "1.0", features = ["full"] }
-pest = "2.7"
-pest_derive = "2.7"
-dashmap = "5.5"
+tokio = { version = "1.49", features = ["full"] }
+pest = "2.8"
+pest_derive = "2.8"
+dashmap = "6.1"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
-clap = { version = "4.4", features = ["derive"] }
-walkdir = "2.4"
+clap = { version = "4.5", features = ["derive"] }
+walkdir = "2.5"
 anyhow = "1.0"
-regex = "1.10"
+regex = "1.12"
