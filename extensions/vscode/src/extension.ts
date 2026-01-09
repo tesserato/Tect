@@ -13,9 +13,8 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    // 1. Create and FORCE SHOW the Output Channel
+    // 1. Create the Output Channel (Do not show yet)
     const outputChannel = vscode.window.createOutputChannel("Tect Language Server");
-    outputChannel.show(true); // Bring to front
     outputChannel.appendLine("------------------------------------------------");
     outputChannel.appendLine(`[${new Date().toISOString()}] Extension activate() called.`);
 
@@ -58,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine("Path A failed. Attempting Path B (Dev/Fallback)...");
         const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
         // Adjust this path if your folder structure is different
-        // Current assumption: extension.js is in /extensions/vscode/out/
+        // Current assumption: extension.js is in /extensions/vscode/out/ or /dist/
         // Target is /target/debug/
         serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
         exists = fs.existsSync(serverModule);
@@ -67,6 +66,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 3. Final Critical Check
     if (!exists) {
+        // ERROR: Open the panel so the user can see what paths were checked
+        outputChannel.show(true);
         const msg = `CRITICAL: Tect Server binary NOT found. Searched for: ${binaryName}`;
         outputChannel.appendLine(msg);
         vscode.window.showErrorMessage(msg);
@@ -96,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
         synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') },
         outputChannel: outputChannel,
-        revealOutputChannelOn: RevealOutputChannelOn.Info, // Show on info/error
+        revealOutputChannelOn: RevealOutputChannelOn.Error, // Only show automatically on Error
         initializationOptions: {},
         errorHandler: {
             error: (error, message, count) => {
@@ -124,11 +125,13 @@ export function activate(context: vscode.ExtensionContext) {
                 TectPreviewPanel.updateIfExists(params.uri);
             });
         }).catch(err => {
+            outputChannel.show(true); // Show panel on start failure
             outputChannel.appendLine(`!!! LanguageClient Start Failed: ${err}`);
             vscode.window.showErrorMessage(`Tect Server failed to start: ${err}`);
         });
 
     } catch (e) {
+        outputChannel.show(true);
         outputChannel.appendLine(`Exception during client creation: ${e}`);
         vscode.window.showErrorMessage(`Tect Extension Error: ${e}`);
     }
