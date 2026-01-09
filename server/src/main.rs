@@ -9,9 +9,10 @@ mod analyzer;
 mod engine;
 mod lsp;
 mod models;
-mod test_engine;
-mod test_parser;
 mod vis_js;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(ClapParser)]
 #[command(author, version, about)]

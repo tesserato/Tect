@@ -1,13 +1,8 @@
-use pest_derive::Parser;
+use crate::analyzer::{Rule, TectParser};
+use crate::models::{Cardinality, Constant, Error, Function, Group, Kind, Token, Variable};
+use pest::Parser;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-// Import models and constructors
-use crate::models::{Cardinality, Constant, Error, Function, Group, Kind, Token, Variable};
-
-#[derive(Parser)]
-#[grammar = "tect.pest"]
-pub struct TectParser;
 
 /// Local registry to track defined symbols during the parsing pass.
 struct SymbolRegistry {
@@ -19,10 +14,9 @@ struct SymbolRegistry {
 
 #[test]
 fn main() {
-    use pest::Parser;
     use std::fs;
 
-    let unparsed_file = fs::read_to_string("../samples/dsbg.tect").expect("cannot read file");
+    let unparsed_file = fs::read_to_string("../examples/dsbg.tect").expect("cannot read file");
 
     let program = TectParser::parse(Rule::program, &unparsed_file)
         .expect("unsuccessful parse")

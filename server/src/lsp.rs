@@ -637,4 +637,3 @@ fn rule_to_logic(r: Rule) -> FormatterRule {
         _ => FormatterRule::Atomic,
     }
 }
-
