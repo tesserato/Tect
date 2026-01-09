@@ -8,7 +8,7 @@ use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range};
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, Position, Range};
 
 #[derive(Parser)]
 #[grammar = "tect.pest"]
@@ -78,6 +78,28 @@ impl TectAnalyzer {
                 _ => {}
             }
         }
+
+        // Pass 3: Validation (Unused Symbols)
+        // We iterate over the symbol table to find symbols that only exist at their definition site.
+        for meta in structure.symbol_table.values() {
+            if meta.occurrences.len() == 1 {
+                // If there is only 1 occurrence, it is the definition itself.
+                // This means the symbol is never used in the flow or by other functions.
+                let range = self.calculate_range(meta.definition_span, content);
+                structure.diagnostics.push(Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    code: Some(tower_lsp::lsp_types::NumberOrString::String(
+                        "unused".to_string(),
+                    )),
+                    source: Some("tect".to_string()),
+                    message: format!("Unused symbol: '{}'", meta.name),
+                    tags: Some(vec![DiagnosticTag::UNNECESSARY]), // Renders as faded out in VS Code
+                    ..Default::default()
+                });
+            }
+        }
+
         structure
     }
 
@@ -283,23 +305,22 @@ impl TectAnalyzer {
         }
     }
 
-    fn semantic_error(&self, span: Span, msg: String, content: &str) -> Diagnostic {
+    /// Helper to convert a byte-based Span into an LSP line/col Range.
+    fn calculate_range(&self, span: Span, content: &str) -> Range {
         let mut line = 0;
         let mut col = 0;
         let mut byte = 0;
         let mut start_pos = Position::new(0, 0);
+        let mut end_pos = Position::new(0, 0);
 
         for c in content.chars() {
+            let char_len = c.len_utf8();
             if byte == span.start {
                 start_pos = Position::new(line, col);
             }
             if byte == span.end {
-                return Diagnostic {
-                    range: Range::new(start_pos, Position::new(line, col)),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    message: msg,
-                    ..Default::default()
-                };
+                end_pos = Position::new(line, col);
+                break;
             }
             if c == '\n' {
                 line += 1;
@@ -307,9 +328,22 @@ impl TectAnalyzer {
             } else {
                 col += c.len_utf16() as u32;
             }
-            byte += c.len_utf8();
+            byte += char_len;
+        }
+        // Handle case where span ends exactly at EOF
+        if byte == span.end {
+            end_pos = Position::new(line, col);
         }
 
-        Diagnostic::default()
+        Range::new(start_pos, end_pos)
+    }
+
+    fn semantic_error(&self, span: Span, msg: String, content: &str) -> Diagnostic {
+        Diagnostic {
+            range: self.calculate_range(span, content),
+            severity: Some(DiagnosticSeverity::ERROR),
+            message: msg,
+            ..Default::default()
+        }
     }
 }
