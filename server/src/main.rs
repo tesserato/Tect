@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
             let mut analyzer = analyzer::TectAnalyzer::new();
             let structure = analyzer.analyze(&content);
             let mut flow = engine::Flow::new(true);
-            let graph = flow.simulate(&structure);
+            let graph = flow.simulate(&structure, &content); // Pass content here
 
             match output.extension().and_then(|s| s.to_str()) {
                 Some("html") => fs::write(output, vis_js::generate_interactive_html(&graph))?,

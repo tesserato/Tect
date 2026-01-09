@@ -15,7 +15,7 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
 
     // 2. Simulate Flow
     let mut flow = Flow::new(true);
-    let graph = flow.simulate(&structure);
+    let graph = flow.simulate(&structure, &content); // Updated signature
 
     // 3. Serialize artifacts
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");

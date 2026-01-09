@@ -360,9 +360,9 @@ impl Backend {
         let uri = Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI"))?;
 
         if let Some(state) = self.document_state.get(&uri) {
-            let (_, structure) = state.value();
+            let (content, structure) = state.value();
             let mut flow = Flow::new(true);
-            let graph = flow.simulate(structure);
+            let graph = flow.simulate(structure, content); // Now passes content
             return Ok(vis_js::produce_vis_data(&graph));
         }
         Err(LspError::internal_error())
@@ -371,9 +371,24 @@ impl Backend {
     async fn process_change(&self, uri: Url, content: String) {
         let mut analyzer = TectAnalyzer::new();
         let structure = analyzer.analyze(&content);
+
+        // 1. Static Diagnostics
+        let mut diagnostics = structure.diagnostics.clone();
+
+        // 2. Engine Logic Diagnostics (Only if we have a generally valid structure)
+        if !diagnostics
+            .iter()
+            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        {
+            let mut flow = Flow::new(true);
+            flow.simulate(&structure, &content);
+            diagnostics.extend(flow.diagnostics);
+        }
+
         self.client
-            .publish_diagnostics(uri.clone(), structure.diagnostics.clone(), None)
+            .publish_diagnostics(uri.clone(), diagnostics, None)
             .await;
+
         self.document_state
             .insert(uri.clone(), (content, structure));
 

@@ -1,7 +1,7 @@
 //! # Tect Semantic Analyzer
 //!
 //! Responsible for transforming raw Tect source code into a [ProgramStructure].
-//! Performs two passes: symbol discovery and occurrence linking.
+//! Performs three passes: symbol discovery, linking, and cleanup.
 
 use crate::models::*;
 use pest::iterators::{Pair, Pairs};
@@ -41,11 +41,11 @@ impl TectAnalyzer {
         // Pass 1: Global Discovery (Definitions)
         for pair in &statements {
             match pair.as_rule() {
-                Rule::const_def => self.define_type(pair, "constant", &mut structure),
-                Rule::var_def => self.define_type(pair, "variable", &mut structure),
-                Rule::err_def => self.define_type(pair, "error", &mut structure),
-                Rule::group_def => self.define_group(pair, &mut structure),
-                Rule::func_def => self.define_function_skeleton(pair, &mut structure),
+                Rule::const_def => self.define_type(pair, "constant", &mut structure, content),
+                Rule::var_def => self.define_type(pair, "variable", &mut structure, content),
+                Rule::err_def => self.define_type(pair, "error", &mut structure, content),
+                Rule::group_def => self.define_group(pair, &mut structure, content),
+                Rule::func_def => self.define_function_skeleton(pair, &mut structure, content),
                 _ => {}
             }
         }
@@ -53,7 +53,7 @@ impl TectAnalyzer {
         // Pass 2: Linking Contracts, Occurrences, and Flow
         for pair in &statements {
             match pair.as_rule() {
-                Rule::func_def => self.link_function_contracts(pair, &mut structure),
+                Rule::func_def => self.link_function_contracts(pair, &mut structure, content),
                 Rule::flow_step => {
                     let name = pair.as_str().trim();
                     if !name.is_empty() {
@@ -80,11 +80,8 @@ impl TectAnalyzer {
         }
 
         // Pass 3: Validation (Unused Symbols)
-        // We iterate over the symbol table to find symbols that only exist at their definition site.
         for meta in structure.symbol_table.values() {
             if meta.occurrences.len() == 1 {
-                // If there is only 1 occurrence, it is the definition itself.
-                // This means the symbol is never used in the flow or by other functions.
                 let range = self.calculate_range(meta.definition_span, content);
                 structure.diagnostics.push(Diagnostic {
                     range,
@@ -94,7 +91,7 @@ impl TectAnalyzer {
                     )),
                     source: Some("tect".to_string()),
                     message: format!("Unused symbol: '{}'", meta.name),
-                    tags: Some(vec![DiagnosticTag::UNNECESSARY]), // Renders as faded out in VS Code
+                    tags: Some(vec![DiagnosticTag::UNNECESSARY]),
                     ..Default::default()
                 });
             }
@@ -115,6 +112,28 @@ impl TectAnalyzer {
         if let Some(meta) = structure.symbol_table.get_mut(&uid) {
             meta.occurrences.push(span);
         }
+    }
+
+    fn check_duplicate(
+        &self,
+        name: &str,
+        span: Span,
+        structure: &mut ProgramStructure,
+        content: &str,
+    ) -> bool {
+        if structure.artifacts.contains_key(name)
+            || structure.groups.contains_key(name)
+            || structure.catalog.contains_key(name)
+        {
+            structure.diagnostics.push(Diagnostic {
+                range: self.calculate_range(span, content),
+                severity: Some(DiagnosticSeverity::ERROR),
+                message: format!("Symbol '{}' is already defined.", name),
+                ..Default::default()
+            });
+            return true;
+        }
+        false
     }
 
     fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
@@ -138,12 +157,23 @@ impl TectAnalyzer {
         }
     }
 
-    fn define_type(&self, pair: &Pair<Rule>, kw: &str, structure: &mut ProgramStructure) {
+    fn define_type(
+        &self,
+        pair: &Pair<Rule>,
+        kw: &str,
+        structure: &mut ProgramStructure,
+        content: &str,
+    ) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
+        let span = Self::map_span(&name_p);
+
+        if self.check_duplicate(&name, span, structure, content) {
+            return;
+        }
 
         let kind = match kw {
             "constant" => Kind::Constant(Arc::new(Constant::new(name.clone(), doc_str))),
@@ -151,7 +181,6 @@ impl TectAnalyzer {
             _ => Kind::Error(Arc::new(Error::new(name.clone(), doc_str))),
         };
 
-        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             kind.uid(),
             SymbolMetadata {
@@ -163,15 +192,19 @@ impl TectAnalyzer {
         structure.artifacts.insert(name, kind);
     }
 
-    fn define_group(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
+    fn define_group(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure, content: &str) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
+        let span = Self::map_span(&name_p);
+
+        if self.check_duplicate(&name, span, structure, content) {
+            return;
+        }
 
         let group = Arc::new(Group::new(name.clone(), doc_str));
-        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             group.uid,
             SymbolMetadata {
@@ -183,7 +216,12 @@ impl TectAnalyzer {
         structure.groups.insert(name, group);
     }
 
-    fn define_function_skeleton(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
+    fn define_function_skeleton(
+        &self,
+        pair: &Pair<Rule>,
+        structure: &mut ProgramStructure,
+        content: &str,
+    ) {
         let mut inner = pair.clone().into_inner();
         let doc_str = Self::collect_docs(&mut inner);
 
@@ -192,11 +230,16 @@ impl TectAnalyzer {
             if p.as_rule() == Rule::ident {
                 let g_name_p = inner.next().unwrap();
                 let g_name = g_name_p.as_str();
-                group = structure.groups.get(g_name).cloned();
 
-                // Track group occurrence in function header
-                if let Some(ref g) = group {
+                if let Some(g) = structure.groups.get(g_name).cloned() {
+                    group = Some(g.clone());
                     self.add_occurrence(g.uid, Self::map_span(&g_name_p), structure);
+                } else {
+                    structure.diagnostics.push(self.semantic_error(
+                        Self::map_span(&g_name_p),
+                        format!("Undefined group: '{}'", g_name),
+                        content,
+                    ));
                 }
             }
         }
@@ -204,9 +247,13 @@ impl TectAnalyzer {
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
+        let span = Self::map_span(&name_p);
+
+        if self.check_duplicate(&name, span, structure, content) {
+            return;
+        }
 
         let function = Arc::new(Function::new_skeleton(name.clone(), doc_str, group));
-        let span = Self::map_span(&name_p);
         structure.symbol_table.insert(
             function.uid,
             SymbolMetadata {
@@ -218,8 +265,14 @@ impl TectAnalyzer {
         structure.catalog.insert(name, function);
     }
 
-    fn link_function_contracts(&self, pair: &Pair<Rule>, structure: &mut ProgramStructure) {
+    fn link_function_contracts(
+        &self,
+        pair: &Pair<Rule>,
+        structure: &mut ProgramStructure,
+        content: &str,
+    ) {
         let mut inner = pair.clone().into_inner();
+        // Skip docs and group (already handled in Pass 1)
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -238,7 +291,7 @@ impl TectAnalyzer {
         let mut consumes = Vec::new();
         if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::token_list {
-                consumes = self.resolve_tokens(inner.next().unwrap(), structure);
+                consumes = self.resolve_tokens(inner.next().unwrap(), structure, content);
             }
         }
 
@@ -246,7 +299,7 @@ impl TectAnalyzer {
         if let Some(outputs_pair) = inner.next() {
             for line in outputs_pair.into_inner() {
                 let list = line.into_inner().next().unwrap();
-                produces.push(self.resolve_tokens(list, structure));
+                produces.push(self.resolve_tokens(list, structure, content));
             }
         }
 
@@ -257,7 +310,12 @@ impl TectAnalyzer {
         }
     }
 
-    fn resolve_tokens(&self, pair: Pair<Rule>, structure: &mut ProgramStructure) -> Vec<Token> {
+    fn resolve_tokens(
+        &self,
+        pair: Pair<Rule>,
+        structure: &mut ProgramStructure,
+        content: &str,
+    ) -> Vec<Token> {
         let mut tokens = Vec::new();
         for t_pair in pair.into_inner() {
             let inner = t_pair.into_inner().next().unwrap();
@@ -273,10 +331,18 @@ impl TectAnalyzer {
                 _ => (inner.as_str(), Cardinality::Unitary, Self::map_span(&inner)),
             };
 
-            let kind =
-                structure.artifacts.get(name).cloned().unwrap_or_else(|| {
-                    Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
+            let kind = if let Some(k) = structure.artifacts.get(name) {
+                k.clone()
+            } else {
+                // Implicit Variable Creation
+                structure.diagnostics.push(Diagnostic {
+                    range: self.calculate_range(span, content),
+                    severity: Some(DiagnosticSeverity::INFORMATION),
+                    message: format!("Implicitly created variable '{}'.", name),
+                    ..Default::default()
                 });
+                Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
+            };
 
             // Register occurrence
             self.add_occurrence(kind.uid(), span, structure);
@@ -306,7 +372,7 @@ impl TectAnalyzer {
     }
 
     /// Helper to convert a byte-based Span into an LSP line/col Range.
-    fn calculate_range(&self, span: Span, content: &str) -> Range {
+    pub fn calculate_range(&self, span: Span, content: &str) -> Range {
         let mut line = 0;
         let mut col = 0;
         let mut byte = 0;
@@ -330,7 +396,6 @@ impl TectAnalyzer {
             }
             byte += char_len;
         }
-        // Handle case where span ends exactly at EOF
         if byte == span.end {
             end_pos = Position::new(line, col);
         }

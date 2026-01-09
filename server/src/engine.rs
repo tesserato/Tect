@@ -3,13 +3,14 @@
 //! Orchestrates the architectural simulation by consuming a [ProgramStructure].
 //! It tracks the movement of tokens through pools and handles branching.
 
+use crate::analyzer::TectAnalyzer;
 use crate::models::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity};
 
 pub enum Consumed {
     AllTokens(Vec<Edge>),
-    #[allow(dead_code)]
     SomeTokens(Vec<Token>),
 }
 
@@ -147,6 +148,7 @@ pub struct Flow {
     pub edges: Vec<Edge>,
     pub pools: Vec<TokenPool>,
     pub deduplicate_edges: bool,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Flow {
@@ -156,10 +158,13 @@ impl Flow {
             edges: Vec::new(),
             pools: Vec::new(),
             deduplicate_edges,
+            diagnostics: Vec::new(),
         }
     }
 
-    pub fn simulate(&mut self, structure: &ProgramStructure) -> Graph {
+    pub fn simulate(&mut self, structure: &ProgramStructure, content: &str) -> Graph {
+        let analyzer = TectAnalyzer::new(); // Used for span calculation helper
+
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
             true,
@@ -183,9 +188,13 @@ impl Flow {
             self.nodes.push(node.clone());
 
             let mut next_pools = Vec::new();
+            let mut step_executed_at_least_once = false;
+            let mut missing_tokens_examples = HashSet::new();
+
             for pool in &mut self.pools {
                 match pool.try_to_consume(func.consumes.clone(), node.clone()) {
                     Consumed::AllTokens(new_edges) => {
+                        step_executed_at_least_once = true;
                         self.edges.extend(new_edges);
                         if func.produces.is_empty() {
                             next_pools.push(pool.clone());
@@ -197,11 +206,32 @@ impl Flow {
                             }
                         }
                     }
-                    Consumed::SomeTokens(_) => {
+                    Consumed::SomeTokens(missing) => {
+                        // Keep the pool as is, since it didn't activate this node
                         next_pools.push(pool.clone());
+                        for m in missing {
+                            missing_tokens_examples.insert(m.kind.name().to_string());
+                        }
                     }
                 }
             }
+
+            // Starvation Check
+            if !step_executed_at_least_once && !func.consumes.is_empty() {
+                let missing_list: Vec<String> = missing_tokens_examples.into_iter().collect();
+                let msg = format!(
+                    "Flow starvation: Function '{}' could not execute. Missing inputs: [{}]",
+                    func.name,
+                    missing_list.join(", ")
+                );
+                self.diagnostics.push(Diagnostic {
+                    range: analyzer.calculate_range(step.span, content),
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    message: msg,
+                    ..Default::default()
+                });
+            }
+
             self.pools = next_pools;
         }
 
