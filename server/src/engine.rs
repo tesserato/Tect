@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub enum Consumed {
     AllTokens(Vec<Edge>),
+    #[allow(dead_code)]
     SomeTokens(Vec<Token>),
 }
 

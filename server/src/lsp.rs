@@ -268,7 +268,7 @@ impl LanguageServer for Backend {
                 items.push(CompletionItem {
                     label: name.clone(),
                     detail: Some("Function".into()),
-                    documentation: func.documentation.clone().map(|d| Documentation::String(d)),
+                    documentation: func.documentation.clone().map(Documentation::String),
                     kind: Some(CompletionItemKind::FUNCTION),
                     ..Default::default()
                 });
@@ -289,10 +289,7 @@ impl LanguageServer for Backend {
                     return Ok(Some(SignatureHelp {
                         signatures: vec![SignatureInformation {
                             label: sig,
-                            documentation: f
-                                .documentation
-                                .clone()
-                                .map(|d| Documentation::String(d)),
+                            documentation: f.documentation.clone().map(Documentation::String),
                             parameters: None,
                             active_parameter: None,
                         }],
@@ -317,7 +314,7 @@ impl LanguageServer for Backend {
                     let label = if let Some(ref g) = f.group {
                         format!("{} {}", g.name, signature)
                     } else {
-                        format!("{}", signature)
+                        signature
                     };
 
                     hints.push(InlayHint {

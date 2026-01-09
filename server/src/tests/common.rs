@@ -11,7 +11,7 @@ pub fn assert_output(path_str: &str, actual: String) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("Failed to create expected output directory");
         }
-        // Write the normalized version? Or raw? 
+        // Write the normalized version? Or raw?
         // usually best to write consistent \n, git handles conversion.
         fs::write(path, &actual_normalized).expect("Unable to write expected output");
         println!("Updated expected output: {}", path_str);

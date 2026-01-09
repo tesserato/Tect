@@ -11,7 +11,8 @@ fn test_format_dsbg() {
     let formatted = format_tect_source(&content).expect("Failed to format content");
     let mut output = File::create("../examples/test_outputs/formatted_dsbg.tect")
         .expect("Failed to create ../examples/test_outputs/formatted_dsbg.tect");
-    write!(output, "{}", formatted).expect("Failed to write ../examples/test_outputs/formatted_dsbg.tect");
+    write!(output, "{}", formatted)
+        .expect("Failed to write ../examples/test_outputs/formatted_dsbg.tect");
 
     assert_output(
         "../examples/expected_outputs/formatted_dsbg.tect",
