@@ -341,107 +341,9 @@ impl LanguageServer for Backend {
         let uri = &p.text_document.uri;
         if let Some(state) = self.document_state.get(uri) {
             let (content, _) = state.value();
-            let mut entities = Vec::new();
-            let mut current_block = String::new();
-            let mut last_rule = None;
-            let mut last_end_pos = 0;
-
-            let parsed = match TectParser::parse(Rule::program, content) {
-                Ok(mut p) => p.next().unwrap(),
-                Err(_) => return Ok(None),
-            };
-
-            for pair in parsed.into_inner() {
-                let rule_raw = pair.as_rule();
-                let span = pair.as_span();
-                let rule_logic = rule_to_logic(rule_raw);
-
-                let gap = &content[last_end_pos..span.start()];
-                let has_empty_line = gap.chars().filter(|&c| c == '\n').count() > 1;
-
-                if (has_empty_line || last_rule != Some(rule_logic)) && !current_block.is_empty() {
-                    entities.push(current_block.trim_end().to_string());
-                    current_block.clear();
-                }
-
-                match rule_logic {
-                    FormatterRule::Comment | FormatterRule::Flow => {
-                        current_block.push_str(pair.as_str().trim());
-                        current_block.push('\n');
-                    }
-                    FormatterRule::Atomic => {
-                        if !current_block.is_empty() {
-                            entities.push(current_block.trim_end().to_string());
-                            current_block.clear();
-                        }
-
-                        let mut formatted = String::new();
-                        if pair.as_rule() == Rule::func_def {
-                            let mut inner = pair.clone().into_inner();
-                            let mut last_inner_pos = None;
-
-                            while let Some(p) = inner.peek() {
-                                let pos = p.as_span().start();
-                                if last_inner_pos == Some(pos) {
-                                    break;
-                                }
-                                last_inner_pos = Some(pos);
-                                if p.as_rule() == Rule::doc_line {
-                                    formatted.push_str(inner.next().unwrap().as_str().trim());
-                                    formatted.push('\n');
-                                } else {
-                                    break;
-                                }
-                            }
-
-                            let mut header = Vec::new();
-                            while let Some(p) = inner.peek() {
-                                if matches!(
-                                    p.as_rule(),
-                                    Rule::ident | Rule::kw_function | Rule::token_list
-                                ) {
-                                    header.push(inner.next().unwrap().as_str().trim());
-                                } else {
-                                    break;
-                                }
-                            }
-                            if !header.is_empty() {
-                                formatted.push_str(&header.join(" "));
-                                formatted.push('\n');
-                            }
-
-                            if let Some(p) = inner.next() {
-                                for child in p.into_inner() {
-                                    if child.as_rule() == Rule::output_line {
-                                        let raw = child.as_str().trim();
-                                        let symbol = if raw.starts_with('>') { ">" } else { "|" };
-                                        let mut parts = child.into_inner();
-                                        let tokens =
-                                            parts.next().map(|t| t.as_str().trim()).unwrap_or("");
-                                        formatted.push_str(&format!("    {} {}\n", symbol, tokens));
-                                    }
-                                }
-                            }
-                        } else {
-                            formatted = pair.as_str().trim().to_string();
-                        }
-                        let cleaned = formatted.trim_end();
-                        if !cleaned.is_empty() {
-                            entities.push(cleaned.to_string());
-                        }
-                    }
-                }
-                last_rule = Some(rule_logic);
-                last_end_pos = span.end();
-            }
-
-            if !current_block.is_empty() {
-                entities.push(current_block.trim_end().to_string());
-            }
-            if !entities.is_empty() {
-                let final_text = entities.join("\n\n") + "\n";
+            if let Some(formatted) = format_tect_source(content) {
                 let full_range = Range::new(Position::new(0, 0), Position::new(u32::MAX, u32::MAX));
-                return Ok(Some(vec![TextEdit::new(full_range, final_text)]));
+                return Ok(Some(vec![TextEdit::new(full_range, formatted)]));
             }
         }
         Ok(None)
@@ -449,20 +351,6 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> LspResult<()> {
         Ok(())
-    }
-}
-
-#[derive(PartialEq, Clone, Copy)]
-enum FormatterRule {
-    Comment,
-    Flow,
-    Atomic,
-}
-fn rule_to_logic(r: Rule) -> FormatterRule {
-    match r {
-        Rule::comment => FormatterRule::Comment,
-        Rule::flow_step => FormatterRule::Flow,
-        _ => FormatterRule::Atomic,
     }
 }
 
@@ -616,3 +504,137 @@ impl Backend {
         }
     }
 }
+
+/// Core formatting logic used by LSP and tests
+pub fn format_tect_source(content: &str) -> Option<String> {
+    let mut entities = Vec::new();
+    let mut current_block = String::new();
+    let mut last_end_pos = 0;
+    let mut last_rule = None;
+
+    let parsed = match TectParser::parse(Rule::program, content) {
+        Ok(mut p) => p.next().unwrap(),
+        Err(_) => return None,
+    };
+
+    for pair in parsed.into_inner() {
+        let rule_raw = pair.as_rule();
+        let span = pair.as_span();
+        let rule_logic = rule_to_logic(rule_raw);
+
+        // Analyze gap between current and previous token
+        let gap = &content[last_end_pos..span.start()];
+        let newline_count = gap.chars().filter(|&c| c == '\n').count();
+
+        // Rule 2: Comments immediately followed by anything never get separated.
+        // If previous was a comment, we force glue regardless of whitespace in source.
+        let force_glue = last_rule == Some(FormatterRule::Comment);
+
+        // Rule 1: Separation by blank line.
+        // If source has >= 2 newlines (a blank line exists), we split.
+        let has_blank_line = newline_count >= 2;
+
+        let should_split = has_blank_line && !force_glue;
+
+        if should_split && !current_block.is_empty() {
+            entities.push(current_block.trim_end().to_string());
+            current_block.clear();
+        }
+
+        // Format the content of the block
+        let mut formatted_content = String::new();
+        match rule_logic {
+            FormatterRule::Atomic => {
+                if pair.as_rule() == Rule::func_def {
+                    // Specialized Function Formatting
+                    let mut inner = pair.clone().into_inner();
+                    let mut last_inner_pos = None;
+
+                    // 1. Extract Docs
+                    while let Some(p) = inner.peek() {
+                        let pos = p.as_span().start();
+                        if last_inner_pos == Some(pos) {
+                            break;
+                        }
+                        last_inner_pos = Some(pos);
+                        if p.as_rule() == Rule::doc_line {
+                            formatted_content.push_str(inner.next().unwrap().as_str().trim());
+                            formatted_content.push('\n');
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // 2. Extract Header (Group, Function Keyword, Name, Inputs)
+                    let mut header = Vec::new();
+                    while let Some(p) = inner.peek() {
+                        if matches!(
+                            p.as_rule(),
+                            Rule::ident | Rule::kw_function | Rule::token_list
+                        ) {
+                            header.push(inner.next().unwrap().as_str().trim());
+                        } else {
+                            break;
+                        }
+                    }
+                    if !header.is_empty() {
+                        formatted_content.push_str(&header.join(" "));
+                        formatted_content.push('\n');
+                    }
+
+                    // 3. Extract Outputs (Indented)
+                    if let Some(p) = inner.next() {
+                        for child in p.into_inner() {
+                            if child.as_rule() == Rule::output_line {
+                                let raw = child.as_str().trim();
+                                let symbol = if raw.starts_with('>') { ">" } else { "|" };
+                                let mut parts = child.into_inner();
+                                let tokens = parts.next().map(|t| t.as_str().trim()).unwrap_or("");
+                                formatted_content.push_str(&format!("    {} {}\n", symbol, tokens));
+                            }
+                        }
+                    }
+                } else {
+                    // Default atomic formatting (constants, vars, errors)
+                    formatted_content = pair.as_str().trim().to_string();
+                    formatted_content.push('\n');
+                }
+            }
+            _ => {
+                // Comments and Flow Steps
+                formatted_content = pair.as_str().trim().to_string();
+                formatted_content.push('\n');
+            }
+        }
+
+        current_block.push_str(&formatted_content);
+        last_end_pos = span.end();
+        last_rule = Some(rule_logic);
+    }
+
+    // Push remaining block
+    if !current_block.is_empty() {
+        entities.push(current_block.trim_end().to_string());
+    }
+
+    // Join blocks with exactly one blank line (\n\n) to restore the visual gap
+    if !entities.is_empty() {
+        return Some(entities.join("\n\n") + "\n");
+    }
+    None
+}
+
+#[derive(PartialEq, Clone, Copy)]
+enum FormatterRule {
+    Comment,
+    Flow,
+    Atomic,
+}
+fn rule_to_logic(r: Rule) -> FormatterRule {
+    match r {
+        Rule::comment => FormatterRule::Comment,
+        Rule::flow_step => FormatterRule::Flow,
+        _ => FormatterRule::Atomic,
+    }
+}
+
