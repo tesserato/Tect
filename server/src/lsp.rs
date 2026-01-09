@@ -473,13 +473,13 @@ impl Backend {
     }
 
     fn format_signature(f: &Function) -> String {
-        let inputs = f
+        let mut inputs = f
             .consumes
             .iter()
             .map(Self::format_token)
             .collect::<Vec<_>>()
             .join(", ");
-        let outputs = f
+        let mut outputs = f
             .produces
             .iter()
             .map(|branch| {
@@ -491,6 +491,12 @@ impl Backend {
             })
             .collect::<Vec<_>>()
             .join(" | ");
+        if inputs.is_empty() {
+            inputs = "()".to_string();
+        }
+        if outputs.is_empty() {
+            outputs = "()".to_string();
+        }
         format!("{} -> {}", inputs, outputs)
     }
 

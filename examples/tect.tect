@@ -45,6 +45,8 @@ error SyntaxError
 # Error markers sent back to the editor to underline issues.
 variable LSPDiagnostics
 
+variable UnusedVariable
+
 # ------------------------------------------------------------
 # 2. Group Definitions
 # ------------------------------------------------------------
