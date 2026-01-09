@@ -1,7 +1,7 @@
 # ============================================================
 # Tect Architecture Specification (Self-Model)
 #
-# This file models the data flow of the Tect Compiler, 
+# This file models the data flow of the Tect Compiler,
 # Language Server, and VS Code Extension.
 # ============================================================
 
@@ -80,7 +80,7 @@ Client function UserEdit
     > RawSource
 
 # **Analyze Source**
-# The Analyzer parses the raw text. 
+# The Analyzer parses the raw text.
 # It produces valid IR or a set of syntax errors.
 # *Impl: `TectAnalyzer::analyze`*
 Frontend function Analyze RawSource

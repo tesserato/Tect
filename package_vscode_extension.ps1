@@ -35,3 +35,21 @@ npm.cmd run package
 Write-Host "--- 8. Packaging extension ---"
 # npx usually handles the executable resolution, but npx.cmd is safer on strictly Windows envs
 npx.cmd @vscode/vsce package
+
+Write-Host "--- 9. Installing extension into VS Code ---"
+# Find the generated .vsix file (there should be only one because of Step 3)
+$vsixFile = Get-ChildItem -Path . -Filter "*.vsix" | Select-Object -First 1
+
+if ($vsixFile) {
+    Write-Host "Found package: $($vsixFile.Name)"
+    Write-Host "Installing..."
+    
+    # 'code' must be in your PATH (VS Code usually adds this automatically)
+    # --force ensures it updates the existing extension without prompting
+    code --install-extension $vsixFile.FullName --force
+    
+    Write-Host "Done! Reload VS Code to apply changes."
+}
+else {
+    Write-Error "Could not find a .vsix file to install."
+}
