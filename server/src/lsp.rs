@@ -505,135 +505,119 @@ impl Backend {
     }
 }
 
-/// Core formatting logic used by LSP and tests
+// --- Block-Based Formatter Implementation ---
+
+struct Block {
+    content: String,
+    start_pos: usize,
+    end_pos: usize,
+}
+
 pub fn format_tect_source(content: &str) -> Option<String> {
-    let mut entities = Vec::new();
-    let mut current_block = String::new();
-    let mut last_end_pos = 0;
-    let mut last_rule = None;
+    let mut blocks = Vec::new();
 
     let parsed = match TectParser::parse(Rule::program, content) {
         Ok(mut p) => p.next().unwrap(),
         Err(_) => return None,
     };
 
+    // 1. Blockify: Convert AST pairs into styled Blocks
     for pair in parsed.into_inner() {
-        let rule_raw = pair.as_rule();
-        let span = pair.as_span();
-        let rule_logic = rule_to_logic(rule_raw);
+        if pair.as_rule() == Rule::EOI {
+            continue;
+        }
 
-        // Analyze gap between current and previous token
-        let gap = &content[last_end_pos..span.start()];
+        let span = pair.as_span();
+        let formatted_content = match pair.as_rule() {
+            Rule::func_def => format_function(pair),
+            Rule::comment | Rule::flow_step => pair.as_str().trim().to_string(),
+            _ => pair.as_str().trim().to_string(), // Constants, vars, etc.
+        };
+
+        if !formatted_content.is_empty() {
+            blocks.push(Block {
+                content: formatted_content,
+                start_pos: span.start(),
+                end_pos: span.end(),
+            });
+        }
+    }
+
+    if blocks.is_empty() {
+        return Some(String::new());
+    }
+
+    // 2. Glue: Join blocks based on original source whitespace
+    let mut result = String::new();
+    result.push_str(&blocks[0].content);
+
+    for i in 1..blocks.len() {
+        let prev = &blocks[i - 1];
+        let curr = &blocks[i];
+
+        // Check original source between end of prev and start of curr
+        let gap = &content[prev.end_pos..curr.start_pos];
         let newline_count = gap.chars().filter(|&c| c == '\n').count();
 
-        // Rule 2: Comments immediately followed by anything never get separated.
-        // If previous was a comment, we force glue regardless of whitespace in source.
-        let force_glue = last_rule == Some(FormatterRule::Comment);
+        // If gap has >= 2 newlines (a blank line), force \n\n.
+        // Else use \n (this keeps comments attached to code if they were adjacent).
+        let separator = if newline_count >= 2 { "\n\n" } else { "\n" };
 
-        // Rule 1: Separation by blank line.
-        // If source has >= 2 newlines (a blank line exists), we split.
-        let has_blank_line = newline_count >= 2;
-
-        let should_split = has_blank_line && !force_glue;
-
-        if should_split && !current_block.is_empty() {
-            entities.push(current_block.trim_end().to_string());
-            current_block.clear();
-        }
-
-        // Format the content of the block
-        let mut formatted_content = String::new();
-        match rule_logic {
-            FormatterRule::Atomic => {
-                if pair.as_rule() == Rule::func_def {
-                    // Specialized Function Formatting
-                    let mut inner = pair.clone().into_inner();
-                    let mut last_inner_pos = None;
-
-                    // 1. Extract Docs
-                    while let Some(p) = inner.peek() {
-                        let pos = p.as_span().start();
-                        if last_inner_pos == Some(pos) {
-                            break;
-                        }
-                        last_inner_pos = Some(pos);
-                        if p.as_rule() == Rule::doc_line {
-                            formatted_content.push_str(inner.next().unwrap().as_str().trim());
-                            formatted_content.push('\n');
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // 2. Extract Header (Group, Function Keyword, Name, Inputs)
-                    let mut header = Vec::new();
-                    while let Some(p) = inner.peek() {
-                        if matches!(
-                            p.as_rule(),
-                            Rule::ident | Rule::kw_function | Rule::token_list
-                        ) {
-                            header.push(inner.next().unwrap().as_str().trim());
-                        } else {
-                            break;
-                        }
-                    }
-                    if !header.is_empty() {
-                        formatted_content.push_str(&header.join(" "));
-                        formatted_content.push('\n');
-                    }
-
-                    // 3. Extract Outputs (Indented)
-                    if let Some(p) = inner.next() {
-                        for child in p.into_inner() {
-                            if child.as_rule() == Rule::output_line {
-                                let raw = child.as_str().trim();
-                                let symbol = if raw.starts_with('>') { ">" } else { "|" };
-                                let mut parts = child.into_inner();
-                                let tokens = parts.next().map(|t| t.as_str().trim()).unwrap_or("");
-                                formatted_content.push_str(&format!("    {} {}\n", symbol, tokens));
-                            }
-                        }
-                    }
-                } else {
-                    // Default atomic formatting (constants, vars, errors)
-                    formatted_content = pair.as_str().trim().to_string();
-                    formatted_content.push('\n');
-                }
-            }
-            _ => {
-                // Comments and Flow Steps
-                formatted_content = pair.as_str().trim().to_string();
-                formatted_content.push('\n');
-            }
-        }
-
-        current_block.push_str(&formatted_content);
-        last_end_pos = span.end();
-        last_rule = Some(rule_logic);
+        result.push_str(separator);
+        result.push_str(&curr.content);
     }
 
-    // Push remaining block
-    if !current_block.is_empty() {
-        entities.push(current_block.trim_end().to_string());
-    }
-
-    // Join blocks with exactly one blank line (\n\n) to restore the visual gap
-    if !entities.is_empty() {
-        return Some(entities.join("\n\n") + "\n");
-    }
-    None
+    result.push('\n');
+    Some(result)
 }
 
-#[derive(PartialEq, Clone, Copy)]
-enum FormatterRule {
-    Comment,
-    Flow,
-    Atomic,
-}
-fn rule_to_logic(r: Rule) -> FormatterRule {
-    match r {
-        Rule::comment => FormatterRule::Comment,
-        Rule::flow_step => FormatterRule::Flow,
-        _ => FormatterRule::Atomic,
+fn format_function(pair: pest::iterators::Pair<Rule>) -> String {
+    let mut inner = pair.clone().into_inner();
+    let mut parts = Vec::new();
+    let mut last_inner_pos = None;
+
+    // 1. Extract Docs
+    while let Some(p) = inner.peek() {
+        let pos = p.as_span().start();
+        if last_inner_pos == Some(pos) {
+            break;
+        }
+        last_inner_pos = Some(pos);
+        if p.as_rule() == Rule::doc_line {
+            parts.push(inner.next().unwrap().as_str().trim().to_string());
+        } else {
+            break;
+        }
     }
+
+    // 2. Extract Header (Group, Function Keyword, Name, Inputs)
+    let mut header = Vec::new();
+    while let Some(p) = inner.peek() {
+        if matches!(
+            p.as_rule(),
+            Rule::ident | Rule::kw_function | Rule::token_list
+        ) {
+            header.push(inner.next().unwrap().as_str().trim());
+        } else {
+            break;
+        }
+    }
+    if !header.is_empty() {
+        parts.push(header.join(" "));
+    }
+
+    // 3. Extract Outputs (Indented)
+    if let Some(p) = inner.next() {
+        for child in p.into_inner() {
+            if child.as_rule() == Rule::output_line {
+                let raw = child.as_str().trim();
+                let symbol = if raw.starts_with('>') { ">" } else { "|" };
+                let mut output_parts = child.into_inner();
+                let tokens = output_parts.next().map(|t| t.as_str().trim()).unwrap_or("");
+                parts.push(format!("    {} {}", symbol, tokens));
+            }
+        }
+    }
+
+    parts.join("\n")
 }
