@@ -14,6 +14,6 @@ $instruction = @"
 CodeWeaver -clipboard `
     -instruction $instruction `
     -include "^server/src,^examples,^Cargo.toml,^extensions/vscode,^extensions/vscode/syntaxes" `
-    -ignore "^experiments/lib,^extensions/vscode/node_modules" `
+    -ignore "^experiments/lib,^extensions/vscode/node_modules,package-lock.json,extension.js" `
     -output "codebase.md" `
     -excluded-paths-file "codebase_excluded_paths.txt"
