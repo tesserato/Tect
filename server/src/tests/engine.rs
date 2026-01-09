@@ -1,3 +1,4 @@
+use super::common::assert_output;
 use crate::engine::Flow;
 use crate::models::*;
 use crate::vis_js;
@@ -282,19 +283,20 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
         "WriteIndexToDisk".into(),
     ];
 
-    // --- Step 3: Simulation and Baseline Formatting ---
+    // --- Step 3: Simulation and Comparison ---
     let mut flow = Flow::new(true);
     let graph = flow.simulate(&structure);
 
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
 
-    // Export architecture.json
+    // Verify architecture.json
     let mut arch_buf = Vec::new();
     let mut arch_ser = serde_json::Serializer::with_formatter(&mut arch_buf, formatter.clone());
     serde::Serialize::serialize(&graph, &mut arch_ser).unwrap();
-    fs::write("../examples/expected_outputs/architecture.json", arch_buf)?;
+    let arch_json = String::from_utf8(arch_buf).expect("Generated JSON was not valid UTF-8");
+    assert_output("../examples/expected_outputs/architecture.json", arch_json);
 
-    // Export functions.json (Baseline Restoration)
+    // Verify functions.json
     let functions = vec![
         f_process_cli,
         f_load_config,
@@ -309,13 +311,19 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
     let mut func_buf = Vec::new();
     let mut func_ser = serde_json::Serializer::with_formatter(&mut func_buf, formatter);
     serde::Serialize::serialize(&functions, &mut func_ser).unwrap();
-    fs::write("../examples/expected_outputs/functions.json", func_buf)?;
+    let func_json = String::from_utf8(func_buf).expect("Generated JSON was not valid UTF-8");
+    
+    
+    assert_output("../examples/expected_outputs/functions.json", func_json);
 
-    // Export architecture.html
-    fs::write(
+    // Verify architecture.html
+    let html_content = vis_js::generate_interactive_html(&graph);
+    // Note: We are writing to a different filename than the original test to distinguish the purpose?
+    // The original test wrote to architecture.html. We will verify against that.
+    assert_output(
         "../examples/expected_outputs/architecture.html",
-        vis_js::generate_interactive_html(&graph),
-    )?;
+        html_content,
+    );
 
     Ok(())
 }
