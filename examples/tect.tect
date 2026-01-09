@@ -71,6 +71,8 @@ group Engine
 # Source: `server/src/vis_js.rs`
 group Presentation
 
+group UnusedGroup
+
 # ------------------------------------------------------------
 # 3. Function Contracts
 # ------------------------------------------------------------

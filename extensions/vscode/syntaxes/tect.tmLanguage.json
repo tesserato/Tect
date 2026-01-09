@@ -13,7 +13,7 @@
         },
         {
             "comment": "Function definition with group prefix support",
-            "match": "\\b(function)\\s+([A-Z][a-zA-Z0-9_]*)\\b",
+            "match": "\\b(function)\\s+([a-zA-Z][a-zA-Z0-9_]*)\\b",
             "captures": {
                 "1": {
                     "name": "keyword.declaration.function.tect"
@@ -24,14 +24,14 @@
             }
         },
         {
-            "comment": "Generic Entity/Type highlighting (PascalCase)",
+            "comment": "Generic Entity/Type highlighting (Any casing)",
             "name": "entity.name.type.tect",
-            "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+            "match": "\\b[a-zA-Z][a-zA-Z0-9_]*\\b"
         },
         {
-            "comment": "Flow steps (identifiers on their own, usually PascalCase)",
+            "comment": "Flow steps (identifiers on their own, any casing)",
             "name": "variable.other.member.tect",
-            "match": "\\b[A-Z][a-zA-Z0-9_]*\\b(?=\\s*(?:#|$))"
+            "match": "\\b[a-zA-Z][a-zA-Z0-9_]*\\b(?=\\s*(?:#|$))"
         },
         {
             "name": "keyword.operator.tect",

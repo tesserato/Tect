@@ -47,11 +47,10 @@ fn test_strict_newline_doc_separation() {
     assert!(!docs.contains("Header") && docs.contains("Doc"));
 }
 
-/// Enforces case-sensitivity and casing rules for Tect identifiers.
+/// Verifies that lowercase identifiers are allowed (no strict PascalCase enforcement).
 #[test]
-fn test_strict_casing_failure() {
-    // Tect identifiers must start with a Capital letter (PascalCase)
+fn test_lowercase_allowed() {
     let input = "constant credentials";
     let pair = TectParser::parse(Rule::program, input);
-    assert!(pair.is_err());
+    assert!(pair.is_ok());
 }
