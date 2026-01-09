@@ -3,11 +3,9 @@
 # A simple static blog generator made in Go.
 # https://github.com/tesserato/DSBG
 # ============================================================
-
 # ------------------------------------------------------------
 # Type Definitions
 # ------------------------------------------------------------
-
 # **Settings**
 # The global configuration object for the generator.
 # Contains:
@@ -66,7 +64,6 @@ error FileSystemError
 # ------------------------------------------------------------
 # Group Definitions
 # ------------------------------------------------------------
-
 # **Environment Group**
 # Setup and configuration phase.
 # Handles the transition from CLI input to internal settings.
@@ -89,7 +86,6 @@ group IO
 # ------------------------------------------------------------
 # Function Definitions
 # ------------------------------------------------------------
-
 # **Process CLI**
 # Parses the command line arguments provided by the user.
 # Returns the global settings and the specific config path found.
@@ -148,7 +144,6 @@ IO function WriteArticlesToDisk HTMLarticle
 # ------------------------------------------------------------
 # The Flow (Execution Pipeline)
 # ------------------------------------------------------------
-
 ProcessCLI
 LoadConfig
 

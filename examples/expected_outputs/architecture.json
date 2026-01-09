@@ -17,17 +17,17 @@
         {
             "uid": 52,
             "function": {
-                "uid": 18,
+                "uid": 15,
                 "name": "ProcessCLI",
-                "documentation": "Processes command-line input",
+                "documentation": "**Process CLI**  \nParses the command line arguments provided by the user.  \nReturns the global settings and the specific config path found.",
                 "consumes": [
                     {
-                        "uid": 15,
+                        "uid": 24,
                         "kind": {
                             "Variable": {
                                 "uid": 5,
                                 "name": "InitialCommand",
-                                "documentation": "The initial command input from the CLI"
+                                "documentation": "**Initial Command**  \nRaw input from the CLI arguments.  \nRepresents the user's intent (e.g., `build`, `watch`)."
                             }
                         },
                         "cardinality": "Unitary"
@@ -36,12 +36,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 16,
+                            "uid": 25,
                             "kind": {
                                 "Constant": {
-                                    "uid": 7,
+                                    "uid": 1,
                                     "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
+                                    "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                                 }
                             },
                             "cardinality": "Unitary"
@@ -49,12 +49,12 @@
                     ],
                     [
                         {
-                            "uid": 17,
+                            "uid": 26,
                             "kind": {
                                 "Variable": {
                                     "uid": 6,
                                     "name": "PathToConfig",
-                                    "documentation": "The path to the configuration file"
+                                    "documentation": "**Path To Config**  \nThe resolved location of the configuration file.  \nDefaults to `./tect.toml` if not provided."
                                 }
                             },
                             "cardinality": "Unitary"
@@ -62,9 +62,9 @@
                     ]
                 ],
                 "group": {
-                    "uid": 1,
+                    "uid": 11,
                     "name": "Environment",
-                    "documentation": null
+                    "documentation": "**Environment Group**  \nSetup and configuration phase.  \nHandles the transition from CLI input to internal settings."
                 }
             },
             "is_artificial_graph_start": false,
@@ -74,17 +74,17 @@
         {
             "uid": 53,
             "function": {
-                "uid": 21,
+                "uid": 16,
                 "name": "LoadConfig",
-                "documentation": "Loads configuration from a file",
+                "documentation": "**Load Config**  \nReads the configuration file from disk and hydrates the  \nglobal Settings object.",
                 "consumes": [
                     {
-                        "uid": 19,
+                        "uid": 27,
                         "kind": {
                             "Variable": {
                                 "uid": 6,
                                 "name": "PathToConfig",
-                                "documentation": "The path to the configuration file"
+                                "documentation": "**Path To Config**  \nThe resolved location of the configuration file.  \nDefaults to `./tect.toml` if not provided."
                             }
                         },
                         "cardinality": "Unitary"
@@ -93,12 +93,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 20,
+                            "uid": 28,
                             "kind": {
                                 "Constant": {
-                                    "uid": 7,
+                                    "uid": 1,
                                     "name": "Settings",
-                                    "documentation": "The loaded settings from the config file"
+                                    "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                                 }
                             },
                             "cardinality": "Unitary"
@@ -106,9 +106,9 @@
                     ]
                 ],
                 "group": {
-                    "uid": 1,
+                    "uid": 11,
                     "name": "Environment",
-                    "documentation": null
+                    "documentation": "**Environment Group**  \nSetup and configuration phase.  \nHandles the transition from CLI input to internal settings."
                 }
             },
             "is_artificial_graph_start": false,
@@ -118,17 +118,17 @@
         {
             "uid": 54,
             "function": {
-                "uid": 24,
+                "uid": 17,
                 "name": "LoadTemplates",
-                "documentation": "Loads HTML templates based on settings",
+                "documentation": "**Load Templates**  \nLocates and compiles the Handlebars templates from the  \ndirectory specified in the settings.",
                 "consumes": [
                     {
-                        "uid": 22,
+                        "uid": 29,
                         "kind": {
                             "Constant": {
-                                "uid": 7,
+                                "uid": 1,
                                 "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
+                                "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                             }
                         },
                         "cardinality": "Unitary"
@@ -137,12 +137,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 23,
+                            "uid": 30,
                             "kind": {
                                 "Constant": {
-                                    "uid": 8,
+                                    "uid": 2,
                                     "name": "Templates",
-                                    "documentation": "The registry of HTML templates used for rendering"
+                                    "documentation": "**Templates**  \nThe registry of HTML templates used for rendering.  \n*Note: Requires a valid handlebars setup.*"
                                 }
                             },
                             "cardinality": "Unitary"
@@ -158,17 +158,17 @@
         {
             "uid": 55,
             "function": {
-                "uid": 28,
+                "uid": 18,
                 "name": "ScanFS",
-                "documentation": "Scans the filesystem for source files",
+                "documentation": "**Scan File System**  \nRecursively walks the source directory to find markdown files.  \nReturns a collection of `SourceFile` or a collection of errors.",
                 "consumes": [
                     {
-                        "uid": 25,
+                        "uid": 31,
                         "kind": {
                             "Constant": {
-                                "uid": 7,
+                                "uid": 1,
                                 "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
+                                "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                             }
                         },
                         "cardinality": "Unitary"
@@ -177,12 +177,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 26,
+                            "uid": 32,
                             "kind": {
                                 "Constant": {
-                                    "uid": 9,
+                                    "uid": 3,
                                     "name": "SourceFile",
-                                    "documentation": "A raw input file found in the source directory"
+                                    "documentation": "**Source File**  \nA raw input file from the filesystem.  \nThis represents a single `.md` file before processing."
                                 }
                             },
                             "cardinality": "Collection"
@@ -190,12 +190,12 @@
                     ],
                     [
                         {
-                            "uid": 27,
+                            "uid": 33,
                             "kind": {
                                 "Error": {
-                                    "uid": 13,
+                                    "uid": 10,
                                     "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                    "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                                 }
                             },
                             "cardinality": "Collection"
@@ -203,9 +203,9 @@
                     ]
                 ],
                 "group": {
-                    "uid": 2,
+                    "uid": 12,
                     "name": "Ingestion",
-                    "documentation": null
+                    "documentation": "**Ingestion Group**  \nReading data from the physical world.  \nFocuses on filesystem discovery."
                 }
             },
             "is_artificial_graph_start": false,
@@ -215,17 +215,17 @@
         {
             "uid": 56,
             "function": {
-                "uid": 32,
+                "uid": 19,
                 "name": "ParseMarkdown",
-                "documentation": "Parses markdown files into article structures",
+                "documentation": "**Parse Markdown**  \nExtracts metadata and converts markdown content to HTML fragments.",
                 "consumes": [
                     {
-                        "uid": 29,
+                        "uid": 34,
                         "kind": {
                             "Constant": {
-                                "uid": 9,
+                                "uid": 3,
                                 "name": "SourceFile",
-                                "documentation": "A raw input file found in the source directory"
+                                "documentation": "**Source File**  \nA raw input file from the filesystem.  \nThis represents a single `.md` file before processing."
                             }
                         },
                         "cardinality": "Unitary"
@@ -234,12 +234,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 30,
+                            "uid": 35,
                             "kind": {
                                 "Constant": {
-                                    "uid": 10,
+                                    "uid": 4,
                                     "name": "Article",
-                                    "documentation": "The processed data structure containing markdown content and metadata"
+                                    "documentation": "**Article**  \nThe processed data structure.  \nContains the parsed markdown body and extracted front-matter metadata  \nsuch as **title**, **date**, and **tags**."
                                 }
                             },
                             "cardinality": "Unitary"
@@ -247,12 +247,12 @@
                     ],
                     [
                         {
-                            "uid": 31,
+                            "uid": 36,
                             "kind": {
                                 "Error": {
-                                    "uid": 13,
+                                    "uid": 10,
                                     "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                    "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                                 }
                             },
                             "cardinality": "Unitary"
@@ -268,138 +268,39 @@
         {
             "uid": 57,
             "function": {
-                "uid": 37,
+                "uid": 21,
                 "name": "RenderHTMLArticles",
-                "documentation": "Renders articles into HTML using templates",
+                "documentation": "**Render HTML Articles**  \nCombines a single article with the site templates to produce  \nthe final standalone HTML file.",
                 "consumes": [
                     {
-                        "uid": 33,
+                        "uid": 40,
                         "kind": {
                             "Constant": {
-                                "uid": 10,
+                                "uid": 4,
                                 "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
+                                "documentation": "**Article**  \nThe processed data structure.  \nContains the parsed markdown body and extracted front-matter metadata  \nsuch as **title**, **date**, and **tags**."
                             }
                         },
                         "cardinality": "Unitary"
                     },
                     {
-                        "uid": 34,
+                        "uid": 41,
                         "kind": {
                             "Constant": {
-                                "uid": 8,
+                                "uid": 2,
                                 "name": "Templates",
-                                "documentation": "The registry of HTML templates used for rendering"
+                                "documentation": "**Templates**  \nThe registry of HTML templates used for rendering.  \n*Note: Requires a valid handlebars setup.*"
                             }
                         },
                         "cardinality": "Unitary"
                     },
-                    {
-                        "uid": 35,
-                        "kind": {
-                            "Constant": {
-                                "uid": 7,
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary"
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 36,
-                            "kind": {
-                                "Variable": {
-                                    "uid": 11,
-                                    "name": "HTMLarticle",
-                                    "documentation": "The final article HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary"
-                        }
-                    ]
-                ],
-                "group": {
-                    "uid": 3,
-                    "name": "Rendering",
-                    "documentation": null
-                }
-            },
-            "is_artificial_graph_start": false,
-            "is_artificial_graph_end": false,
-            "is_artificial_error_termination": false
-        },
-        {
-            "uid": 58,
-            "function": {
-                "uid": 41,
-                "name": "RenderHTMLIndex",
-                "documentation": "Renders the index page into HTML using templates",
-                "consumes": [
-                    {
-                        "uid": 38,
-                        "kind": {
-                            "Constant": {
-                                "uid": 10,
-                                "name": "Article",
-                                "documentation": "The processed data structure containing markdown content and metadata"
-                            }
-                        },
-                        "cardinality": "Collection"
-                    },
-                    {
-                        "uid": 39,
-                        "kind": {
-                            "Constant": {
-                                "uid": 7,
-                                "name": "Settings",
-                                "documentation": "The loaded settings from the config file"
-                            }
-                        },
-                        "cardinality": "Unitary"
-                    }
-                ],
-                "produces": [
-                    [
-                        {
-                            "uid": 40,
-                            "kind": {
-                                "Variable": {
-                                    "uid": 12,
-                                    "name": "HTMLIndex",
-                                    "documentation": "The final index HTML string ready to be written to disk"
-                                }
-                            },
-                            "cardinality": "Unitary"
-                        }
-                    ]
-                ],
-                "group": {
-                    "uid": 3,
-                    "name": "Rendering",
-                    "documentation": null
-                }
-            },
-            "is_artificial_graph_start": false,
-            "is_artificial_graph_end": false,
-            "is_artificial_error_termination": false
-        },
-        {
-            "uid": 59,
-            "function": {
-                "uid": 45,
-                "name": "WriteArticlesToDisk",
-                "documentation": "Writes HTML files to disk",
-                "consumes": [
                     {
                         "uid": 42,
                         "kind": {
-                            "Variable": {
-                                "uid": 11,
-                                "name": "HTMLarticle",
-                                "documentation": "The final article HTML string ready to be written to disk"
+                            "Constant": {
+                                "uid": 1,
+                                "name": "Settings",
+                                "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                             }
                         },
                         "cardinality": "Unitary"
@@ -411,22 +312,9 @@
                             "uid": 43,
                             "kind": {
                                 "Variable": {
-                                    "uid": 14,
-                                    "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
-                                }
-                            },
-                            "cardinality": "Unitary"
-                        }
-                    ],
-                    [
-                        {
-                            "uid": 44,
-                            "kind": {
-                                "Error": {
-                                    "uid": 13,
-                                    "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                    "uid": 7,
+                                    "name": "HTMLarticle",
+                                    "documentation": "**HTML Article**  \nThe final rendered HTML string for a single blog post."
                                 }
                             },
                             "cardinality": "Unitary"
@@ -434,9 +322,121 @@
                     ]
                 ],
                 "group": {
-                    "uid": 4,
+                    "uid": 13,
+                    "name": "Rendering",
+                    "documentation": "**Rendering Group**  \nGenerating the presentation layer.  \nTransforms pure data into user-facing HTML."
+                }
+            },
+            "is_artificial_graph_start": false,
+            "is_artificial_graph_end": false,
+            "is_artificial_error_termination": false
+        },
+        {
+            "uid": 58,
+            "function": {
+                "uid": 20,
+                "name": "RenderHTMLIndex",
+                "documentation": "**Render HTML Index**  \nAggregates all processed articles to generate the main listing page.",
+                "consumes": [
+                    {
+                        "uid": 37,
+                        "kind": {
+                            "Constant": {
+                                "uid": 4,
+                                "name": "Article",
+                                "documentation": "**Article**  \nThe processed data structure.  \nContains the parsed markdown body and extracted front-matter metadata  \nsuch as **title**, **date**, and **tags**."
+                            }
+                        },
+                        "cardinality": "Collection"
+                    },
+                    {
+                        "uid": 38,
+                        "kind": {
+                            "Constant": {
+                                "uid": 1,
+                                "name": "Settings",
+                                "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
+                            }
+                        },
+                        "cardinality": "Unitary"
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 39,
+                            "kind": {
+                                "Variable": {
+                                    "uid": 8,
+                                    "name": "HTMLIndex",
+                                    "documentation": "**HTML Index**  \nThe final generated index page containing the list of all articles."
+                                }
+                            },
+                            "cardinality": "Unitary"
+                        }
+                    ]
+                ],
+                "group": {
+                    "uid": 13,
+                    "name": "Rendering",
+                    "documentation": "**Rendering Group**  \nGenerating the presentation layer.  \nTransforms pure data into user-facing HTML."
+                }
+            },
+            "is_artificial_graph_start": false,
+            "is_artificial_graph_end": false,
+            "is_artificial_error_termination": false
+        },
+        {
+            "uid": 59,
+            "function": {
+                "uid": 23,
+                "name": "WriteArticlesToDisk",
+                "documentation": "**Write Articles To Disk**  \nSaves individual article HTML files to their respective paths.",
+                "consumes": [
+                    {
+                        "uid": 47,
+                        "kind": {
+                            "Variable": {
+                                "uid": 7,
+                                "name": "HTMLarticle",
+                                "documentation": "**HTML Article**  \nThe final rendered HTML string for a single blog post."
+                            }
+                        },
+                        "cardinality": "Unitary"
+                    }
+                ],
+                "produces": [
+                    [
+                        {
+                            "uid": 48,
+                            "kind": {
+                                "Variable": {
+                                    "uid": 9,
+                                    "name": "SuccessReport",
+                                    "documentation": "**Success Report**  \nA final summary of the operations performed.  \nIncludes timing data and the count of files written."
+                                }
+                            },
+                            "cardinality": "Unitary"
+                        }
+                    ],
+                    [
+                        {
+                            "uid": 49,
+                            "kind": {
+                                "Error": {
+                                    "uid": 10,
+                                    "name": "FileSystemError",
+                                    "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
+                                }
+                            },
+                            "cardinality": "Unitary"
+                        }
+                    ]
+                ],
+                "group": {
+                    "uid": 14,
                     "name": "IO",
-                    "documentation": null
+                    "documentation": "**IO Group**  \nCommitting data back to disk."
                 }
             },
             "is_artificial_graph_start": false,
@@ -446,17 +446,17 @@
         {
             "uid": 60,
             "function": {
-                "uid": 49,
+                "uid": 22,
                 "name": "WriteIndexToDisk",
-                "documentation": "Writes the index HTML file to disk",
+                "documentation": "**Write Index To Disk**  \nSaves the generated index page to the output directory.",
                 "consumes": [
                     {
-                        "uid": 46,
+                        "uid": 44,
                         "kind": {
                             "Variable": {
-                                "uid": 12,
+                                "uid": 8,
                                 "name": "HTMLIndex",
-                                "documentation": "The final index HTML string ready to be written to disk"
+                                "documentation": "**HTML Index**  \nThe final generated index page containing the list of all articles."
                             }
                         },
                         "cardinality": "Unitary"
@@ -465,12 +465,12 @@
                 "produces": [
                     [
                         {
-                            "uid": 47,
+                            "uid": 45,
                             "kind": {
                                 "Variable": {
-                                    "uid": 14,
+                                    "uid": 9,
                                     "name": "SuccessReport",
-                                    "documentation": "A final summary of the operations performed during the run"
+                                    "documentation": "**Success Report**  \nA final summary of the operations performed.  \nIncludes timing data and the count of files written."
                                 }
                             },
                             "cardinality": "Unitary"
@@ -478,12 +478,12 @@
                     ],
                     [
                         {
-                            "uid": 48,
+                            "uid": 46,
                             "kind": {
                                 "Error": {
-                                    "uid": 13,
+                                    "uid": 10,
                                     "name": "FileSystemError",
-                                    "documentation": "Triggered when a file cannot be read from or written to the disk"
+                                    "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                                 }
                             },
                             "cardinality": "Unitary"
@@ -491,9 +491,9 @@
                     ]
                 ],
                 "group": {
-                    "uid": 4,
+                    "uid": 14,
                     "name": "IO",
-                    "documentation": null
+                    "documentation": "**IO Group**  \nCommitting data back to disk."
                 }
             },
             "is_artificial_graph_start": false,
@@ -534,12 +534,12 @@
             "from_node_uid": 51,
             "to_node_uid": 52,
             "token": {
-                "uid": 15,
+                "uid": 24,
                 "kind": {
                     "Variable": {
                         "uid": 5,
                         "name": "InitialCommand",
-                        "documentation": "The initial command input from the CLI"
+                        "documentation": "**Initial Command**  \nRaw input from the CLI arguments.  \nRepresents the user's intent (e.g., `build`, `watch`)."
                     }
                 },
                 "cardinality": "Unitary"
@@ -550,12 +550,12 @@
             "from_node_uid": 52,
             "to_node_uid": 53,
             "token": {
-                "uid": 17,
+                "uid": 26,
                 "kind": {
                     "Variable": {
                         "uid": 6,
                         "name": "PathToConfig",
-                        "documentation": "The path to the configuration file"
+                        "documentation": "**Path To Config**  \nThe resolved location of the configuration file.  \nDefaults to `./tect.toml` if not provided."
                     }
                 },
                 "cardinality": "Unitary"
@@ -566,12 +566,12 @@
             "from_node_uid": 52,
             "to_node_uid": 54,
             "token": {
-                "uid": 16,
+                "uid": 25,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -582,12 +582,12 @@
             "from_node_uid": 53,
             "to_node_uid": 54,
             "token": {
-                "uid": 20,
+                "uid": 28,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -598,12 +598,12 @@
             "from_node_uid": 52,
             "to_node_uid": 55,
             "token": {
-                "uid": 16,
+                "uid": 25,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -614,12 +614,12 @@
             "from_node_uid": 53,
             "to_node_uid": 55,
             "token": {
-                "uid": 20,
+                "uid": 28,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -630,12 +630,12 @@
             "from_node_uid": 55,
             "to_node_uid": 56,
             "token": {
-                "uid": 26,
+                "uid": 32,
                 "kind": {
                     "Constant": {
-                        "uid": 9,
+                        "uid": 3,
                         "name": "SourceFile",
-                        "documentation": "A raw input file found in the source directory"
+                        "documentation": "**Source File**  \nA raw input file from the filesystem.  \nThis represents a single `.md` file before processing."
                     }
                 },
                 "cardinality": "Collection"
@@ -646,12 +646,12 @@
             "from_node_uid": 56,
             "to_node_uid": 57,
             "token": {
-                "uid": 30,
+                "uid": 35,
                 "kind": {
                     "Constant": {
-                        "uid": 10,
+                        "uid": 4,
                         "name": "Article",
-                        "documentation": "The processed data structure containing markdown content and metadata"
+                        "documentation": "**Article**  \nThe processed data structure.  \nContains the parsed markdown body and extracted front-matter metadata  \nsuch as **title**, **date**, and **tags**."
                     }
                 },
                 "cardinality": "Collection"
@@ -662,12 +662,12 @@
             "from_node_uid": 54,
             "to_node_uid": 57,
             "token": {
-                "uid": 23,
+                "uid": 30,
                 "kind": {
                     "Constant": {
-                        "uid": 8,
+                        "uid": 2,
                         "name": "Templates",
-                        "documentation": "The registry of HTML templates used for rendering"
+                        "documentation": "**Templates**  \nThe registry of HTML templates used for rendering.  \n*Note: Requires a valid handlebars setup.*"
                     }
                 },
                 "cardinality": "Unitary"
@@ -678,12 +678,12 @@
             "from_node_uid": 52,
             "to_node_uid": 57,
             "token": {
-                "uid": 16,
+                "uid": 25,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -694,12 +694,12 @@
             "from_node_uid": 53,
             "to_node_uid": 57,
             "token": {
-                "uid": 20,
+                "uid": 28,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -710,12 +710,12 @@
             "from_node_uid": 56,
             "to_node_uid": 58,
             "token": {
-                "uid": 30,
+                "uid": 35,
                 "kind": {
                     "Constant": {
-                        "uid": 10,
+                        "uid": 4,
                         "name": "Article",
-                        "documentation": "The processed data structure containing markdown content and metadata"
+                        "documentation": "**Article**  \nThe processed data structure.  \nContains the parsed markdown body and extracted front-matter metadata  \nsuch as **title**, **date**, and **tags**."
                     }
                 },
                 "cardinality": "Collection"
@@ -726,12 +726,12 @@
             "from_node_uid": 52,
             "to_node_uid": 58,
             "token": {
-                "uid": 16,
+                "uid": 25,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -742,12 +742,12 @@
             "from_node_uid": 53,
             "to_node_uid": 58,
             "token": {
-                "uid": 20,
+                "uid": 28,
                 "kind": {
                     "Constant": {
-                        "uid": 7,
+                        "uid": 1,
                         "name": "Settings",
-                        "documentation": "The loaded settings from the config file"
+                        "documentation": "**Settings**  \nThe global configuration object for the generator.  \nContains:  \n- `source_dir`: Path to markdown files  \n- `build_dir`: Path for output  \n- `site_url`: Canonical URL"
                     }
                 },
                 "cardinality": "Unitary"
@@ -758,12 +758,12 @@
             "from_node_uid": 57,
             "to_node_uid": 59,
             "token": {
-                "uid": 36,
+                "uid": 43,
                 "kind": {
                     "Variable": {
-                        "uid": 11,
+                        "uid": 7,
                         "name": "HTMLarticle",
-                        "documentation": "The final article HTML string ready to be written to disk"
+                        "documentation": "**HTML Article**  \nThe final rendered HTML string for a single blog post."
                     }
                 },
                 "cardinality": "Collection"
@@ -774,12 +774,12 @@
             "from_node_uid": 58,
             "to_node_uid": 60,
             "token": {
-                "uid": 40,
+                "uid": 39,
                 "kind": {
                     "Variable": {
-                        "uid": 12,
+                        "uid": 8,
                         "name": "HTMLIndex",
-                        "documentation": "The final index HTML string ready to be written to disk"
+                        "documentation": "**HTML Index**  \nThe final generated index page containing the list of all articles."
                     }
                 },
                 "cardinality": "Unitary"
@@ -790,12 +790,12 @@
             "from_node_uid": 59,
             "to_node_uid": 62,
             "token": {
-                "uid": 43,
+                "uid": 48,
                 "kind": {
                     "Variable": {
-                        "uid": 14,
+                        "uid": 9,
                         "name": "SuccessReport",
-                        "documentation": "A final summary of the operations performed during the run"
+                        "documentation": "**Success Report**  \nA final summary of the operations performed.  \nIncludes timing data and the count of files written."
                     }
                 },
                 "cardinality": "Collection"
@@ -806,12 +806,12 @@
             "from_node_uid": 60,
             "to_node_uid": 62,
             "token": {
-                "uid": 47,
+                "uid": 45,
                 "kind": {
                     "Variable": {
-                        "uid": 14,
+                        "uid": 9,
                         "name": "SuccessReport",
-                        "documentation": "A final summary of the operations performed during the run"
+                        "documentation": "**Success Report**  \nA final summary of the operations performed.  \nIncludes timing data and the count of files written."
                     }
                 },
                 "cardinality": "Unitary"
@@ -822,12 +822,12 @@
             "from_node_uid": 60,
             "to_node_uid": 64,
             "token": {
-                "uid": 48,
+                "uid": 46,
                 "kind": {
                     "Error": {
-                        "uid": 13,
+                        "uid": 10,
                         "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                        "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                     }
                 },
                 "cardinality": "Unitary"
@@ -838,12 +838,12 @@
             "from_node_uid": 59,
             "to_node_uid": 64,
             "token": {
-                "uid": 44,
+                "uid": 49,
                 "kind": {
                     "Error": {
-                        "uid": 13,
+                        "uid": 10,
                         "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                        "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                     }
                 },
                 "cardinality": "Collection"
@@ -854,12 +854,12 @@
             "from_node_uid": 54,
             "to_node_uid": 62,
             "token": {
-                "uid": 23,
+                "uid": 30,
                 "kind": {
                     "Constant": {
-                        "uid": 8,
+                        "uid": 2,
                         "name": "Templates",
-                        "documentation": "The registry of HTML templates used for rendering"
+                        "documentation": "**Templates**  \nThe registry of HTML templates used for rendering.  \n*Note: Requires a valid handlebars setup.*"
                     }
                 },
                 "cardinality": "Unitary"
@@ -870,12 +870,12 @@
             "from_node_uid": 56,
             "to_node_uid": 64,
             "token": {
-                "uid": 31,
+                "uid": 36,
                 "kind": {
                     "Error": {
-                        "uid": 13,
+                        "uid": 10,
                         "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                        "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                     }
                 },
                 "cardinality": "Collection"
@@ -886,12 +886,12 @@
             "from_node_uid": 55,
             "to_node_uid": 64,
             "token": {
-                "uid": 27,
+                "uid": 33,
                 "kind": {
                     "Error": {
-                        "uid": 13,
+                        "uid": 10,
                         "name": "FileSystemError",
-                        "documentation": "Triggered when a file cannot be read from or written to the disk"
+                        "documentation": "**File System Error**  \nTriggered when IO operations fail.  \ncommon causes:  \n1. *Permission Denied*  \n2. *Disk Full*  \n3. *Path Not Found*"
                     }
                 },
                 "cardinality": "Collection"
