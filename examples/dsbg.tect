@@ -1,5 +1,7 @@
 # ============================================================
-# Blog Architecture Specification (.tect)
+# Simplified Version of the Architecture for a DSBG
+# A simple static blog generator made in Go.
+# https://github.com/tesserato/DSBG
 # ============================================================
 
 # ------------------------------------------------------------

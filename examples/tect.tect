@@ -1,7 +1,7 @@
 # ============================================================
-# Tect Architecture Specification (Self-Model)
+# Tect Architecture
 #
-# This file models the data flow of the Tect Compiler,
+# This example models the data flow of the Tect Compiler,
 # Language Server, and VS Code Extension.
 # ============================================================
 
