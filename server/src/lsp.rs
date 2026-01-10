@@ -589,6 +589,23 @@ pub fn format_tect_source(content: &str) -> Option<String> {
     Some(result)
 }
 
+fn format_token_list(pair: pest::iterators::Pair<Rule>) -> String {
+    pair.into_inner()
+        .map(|t| {
+            // t is Rule::token -> inner is Rule::collection or Rule::unitary
+            let inner = t.into_inner().next().unwrap();
+            match inner.as_rule() {
+                Rule::collection => {
+                    let name = inner.into_inner().next().unwrap().as_str().trim();
+                    format!("[{}]", name)
+                }
+                _ => inner.as_str().trim().to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn format_function(pair: pest::iterators::Pair<Rule>) -> String {
     let mut inner = pair.clone().into_inner();
     let mut parts = Vec::new();
@@ -611,11 +628,10 @@ fn format_function(pair: pest::iterators::Pair<Rule>) -> String {
     // 2. Extract Header (Group, Function Keyword, Name, Inputs)
     let mut header = Vec::new();
     while let Some(p) = inner.peek() {
-        if matches!(
-            p.as_rule(),
-            Rule::ident | Rule::kw_function | Rule::token_list
-        ) {
-            header.push(inner.next().unwrap().as_str().trim());
+        if p.as_rule() == Rule::token_list {
+            header.push(format_token_list(inner.next().unwrap()));
+        } else if matches!(p.as_rule(), Rule::ident | Rule::kw_function) {
+            header.push(inner.next().unwrap().as_str().trim().to_string());
         } else {
             break;
         }
@@ -631,7 +647,11 @@ fn format_function(pair: pest::iterators::Pair<Rule>) -> String {
                 let raw = child.as_str().trim();
                 let symbol = if raw.starts_with('>') { ">" } else { "|" };
                 let mut output_parts = child.into_inner();
-                let tokens = output_parts.next().map(|t| t.as_str().trim()).unwrap_or("");
+                // Token list
+                let tokens = output_parts
+                    .next()
+                    .map(format_token_list)
+                    .unwrap_or_default();
                 parts.push(format!("    {} {}", symbol, tokens));
             }
         }
