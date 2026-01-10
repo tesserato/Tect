@@ -1,5 +1,6 @@
+use crate::formatter::format_tect_source;
+
 use super::common::assert_output;
-use crate::lsp::format_tect_source;
 use std::fs::{self, File};
 use std::io::Write;
 

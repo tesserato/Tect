@@ -7,6 +7,7 @@ use tower_lsp::{LspService, Server};
 
 mod analyzer;
 mod engine;
+mod formatter;
 mod lsp;
 mod models;
 mod vis_js;
