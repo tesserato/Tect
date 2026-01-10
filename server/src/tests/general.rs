@@ -1,5 +1,6 @@
 use crate::analyzer::{Rule, TectAnalyzer, TectParser};
 use pest::Parser;
+use std::path::PathBuf;
 
 /// Verifies that data artifacts can be defined correctly.
 #[test]
@@ -22,7 +23,7 @@ fn test_parse_function_no_parens() {
 fn test_doc_comment_association() {
     let input = "# Doc 1\n# Doc 2\nconstant Credentials";
     let mut a = TectAnalyzer::new();
-    let structure = a.analyze(input);
+    let structure = a.analyze(input, PathBuf::from("test.tect"));
     let s = structure.artifacts.get("Credentials").unwrap();
 
     let docs = match s {
@@ -37,7 +38,7 @@ fn test_doc_comment_association() {
 fn test_strict_newline_doc_separation() {
     let input = "# Header\n\n# Doc\nconstant C";
     let mut a = TectAnalyzer::new();
-    let structure = a.analyze(input);
+    let structure = a.analyze(input, PathBuf::from("test.tect"));
     let s = structure.artifacts.get("C").unwrap();
 
     let docs = match s {

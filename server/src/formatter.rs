@@ -29,6 +29,7 @@ pub fn format_tect_source(content: &str) -> Option<String> {
         let span = pair.as_span();
         let formatted_content = match pair.as_rule() {
             Rule::func_def => format_function(pair),
+            Rule::import_stmt => pair.as_str().trim().to_string(),
             Rule::comment | Rule::flow_step => pair.as_str().trim().to_string(),
             _ => pair.as_str().trim().to_string(), // Constants, vars, etc.
         };

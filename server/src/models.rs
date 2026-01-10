@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tower_lsp::lsp_types::Diagnostic;
@@ -199,20 +200,23 @@ pub struct ProgramStructure {
     pub catalog: HashMap<String, Arc<Function>>,
     pub flow: Vec<FlowStep>,
     pub symbol_table: HashMap<u32, SymbolMetadata>,
-    pub diagnostics: Vec<Diagnostic>,
+    /// Diagnostics grouped by file path
+    pub diagnostics: Vec<(PathBuf, Diagnostic)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FlowStep {
     pub function_name: String,
     pub span: Span,
+    pub source_file: PathBuf,
 }
 
-impl From<&str> for FlowStep {
-    fn from(s: &str) -> Self {
+impl FlowStep {
+    pub fn new(name: String, span: Span, source_file: PathBuf) -> Self {
         Self {
-            function_name: s.to_string(),
-            span: Span { start: 0, end: 0 },
+            function_name: name,
+            span,
+            source_file,
         }
     }
 }
@@ -286,5 +290,7 @@ pub struct Span {
 pub struct SymbolMetadata {
     pub name: String,
     pub definition_span: Span,
-    pub occurrences: Vec<Span>,
+    pub source_file: PathBuf,
+    /// Occurrences as (File, Span)
+    pub occurrences: Vec<(PathBuf, Span)>,
 }

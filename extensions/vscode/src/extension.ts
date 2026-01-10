@@ -171,8 +171,25 @@ class TectPreviewPanel {
     private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private _uri: vscode.Uri) {
         this._panel = panel;
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+
+        // Handle messages from the webview
+        this._panel.webview.onDidReceiveMessage(
+            message => {
+                switch (message.command) {
+                    case 'webviewReady':
+                        // The webview has finished loading JS and is ready for data
+                        this.update();
+                        return;
+                }
+            },
+            null,
+            this._disposables
+        );
+
         this._panel.webview.html = this._getHtmlForWebview();
-        this.update();
+
+        // Note: We do NOT call this.update() here anymore to avoid the race condition.
+        // We wait for the 'webviewReady' signal instead.
     }
 
     public async update() {
@@ -200,6 +217,7 @@ class TectPreviewPanel {
             <body>
                 <div id="mynetwork"></div>
                 <script>
+                    const vscode = acquireVsCodeApi();
                     const container = document.getElementById('mynetwork');
                     let network = null;
                     let nodes = new vis.DataSet([]);
@@ -257,6 +275,9 @@ class TectPreviewPanel {
                             }
                         }
                     });
+
+                    // Signal to VS Code that the webview script is loaded and ready to receive messages
+                    vscode.postMessage({ command: 'webviewReady' });
                 </script>
             </body>
             </html>`;

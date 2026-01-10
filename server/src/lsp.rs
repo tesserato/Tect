@@ -11,6 +11,7 @@ use crate::vis_js::{self, VisData};
 use dashmap::DashMap;
 use regex::Regex;
 use serde_json::Value;
+use std::collections::HashMap;
 use tower_lsp::jsonrpc::{Error as LspError, Result as LspResult};
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
@@ -81,6 +82,7 @@ impl LanguageServer for Backend {
                     "error" => Some("Defines an architectural error state or exception branch."),
                     "group" => Some("Organizes functions into logical architectural layers or modules."),
                     "function" => Some("Defines an architectural contract with specific inputs and result branches."),
+                    "import" => Some("Imports definitions from another Tect file."),
                     _ => None,
                 };
 
@@ -153,9 +155,19 @@ impl LanguageServer for Backend {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
                 if let Some(meta) = self.find_meta(&word, structure) {
+                    let target_uri = Url::from_file_path(&meta.source_file).unwrap();
+                    // If target is same file, use content for range.
+                    // If target is different, we can't calculate range easily without reading it.
+                    // For now, if different file, we return 0,0 range.
+                    let range = if target_uri == *uri {
+                        Self::span_to_range(content, meta.definition_span)
+                    } else {
+                        // In a real implementation, we would cache file contents to calculate this
+                        Range::default()
+                    };
+
                     return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
-                        uri.clone(),
-                        Self::span_to_range(content, meta.definition_span),
+                        target_uri, range,
                     ))));
                 }
             }
@@ -168,37 +180,47 @@ impl LanguageServer for Backend {
         p: DocumentSymbolParams,
     ) -> LspResult<Option<DocumentSymbolResponse>> {
         let uri = &p.text_document.uri;
+        let path = uri.to_file_path().unwrap();
+
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             let mut symbols = Vec::new();
+
+            // Only show symbols defined in this file
             for kind in structure.artifacts.values() {
                 if let Some(meta) = structure.symbol_table.get(&kind.uid()) {
-                    symbols.push(self.make_symbol(
-                        kind.name(),
-                        SymbolKind::STRUCT,
-                        content,
-                        meta.definition_span,
-                    ));
+                    if meta.source_file == path {
+                        symbols.push(self.make_symbol(
+                            kind.name(),
+                            SymbolKind::STRUCT,
+                            content,
+                            meta.definition_span,
+                        ));
+                    }
                 }
             }
             for func in structure.catalog.values() {
                 if let Some(meta) = structure.symbol_table.get(&func.uid) {
-                    symbols.push(self.make_symbol(
-                        &func.name,
-                        SymbolKind::FUNCTION,
-                        content,
-                        meta.definition_span,
-                    ));
+                    if meta.source_file == path {
+                        symbols.push(self.make_symbol(
+                            &func.name,
+                            SymbolKind::FUNCTION,
+                            content,
+                            meta.definition_span,
+                        ));
+                    }
                 }
             }
             for group in structure.groups.values() {
                 if let Some(meta) = structure.symbol_table.get(&group.uid) {
-                    symbols.push(self.make_symbol(
-                        &group.name,
-                        SymbolKind::NAMESPACE,
-                        content,
-                        meta.definition_span,
-                    ));
+                    if meta.source_file == path {
+                        symbols.push(self.make_symbol(
+                            &group.name,
+                            SymbolKind::NAMESPACE,
+                            content,
+                            meta.definition_span,
+                        ));
+                    }
                 }
             }
             return Ok(Some(DocumentSymbolResponse::Nested(symbols)));
@@ -214,15 +236,25 @@ impl LanguageServer for Backend {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
                 if let Some(meta) = self.find_meta(&word, structure) {
-                    let edits = meta
-                        .occurrences
-                        .iter()
-                        .map(|s| TextEdit::new(Self::span_to_range(content, *s), new_name.clone()))
-                        .collect();
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(uri.clone(), edits);
+                    let mut changes = HashMap::new();
+
+                    for (file_path, span) in &meta.occurrences {
+                        let file_uri = Url::from_file_path(file_path).unwrap();
+
+                        // We need the content of that file to calc range.
+                        // Limitation: rename only works in current file fully or blindly 0,0 elsewhere
+                        // For the purpose of this implementation, we only support renaming in current file properly.
+                        if file_uri == *uri {
+                            let range = Self::span_to_range(content, *span);
+                            changes
+                                .entry(file_uri)
+                                .or_insert_with(Vec::new)
+                                .push(TextEdit::new(range, new_name.clone()));
+                        }
+                    }
+
                     return Ok(Some(WorkspaceEdit {
-                        changes: Some(map),
+                        changes: Some(changes),
                         ..Default::default()
                     }));
                 }
@@ -238,12 +270,21 @@ impl LanguageServer for Backend {
             let (content, structure) = state.value();
             if let Some((word, _)) = Self::get_word_at(content, pos) {
                 if let Some(meta) = self.find_meta(&word, structure) {
-                    return Ok(Some(
-                        meta.occurrences
-                            .iter()
-                            .map(|s| Location::new(uri.clone(), Self::span_to_range(content, *s)))
-                            .collect(),
-                    ));
+                    let locs = meta
+                        .occurrences
+                        .iter()
+                        .map(|(path, span)| {
+                            let target_uri = Url::from_file_path(path).unwrap();
+                            let range = if target_uri == *uri {
+                                Self::span_to_range(content, *span)
+                            } else {
+                                Range::default() // Cannot resolve range without loading content
+                            };
+                            Location::new(target_uri, range)
+                        })
+                        .collect();
+
+                    return Ok(Some(locs));
                 }
             }
         }
@@ -304,29 +345,34 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, p: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
         let uri = &p.text_document.uri;
+        let path = uri.to_file_path().unwrap();
+
         if let Some(state) = self.document_state.get(uri) {
             let (content, structure) = state.value();
             let mut hints = Vec::new();
             for step in &structure.flow {
-                if let Some(f) = structure.catalog.get(&step.function_name) {
-                    let range = Self::span_to_range(content, step.span);
-                    let signature = Self::format_signature(f);
-                    let label = if let Some(ref g) = f.group {
-                        format!("{} {}", g.name, signature)
-                    } else {
-                        signature
-                    };
+                // Only show hints for steps in the current file
+                if step.source_file == path {
+                    if let Some(f) = structure.catalog.get(&step.function_name) {
+                        let range = Self::span_to_range(content, step.span);
+                        let signature = Self::format_signature(f);
+                        let label = if let Some(ref g) = f.group {
+                            format!("{} {}", g.name, signature)
+                        } else {
+                            signature
+                        };
 
-                    hints.push(InlayHint {
-                        position: range.end,
-                        label: InlayHintLabel::String(label),
-                        kind: Some(InlayHintKind::TYPE),
-                        padding_left: Some(true),
-                        padding_right: None,
-                        data: None,
-                        tooltip: None,
-                        text_edits: None,
-                    });
+                        hints.push(InlayHint {
+                            position: range.end,
+                            label: InlayHintLabel::String(label),
+                            kind: Some(InlayHintKind::TYPE),
+                            padding_left: Some(true),
+                            padding_right: None,
+                            data: None,
+                            tooltip: None,
+                            text_edits: None,
+                        });
+                    }
                 }
             }
             return Ok(Some(hints));
@@ -369,25 +415,40 @@ impl Backend {
     }
 
     async fn process_change(&self, uri: Url, content: String) {
+        let path = uri.to_file_path().unwrap();
         let mut analyzer = TectAnalyzer::new();
-        let structure = analyzer.analyze(&content);
+        let structure = analyzer.analyze(&content, path);
 
         // 1. Static Diagnostics
-        let mut diagnostics = structure.diagnostics.clone();
+        let mut all_diagnostics = structure.diagnostics.clone();
 
         // 2. Engine Logic Diagnostics (Only if we have a generally valid structure)
-        if !diagnostics
+        if !all_diagnostics
             .iter()
-            .any(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+            .any(|(_, d)| d.severity == Some(DiagnosticSeverity::ERROR))
         {
             let mut flow = Flow::new(true);
             flow.simulate(&structure, &content);
-            diagnostics.extend(flow.diagnostics);
+            all_diagnostics.extend(flow.diagnostics);
         }
 
-        self.client
-            .publish_diagnostics(uri.clone(), diagnostics, None)
-            .await;
+        // Group diagnostics by URI
+        let mut diag_map: HashMap<Url, Vec<Diagnostic>> = HashMap::new();
+        for (fpath, diag) in all_diagnostics {
+            if let Ok(furi) = Url::from_file_path(fpath) {
+                diag_map.entry(furi).or_default().push(diag);
+            }
+        }
+
+        // Publish diagnostics for ALL affected files (including imports)
+        // If a file is not in the map, we should publish empty diagnostics to clear old ones
+        // In a real robust LSP, we'd track opened files. Here we publish what we found.
+        // We also explicitly publish for current file to ensure it clears if valid.
+        diag_map.entry(uri.clone()).or_default();
+
+        for (furi, diags) in diag_map {
+            self.client.publish_diagnostics(furi, diags, None).await;
+        }
 
         self.document_state
             .insert(uri.clone(), (content, structure));

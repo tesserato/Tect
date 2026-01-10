@@ -8,8 +8,19 @@
             "end": "$"
         },
         {
+            "name": "string.quoted.double.tect",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.tect",
+                    "match": "\\\\."
+                }
+            ]
+        },
+        {
             "name": "keyword.control.tect",
-            "match": "\\b(constant|variable|error|group)\\b"
+            "match": "\\b(constant|variable|error|group|import)\\b"
         },
         {
             "comment": "Function definition with group prefix support",

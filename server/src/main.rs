@@ -45,11 +45,12 @@ async fn main() -> Result<()> {
 
     match cmd {
         Commands::Build { input, output } => {
-            let content = fs::read_to_string(input)?;
+            let content = fs::read_to_string(&input)?;
+            // Must pass path for relative import resolution
             let mut analyzer = analyzer::TectAnalyzer::new();
-            let structure = analyzer.analyze(&content);
+            let structure = analyzer.analyze(&content, input);
             let mut flow = engine::Flow::new(true);
-            let graph = flow.simulate(&structure, &content); // Pass content here
+            let graph = flow.simulate(&structure, &content);
 
             match output.extension().and_then(|s| s.to_str()) {
                 Some("html") => fs::write(output, vis_js::generate_interactive_html(&graph))?,

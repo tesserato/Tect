@@ -13,12 +13,16 @@ doc_line =  { comment ~ ln }
 /// Standard alphanumeric identifier starting with a letter
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
+/// String literal for imports
+string_literal = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+
 // --- Keywords ---
 kw_constant = { "constant" }
 kw_variable = { "variable" }
 kw_error    = { "error" }
 kw_group    = { "group" }
 kw_function = { "function" }
+kw_import   = { "import" }
 
 // --- Tokens ---
 token      = { collection | unitary }
@@ -26,6 +30,9 @@ collection = { "[" ~ ident ~ "]" }
 unitary    = { ident }
 
 // --- Definitions ---
+
+/// Import statement
+import_stmt = { kw_import ~ string_literal }
 
 /// Global constant definition
 const_def = { doc_line* ~ kw_constant ~ ident }
@@ -46,8 +53,6 @@ token_list = { token ~ ("," ~ token)* }
 output_line = { (">" | "|") ~ token_list }
 
 /// Function Contract Definition
-/// Syntax: [Group] function Name Input1, Input2...
-/// Note: Parentheses are excluded to match the simplified Tect specification.
 func_def = {
     doc_line* ~
     (!kw_function ~ ident)? ~ // Optional Group Prefix
@@ -73,13 +78,15 @@ keyword = {
   | kw_error
   | kw_group
   | kw_function
+  | kw_import
 }
 
 // --- Root ---
 
 /// Top-level statement types
 statement = _{
-    const_def
+    import_stmt
+  | const_def
   | var_def
   | err_def
   | group_def

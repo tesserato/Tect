@@ -2,20 +2,21 @@ use super::common::assert_output;
 use crate::engine::Flow;
 use crate::vis_js;
 use std::fs;
+use std::path::PathBuf;
 
 #[test]
 fn generate_blog_architecture_json() -> std::io::Result<()> {
     // 1. Read and Analyze source file
-    // We now use the actual sample file instead of manually building the structure
     let input_path = "../examples/dsbg.tect";
     let content = fs::read_to_string(input_path).expect("Failed to read dsbg.tect");
+    let path = PathBuf::from(input_path);
 
     let mut analyzer = crate::analyzer::TectAnalyzer::new();
-    let structure = analyzer.analyze(&content);
+    let structure = analyzer.analyze(&content, path);
 
     // 2. Simulate Flow
     let mut flow = Flow::new(true);
-    let graph = flow.simulate(&structure, &content); // Updated signature
+    let graph = flow.simulate(&structure, &content);
 
     // 3. Serialize artifacts
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
@@ -27,9 +28,6 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
     let arch_json = String::from_utf8(arch_buf).expect("Generated JSON was not valid UTF-8");
 
     // B) Functions JSON
-    // We collect functions from the catalog and sort them by UID.
-    // This ensures the order matches the definition order in the file (sequential UIDs),
-    // producing a deterministic JSON output for comparison.
     let mut functions: Vec<_> = structure.catalog.values().collect();
     functions.sort_by_key(|f| f.uid);
 
@@ -41,8 +39,7 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
     // C) HTML Output
     let html_content = vis_js::generate_interactive_html(&graph);
 
-    // 4. Save artifacts to test_outputs (for debugging/inspection)
-    // This allows us to see exactly what was generated, even if the test fails or passes.
+    // 4. Save artifacts
     let output_dir = "../examples/test_outputs";
     fs::create_dir_all(output_dir)?;
 
@@ -50,10 +47,7 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
     fs::write(format!("{}/functions.json", output_dir), &func_json)?;
     fs::write(format!("{}/architecture.html", output_dir), &html_content)?;
 
-    // 5. Compare against expected_outputs (Verification)
-    // If these fail, run with `UPDATE_EXPECTED=1 cargo test` to update the expected files.
-    // Note: Parsing the file freshly might result in different UIDs than the previous
-    // manual construction, so an initial update of expected_outputs will likely be required.
+    // 5. Compare against expected_outputs
     assert_output("../examples/expected_outputs/architecture.json", arch_json);
     assert_output("../examples/expected_outputs/functions.json", func_json);
     // assert_output(

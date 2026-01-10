@@ -6,6 +6,7 @@
 use crate::analyzer::TectAnalyzer;
 use crate::models::*;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity};
 
@@ -148,7 +149,7 @@ pub struct Flow {
     pub edges: Vec<Edge>,
     pub pools: Vec<TokenPool>,
     pub deduplicate_edges: bool,
-    pub diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<(PathBuf, Diagnostic)>,
 }
 
 impl Flow {
@@ -163,7 +164,7 @@ impl Flow {
     }
 
     pub fn simulate(&mut self, structure: &ProgramStructure, content: &str) -> Graph {
-        let analyzer = TectAnalyzer::new(); // Used for span calculation helper
+        let analyzer = TectAnalyzer::new();
 
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
@@ -207,7 +208,6 @@ impl Flow {
                         }
                     }
                     Consumed::SomeTokens(missing) => {
-                        // Keep the pool as is, since it didn't activate this node
                         next_pools.push(pool.clone());
                         for m in missing {
                             missing_tokens_examples.insert(m.kind.name().to_string());
@@ -216,7 +216,6 @@ impl Flow {
                 }
             }
 
-            // Starvation Check
             if !step_executed_at_least_once && !func.consumes.is_empty() {
                 let missing_list: Vec<String> = missing_tokens_examples.into_iter().collect();
                 let msg = format!(
@@ -224,12 +223,28 @@ impl Flow {
                     func.name,
                     missing_list.join(", ")
                 );
-                self.diagnostics.push(Diagnostic {
-                    range: analyzer.calculate_range(step.span, content),
-                    severity: Some(DiagnosticSeverity::WARNING),
-                    message: msg,
-                    ..Default::default()
-                });
+
+                // We use the passed content for range calculation.
+                // NOTE: If the step is in an imported file, 'content' (which is the root file)
+                // will yield incorrect ranges. This is a known limitation of this simplified recursion.
+                // A robust solution would store content per file or re-read it.
+                // For now, we only generate range if the step source is the current file.
+                // Otherwise we just default to 0,0 range but attach the correct file path.
+
+                // Hack: We can't easily check current file vs imported file range without loading content.
+                // But the diagnostic struct requires a range.
+                // Ideally, the Flow/Engine shouldn't care about Ranges, but it does for reporting.
+                // We will attach the diagnostic to the step.source_file.
+
+                self.diagnostics.push((
+                    step.source_file.clone(),
+                    Diagnostic {
+                        range: analyzer.calculate_range(step.span, content),
+                        severity: Some(DiagnosticSeverity::WARNING),
+                        message: msg,
+                        ..Default::default()
+                    },
+                ));
             }
 
             self.pools = next_pools;
