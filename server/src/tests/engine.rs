@@ -11,12 +11,13 @@ fn generate_blog_architecture_json() -> std::io::Result<()> {
     let content = fs::read_to_string(input_path).expect("Failed to read dsbg.tect");
     let path = PathBuf::from(input_path);
 
-    let mut analyzer = crate::analyzer::TectAnalyzer::new();
-    let structure = analyzer.analyze(&content, path);
+    let mut workspace = crate::analyzer::Workspace::new();
+    workspace.analyze(path, Some(content.clone()));
+    let structure = &workspace.structure;
 
     // 2. Simulate Flow
     let mut flow = Flow::new(true);
-    let graph = flow.simulate(&structure, &content);
+    let graph = flow.simulate(structure);
 
     // 3. Serialize artifacts
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");

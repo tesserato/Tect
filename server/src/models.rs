@@ -1,20 +1,53 @@
 //! # Tect Logical Models
 //!
-//! This module defines the core architectural entities and the
-//! [ProgramStructure] Intermediate Representation (IR).
+//! Defines the core architectural entities, the Intermediate Representation (IR),
+//! and the diagnostic structures used across the compiler pipeline.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use tower_lsp::lsp_types::Diagnostic;
+use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
 
 // --- ID Registry ---
 static GLOBAL_UID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 fn next_uid() -> u32 {
     GLOBAL_UID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+// --- Source Management Types ---
+
+/// A unique identifier for a source file in the workspace.
+pub type FileId = u32;
+
+/// A region of text in a specific file, defined by byte offsets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Span {
+    pub file_id: FileId,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Span {
+    pub fn new(file_id: FileId, start: usize, end: usize) -> Self {
+        Self {
+            file_id,
+            start,
+            end,
+        }
+    }
+}
+
+/// An intermediate diagnostic structure.
+/// Decouples the logic (Engine/Analyzer) from the presentation (LSP Range/URI).
+#[derive(Debug, Clone)]
+pub struct DiagnosticWithContext {
+    pub file_id: FileId,
+    pub span: Option<Span>,
+    pub message: String,
+    pub severity: DiagnosticSeverity,
+    pub tags: Vec<DiagnosticTag>,
 }
 
 // --- Core Logic ---
@@ -200,25 +233,14 @@ pub struct ProgramStructure {
     pub catalog: HashMap<String, Arc<Function>>,
     pub flow: Vec<FlowStep>,
     pub symbol_table: HashMap<u32, SymbolMetadata>,
-    /// Diagnostics grouped by file path
-    pub diagnostics: Vec<(PathBuf, Diagnostic)>,
+    #[serde(skip)]
+    pub diagnostics: Vec<DiagnosticWithContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FlowStep {
     pub function_name: String,
     pub span: Span,
-    pub source_file: PathBuf,
-}
-
-impl FlowStep {
-    pub fn new(name: String, span: Span, source_file: PathBuf) -> Self {
-        Self {
-            function_name: name,
-            span,
-            source_file,
-        }
-    }
 }
 
 // --- Flow Entities ---
@@ -278,19 +300,11 @@ pub struct Graph {
     pub edges: Vec<Edge>,
 }
 
-// --- LSP Models ---
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
+// --- Symbol Metadata ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SymbolMetadata {
     pub name: String,
     pub definition_span: Span,
-    pub source_file: PathBuf,
-    /// Occurrences as (File, Span)
-    pub occurrences: Vec<(PathBuf, Span)>,
+    pub occurrences: Vec<Span>,
 }

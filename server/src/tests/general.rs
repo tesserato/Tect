@@ -1,4 +1,4 @@
-use crate::analyzer::{Rule, TectAnalyzer, TectParser};
+use crate::analyzer::{Rule, TectParser, Workspace};
 use pest::Parser;
 use std::path::PathBuf;
 
@@ -22,9 +22,11 @@ fn test_parse_function_no_parens() {
 #[test]
 fn test_doc_comment_association() {
     let input = "# Doc 1\n# Doc 2\nconstant Credentials";
-    let mut a = TectAnalyzer::new();
-    let structure = a.analyze(input, PathBuf::from("test.tect"));
-    let s = structure.artifacts.get("Credentials").unwrap();
+    let mut a = Workspace::new();
+    // analyze modifies structure in-place
+    a.analyze(PathBuf::from("test.tect"), Some(input.to_string()));
+
+    let s = a.structure.artifacts.get("Credentials").unwrap();
 
     let docs = match s {
         crate::models::Kind::Constant(c) => c.documentation.as_ref().unwrap(),
@@ -37,9 +39,10 @@ fn test_doc_comment_association() {
 #[test]
 fn test_strict_newline_doc_separation() {
     let input = "# Header\n\n# Doc\nconstant C";
-    let mut a = TectAnalyzer::new();
-    let structure = a.analyze(input, PathBuf::from("test.tect"));
-    let s = structure.artifacts.get("C").unwrap();
+    let mut a = Workspace::new();
+    a.analyze(PathBuf::from("test.tect"), Some(input.to_string()));
+
+    let s = a.structure.artifacts.get("C").unwrap();
 
     let docs = match s {
         crate::models::Kind::Constant(c) => c.documentation.as_ref().unwrap(),

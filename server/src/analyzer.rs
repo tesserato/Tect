@@ -1,312 +1,361 @@
 //! # Tect Semantic Analyzer
 //!
-//! Responsible for transforming raw Tect source code into a [ProgramStructure].
-//! Performs import resolution, symbol discovery, linking, and validation.
+//! Responsible for parsing, dependency resolution, and semantic analysis.
+//! Uses a SourceManager to handle multi-file projects and builds a global
+//! ProgramStructure.
 
 use crate::models::*;
+use crate::source_manager::SourceManager;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, Position, Range};
+use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
 
 #[derive(Parser)]
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
-pub struct TectAnalyzer;
+/// The orchestrator for analysis.
+/// Holds the Virtual File System (SourceManager) and the resulting IR (ProgramStructure).
+pub struct Workspace {
+    pub source_manager: SourceManager,
+    pub structure: ProgramStructure,
+}
 
-impl TectAnalyzer {
+impl Default for Workspace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Workspace {
     pub fn new() -> Self {
-        Self
+        Self {
+            source_manager: SourceManager::new(),
+            structure: ProgramStructure::default(),
+        }
     }
 
-    /// Analyzes source code from a given path. Recursively handles imports.
-    pub fn analyze(&mut self, content: &str, path: PathBuf) -> ProgramStructure {
+    /// Entry point: Analyze a project starting from a root file.
+    /// If content is provided, it uses that (useful for unsaved editor buffers).
+    pub fn analyze(&mut self, root_path: PathBuf, root_content: Option<String>) {
+        self.structure = ProgramStructure::default();
+
+        // 1. Dependency Discovery
+        let root_id = self.source_manager.get_id(&root_path);
+        self.source_manager.load_file(root_id, root_content);
+
+        let mut parse_queue = vec![root_id];
         let mut visited = HashSet::new();
-        self.analyze_recursive(content, path, &mut visited)
+        let mut dependency_graph: HashMap<FileId, Vec<FileId>> = HashMap::new();
+
+        // BFS to load and discover files
+        let mut head = 0;
+        while head < parse_queue.len() {
+            let current_id = parse_queue[head];
+            head += 1;
+
+            if visited.contains(&current_id) {
+                continue;
+            }
+            visited.insert(current_id);
+
+            // Ensure loaded
+            if self.source_manager.get_content(current_id).is_none() {
+                if !self.source_manager.load_file(current_id, None) {
+                    self.report_error(
+                        current_id,
+                        None,
+                        format!(
+                            "Failed to read file: {:?}",
+                            self.source_manager.get_path(current_id)
+                        ),
+                    );
+                    continue;
+                }
+            }
+
+            // Quick parse for imports to build graph
+            // Fix: Clone content to avoid holding immutable borrow of self.source_manager
+            // while calling self.scan_imports (mutable borrow of self).
+            let content_owned = self
+                .source_manager
+                .get_content(current_id)
+                .map(|s| s.to_string());
+
+            if let Some(content) = content_owned {
+                let imports = self.scan_imports(&content, current_id);
+                for (path, _span) in imports {
+                    let imported_id = self.source_manager.get_id(path);
+                    dependency_graph
+                        .entry(current_id)
+                        .or_default()
+                        .push(imported_id);
+
+                    if !visited.contains(&imported_id) && !parse_queue.contains(&imported_id) {
+                        parse_queue.push(imported_id);
+                    } else if visited.contains(&imported_id) {
+                        // Diamond dependency or cycle; graph will handle it.
+                    }
+                }
+            }
+        }
+
+        // 2. Cycle Detection
+        if let Some(cycle_path) = self.detect_cycle(root_id, &dependency_graph) {
+            self.report_error(
+                root_id,
+                None,
+                format!("Circular dependency detected: {}", cycle_path),
+            );
+            return;
+        }
+
+        // 3. Parse & Merge
+        for file_id in visited {
+            self.parse_file(file_id);
+        }
+
+        // 4. Validation (Unused Symbols)
+        self.check_unused_symbols();
     }
 
-    fn analyze_recursive(
-        &mut self,
-        content: &str,
-        path: PathBuf,
-        visited: &mut HashSet<PathBuf>,
-    ) -> ProgramStructure {
-        visited.insert(path.clone());
-        let mut structure = ProgramStructure::default();
+    /// Scans a file for import statements to build the dependency graph.
+    fn scan_imports(&mut self, content: &str, file_id: FileId) -> Vec<(PathBuf, Span)> {
+        let mut results = Vec::new();
+        if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
+            if let Some(root) = pairs.next() {
+                for pair in root.into_inner() {
+                    if let Rule::import_stmt = pair.as_rule() {
+                        let span = self.map_span(&pair, file_id);
+                        let mut inner = pair.into_inner();
+                        let _ = inner.next(); // import kw
+                        let str_lit = inner.next().unwrap().as_str();
+                        let rel_path = &str_lit[1..str_lit.len() - 1]; // strip quotes
 
-        let parse_res = TectParser::parse(Rule::program, content);
+                        if let Some(base_path) = self.source_manager.get_path(file_id) {
+                            let target: PathBuf = if let Some(parent) = base_path.parent() {
+                                parent.join(rel_path)
+                            } else {
+                                PathBuf::from(rel_path)
+                            };
+                            results.push((target, span));
+                        }
+                    }
+                }
+            }
+        }
+        results
+    }
 
+    /// Detects cycles in the dependency graph using DFS.
+    fn detect_cycle(&self, root: FileId, graph: &HashMap<FileId, Vec<FileId>>) -> Option<String> {
+        let mut visited = HashSet::new();
+        let mut recursion_stack = HashSet::new();
+        let mut path_stack = Vec::new();
+
+        self.dfs_cycle(
+            root,
+            graph,
+            &mut visited,
+            &mut recursion_stack,
+            &mut path_stack,
+        )
+    }
+
+    fn dfs_cycle(
+        &self,
+        current: FileId,
+        graph: &HashMap<FileId, Vec<FileId>>,
+        visited: &mut HashSet<FileId>,
+        recursion_stack: &mut HashSet<FileId>,
+        path_stack: &mut Vec<FileId>,
+    ) -> Option<String> {
+        visited.insert(current);
+        recursion_stack.insert(current);
+        path_stack.push(current);
+
+        if let Some(neighbors) = graph.get(&current) {
+            for &neighbor in neighbors {
+                if recursion_stack.contains(&neighbor) {
+                    // Cycle found
+                    let cycle_path: Vec<String> = path_stack
+                        .iter()
+                        .chain(std::iter::once(&neighbor))
+                        .filter_map(|id| {
+                            self.source_manager
+                                .get_path(*id)
+                                .map(|p: &PathBuf| p.to_string_lossy().to_string())
+                        })
+                        .collect();
+                    return Some(cycle_path.join(" -> "));
+                }
+                if !visited.contains(&neighbor) {
+                    if let Some(cycle) =
+                        self.dfs_cycle(neighbor, graph, visited, recursion_stack, path_stack)
+                    {
+                        return Some(cycle);
+                    }
+                }
+            }
+        }
+
+        recursion_stack.remove(&current);
+        path_stack.pop();
+        None
+    }
+
+    fn parse_file(&mut self, file_id: FileId) {
+        let content: &str = match self.source_manager.get_content(file_id) {
+            Some(c) => c,
+            None => return,
+        };
+
+        // We clone content here because we need to reference it while mutating self via reports.
+        // This avoids borrow checker conflicts with self.report_error.
+        let content_owned = content.to_string();
+
+        let parse_res = TectParser::parse(Rule::program, &content_owned);
         let pairs = match parse_res {
             Ok(mut p) => p.next().unwrap(),
             Err(e) => {
-                structure
-                    .diagnostics
-                    .push((path.clone(), self.pest_error_to_diagnostic(e)));
-                return structure;
+                let start_off = match e.line_col {
+                    pest::error::LineColLocation::Pos((l, c)) => {
+                        self.pos_to_offset(&content_owned, l, c)
+                    }
+                    pest::error::LineColLocation::Span((l, c), _) => {
+                        self.pos_to_offset(&content_owned, l, c)
+                    }
+                };
+                let end_off = start_off; // Approximate for Pest error
+                self.report_error(
+                    file_id,
+                    Some(Span::new(file_id, start_off, end_off)),
+                    format!("Syntax Error: {}", e.variant.message()),
+                );
+                return;
             }
         };
 
         let statements: Vec<Pair<Rule>> = pairs.into_inner().collect();
 
-        // Pass 0: Imports
-        for pair in &statements {
-            if let Rule::import_stmt = pair.as_rule() {
-                self.process_import(pair, &path, &mut structure, visited);
-            }
-        }
-
-        // Pass 1: Global Discovery (Definitions)
+        // Pass 1: Definitions
         for pair in &statements {
             match pair.as_rule() {
-                Rule::const_def => {
-                    self.define_type(pair, "constant", &mut structure, content, &path)
-                }
-                Rule::var_def => self.define_type(pair, "variable", &mut structure, content, &path),
-                Rule::err_def => self.define_type(pair, "error", &mut structure, content, &path),
-                Rule::group_def => self.define_group(pair, &mut structure, content, &path),
-                Rule::func_def => {
-                    self.define_function_skeleton(pair, &mut structure, content, &path)
-                }
+                Rule::const_def => self.define_type(pair, "constant", file_id),
+                Rule::var_def => self.define_type(pair, "variable", file_id),
+                Rule::err_def => self.define_type(pair, "error", file_id),
+                Rule::group_def => self.define_group(pair, file_id),
+                Rule::func_def => self.define_function_skeleton(pair, file_id),
                 _ => {}
             }
         }
 
-        // Pass 2: Linking Contracts, Occurrences, and Flow
+        // Pass 2: Linking
         for pair in &statements {
             match pair.as_rule() {
-                Rule::func_def => {
-                    self.link_function_contracts(pair, &mut structure, content, &path)
-                }
+                Rule::func_def => self.link_function_contracts(pair, file_id),
                 Rule::flow_step => {
                     let name = pair.as_str().trim();
                     if !name.is_empty() {
-                        let span = Self::map_span(pair);
-                        structure
-                            .flow
-                            .push(FlowStep::new(name.to_string(), span, path.clone()));
+                        let span = self.map_span(pair, file_id);
+                        self.structure.flow.push(FlowStep {
+                            function_name: name.to_string(),
+                            span,
+                        });
 
-                        if let Some(func) = structure.catalog.get(name) {
-                            self.add_occurrence(func.uid, span, &path, &mut structure);
+                        if let Some(func) = self.structure.catalog.get(name) {
+                            self.add_occurrence(func.uid, span);
                         } else {
-                            structure.diagnostics.push((
-                                path.clone(),
-                                self.semantic_error(
-                                    span,
-                                    format!("Undefined function: '{}'", name),
-                                    content,
-                                ),
-                            ));
+                            self.report_error(
+                                file_id,
+                                Some(span),
+                                format!("Undefined function: '{}'", name),
+                            );
                         }
                     }
                 }
                 _ => {}
             }
         }
-
-        // Pass 3: Validation (Unused Symbols) - Only check symbols defined in THIS file
-        // Symbols from imported files are checked in their own recursion step,
-        // OR we check globally. Here we check globally but filter by source file to
-        // attach the diagnostic to the correct file.
-        for meta in structure.symbol_table.values() {
-            // Only report unused symbols for the current file being analyzed
-            if meta.source_file == path && meta.occurrences.len() == 1 {
-                let range = self.calculate_range(meta.definition_span, content);
-                structure.diagnostics.push((
-                    path.clone(),
-                    Diagnostic {
-                        range,
-                        severity: Some(DiagnosticSeverity::WARNING),
-                        code: Some(tower_lsp::lsp_types::NumberOrString::String(
-                            "unused".to_string(),
-                        )),
-                        source: Some("tect".to_string()),
-                        message: format!("Unused symbol: '{}'", meta.name),
-                        tags: Some(vec![DiagnosticTag::UNNECESSARY]),
-                        ..Default::default()
-                    },
-                ));
-            }
-        }
-
-        structure
     }
 
-    fn process_import(
-        &mut self,
-        pair: &Pair<Rule>,
-        base_path: &Path,
-        structure: &mut ProgramStructure,
-        visited: &mut HashSet<PathBuf>,
-    ) {
-        let mut inner = pair.clone().into_inner();
-        let _kw = inner.next(); // import
-        let str_lit = inner.next().unwrap().as_str();
-        // remove quotes
-        let rel_path = &str_lit[1..str_lit.len() - 1];
-
-        let target_path = if let Some(parent) = base_path.parent() {
-            parent.join(rel_path)
-        } else {
-            PathBuf::from(rel_path)
-        };
-
-        // Cycle Check
-        if visited.contains(&target_path) {
-            let span = Self::map_span(pair);
-            // We can't easily get content here for range calc without passing it around heavily
-            // For now, simpler error handling
-            // In a real impl, we'd use the parent content.
-            // We'll rely on the fact that analyze_recursive handles the content for diag generation
-            // But here we are in the parent context.
-            // Let's assume valid UTF8 for range calc later or just 0,0 for now if lazy.
-            // Actually, we should report this error in the parent file.
-            // We need the parent content to calculate range.
-            // Limitations of this recursive implementation pattern.
-            // Ideally diagnostics should be gathered with context.
-            return;
-        }
-
-        // Read File
-        match fs::read_to_string(&target_path) {
-            Ok(imported_content) => {
-                // Recursively analyze
-                let child_structure =
-                    self.analyze_recursive(&imported_content, target_path, visited);
-                self.merge_structure(structure, child_structure);
-            }
-            Err(e) => {
-                // Report error in the current file (base_path)
-                // We don't have the current file's content in this method easily available without changing sig
-                // But analyze_recursive calls this.
-                // We will skip adding a diagnostic for I/O error here for brevity,
-                // or we'd need to pass 'content' to process_import.
+    fn check_unused_symbols(&mut self) {
+        for meta in self.structure.symbol_table.values() {
+            if meta.occurrences.len() == 1 {
+                self.structure.diagnostics.push(DiagnosticWithContext {
+                    file_id: meta.definition_span.file_id,
+                    span: Some(meta.definition_span),
+                    message: format!("Unused symbol: '{}'", meta.name),
+                    severity: DiagnosticSeverity::WARNING,
+                    tags: vec![DiagnosticTag::UNNECESSARY],
+                });
             }
         }
     }
 
-    fn merge_structure(&self, parent: &mut ProgramStructure, child: ProgramStructure) {
-        // Merge Artifacts
-        for (name, kind) in child.artifacts {
-            // Check duplicates? We are checking duplicates during definition.
-            // Here we just merge. If duplicate exists, it might shadow or conflict.
-            // For a robust system, we check collision here.
-            if !parent.artifacts.contains_key(&name) {
-                parent.artifacts.insert(name, kind);
-            }
-        }
+    // --- Helpers ---
 
-        // Merge Groups
-        for (name, group) in child.groups {
-            if !parent.groups.contains_key(&name) {
-                parent.groups.insert(name, group);
-            }
-        }
-
-        // Merge Catalog
-        for (name, func) in child.catalog {
-            if !parent.catalog.contains_key(&name) {
-                parent.catalog.insert(name, func);
-            }
-        }
-
-        // Merge Symbol Table
-        for (uid, meta) in child.symbol_table {
-            if let Some(existing) = parent.symbol_table.get_mut(&uid) {
-                existing.occurrences.extend(meta.occurrences);
-            } else {
-                parent.symbol_table.insert(uid, meta);
-            }
-        }
-
-        // Merge Flow
-        parent.flow.extend(child.flow);
-
-        // Merge Diagnostics
-        parent.diagnostics.extend(child.diagnostics);
-    }
-
-    fn map_span(p: &Pair<Rule>) -> Span {
+    fn map_span(&self, p: &Pair<Rule>, file_id: FileId) -> Span {
         let s = p.as_span();
-        Span {
-            start: s.start(),
-            end: s.end(),
+        Span::new(file_id, s.start(), s.end())
+    }
+
+    fn add_occurrence(&mut self, uid: u32, span: Span) {
+        if let Some(meta) = self.structure.symbol_table.get_mut(&uid) {
+            meta.occurrences.push(span);
         }
     }
 
-    fn add_occurrence(&self, uid: u32, span: Span, path: &Path, structure: &mut ProgramStructure) {
-        if let Some(meta) = structure.symbol_table.get_mut(&uid) {
-            meta.occurrences.push((path.to_path_buf(), span));
-        }
-    }
-
-    fn check_duplicate(
-        &self,
-        name: &str,
-        span: Span,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) -> bool {
-        if structure.artifacts.contains_key(name)
-            || structure.groups.contains_key(name)
-            || structure.catalog.contains_key(name)
+    fn check_duplicate(&mut self, name: &str, span: Span) -> bool {
+        if self.structure.artifacts.contains_key(name)
+            || self.structure.groups.contains_key(name)
+            || self.structure.catalog.contains_key(name)
         {
-            structure.diagnostics.push((
-                path.to_path_buf(),
-                Diagnostic {
-                    range: self.calculate_range(span, content),
-                    severity: Some(DiagnosticSeverity::ERROR),
-                    message: format!("Symbol '{}' is already defined.", name),
-                    ..Default::default()
-                },
-            ));
+            self.report_error(
+                span.file_id,
+                Some(span),
+                format!("Symbol '{}' is already defined.", name),
+            );
             return true;
         }
         false
     }
 
-    fn collect_docs(inner: &mut Pairs<Rule>) -> Option<String> {
-        let mut docs = Vec::new();
-        while let Some(p) = inner.peek() {
-            if p.as_rule() == Rule::doc_line {
-                let raw = inner.next().unwrap().as_str();
-                let content = raw
-                    .trim_start_matches('#')
-                    .trim_start_matches(' ')
-                    .trim_end();
-                docs.push(content.to_string());
-            } else {
-                break;
-            }
-        }
-        if docs.is_empty() {
-            None
-        } else {
-            Some(docs.join("  \n"))
-        }
+    fn report_error(&mut self, file_id: FileId, span: Option<Span>, msg: String) {
+        self.structure.diagnostics.push(DiagnosticWithContext {
+            file_id,
+            span,
+            message: msg,
+            severity: DiagnosticSeverity::ERROR,
+            tags: vec![],
+        });
     }
 
-    fn define_type(
-        &self,
-        pair: &Pair<Rule>,
-        kw: &str,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) {
+    fn report_info(&mut self, file_id: FileId, span: Option<Span>, msg: String) {
+        self.structure.diagnostics.push(DiagnosticWithContext {
+            file_id,
+            span,
+            message: msg,
+            severity: DiagnosticSeverity::INFORMATION,
+            tags: vec![],
+        });
+    }
+
+    // --- Definition Logic ---
+
+    fn define_type(&mut self, pair: &Pair<Rule>, kw: &str, file_id: FileId) {
         let mut inner = pair.clone().into_inner();
-        let doc_str = Self::collect_docs(&mut inner);
+        let doc_str = self.collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
-        let span = Self::map_span(&name_p);
+        let span = self.map_span(&name_p, file_id);
 
-        if self.check_duplicate(&name, span, structure, content, path) {
+        if self.check_duplicate(&name, span) {
             return;
         }
 
@@ -316,77 +365,59 @@ impl TectAnalyzer {
             _ => Kind::Error(Arc::new(Error::new(name.clone(), doc_str))),
         };
 
-        structure.symbol_table.insert(
+        self.structure.symbol_table.insert(
             kind.uid(),
             SymbolMetadata {
                 name: name.clone(),
                 definition_span: span,
-                source_file: path.to_path_buf(),
-                occurrences: vec![(path.to_path_buf(), span)],
+                occurrences: vec![span],
             },
         );
-        structure.artifacts.insert(name, kind);
+        self.structure.artifacts.insert(name, kind);
     }
 
-    fn define_group(
-        &self,
-        pair: &Pair<Rule>,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) {
+    fn define_group(&mut self, pair: &Pair<Rule>, file_id: FileId) {
         let mut inner = pair.clone().into_inner();
-        let doc_str = Self::collect_docs(&mut inner);
+        let doc_str = self.collect_docs(&mut inner);
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
-        let span = Self::map_span(&name_p);
+        let span = self.map_span(&name_p, file_id);
 
-        if self.check_duplicate(&name, span, structure, content, path) {
+        if self.check_duplicate(&name, span) {
             return;
         }
 
         let group = Arc::new(Group::new(name.clone(), doc_str));
-        structure.symbol_table.insert(
+        self.structure.symbol_table.insert(
             group.uid,
             SymbolMetadata {
                 name: name.clone(),
                 definition_span: span,
-                source_file: path.to_path_buf(),
-                occurrences: vec![(path.to_path_buf(), span)],
+                occurrences: vec![span],
             },
         );
-        structure.groups.insert(name, group);
+        self.structure.groups.insert(name, group);
     }
 
-    fn define_function_skeleton(
-        &self,
-        pair: &Pair<Rule>,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) {
+    fn define_function_skeleton(&mut self, pair: &Pair<Rule>, file_id: FileId) {
         let mut inner = pair.clone().into_inner();
-        let doc_str = Self::collect_docs(&mut inner);
-
+        let doc_str = self.collect_docs(&mut inner);
         let mut group = None;
+
         if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::ident {
                 let g_name_p = inner.next().unwrap();
                 let g_name = g_name_p.as_str();
-
-                if let Some(g) = structure.groups.get(g_name).cloned() {
+                if let Some(g) = self.structure.groups.get(g_name).cloned() {
                     group = Some(g.clone());
-                    self.add_occurrence(g.uid, Self::map_span(&g_name_p), path, structure);
+                    self.add_occurrence(g.uid, self.map_span(&g_name_p, file_id));
                 } else {
-                    structure.diagnostics.push((
-                        path.to_path_buf(),
-                        self.semantic_error(
-                            Self::map_span(&g_name_p),
-                            format!("Undefined group: '{}'", g_name),
-                            content,
-                        ),
-                    ));
+                    self.report_error(
+                        file_id,
+                        Some(self.map_span(&g_name_p, file_id)),
+                        format!("Undefined group: '{}'", g_name),
+                    );
                 }
             }
         }
@@ -394,33 +425,27 @@ impl TectAnalyzer {
         let _kw = inner.next().unwrap();
         let name_p = inner.next().unwrap();
         let name = name_p.as_str().to_string();
-        let span = Self::map_span(&name_p);
+        let span = self.map_span(&name_p, file_id);
 
-        if self.check_duplicate(&name, span, structure, content, path) {
+        if self.check_duplicate(&name, span) {
             return;
         }
 
         let function = Arc::new(Function::new_skeleton(name.clone(), doc_str, group));
-        structure.symbol_table.insert(
+        self.structure.symbol_table.insert(
             function.uid,
             SymbolMetadata {
                 name: name.clone(),
                 definition_span: span,
-                source_file: path.to_path_buf(),
-                occurrences: vec![(path.to_path_buf(), span)],
+                occurrences: vec![span],
             },
         );
-        structure.catalog.insert(name, function);
+        self.structure.catalog.insert(name, function);
     }
 
-    fn link_function_contracts(
-        &self,
-        pair: &Pair<Rule>,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) {
+    fn link_function_contracts(&mut self, pair: &Pair<Rule>, file_id: FileId) {
         let mut inner = pair.clone().into_inner();
+        // Skip docs and group prefix
         while let Some(p) = inner.peek() {
             if p.as_rule() == Rule::doc_line {
                 inner.next();
@@ -439,7 +464,7 @@ impl TectAnalyzer {
         let mut consumes = Vec::new();
         if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::token_list {
-                consumes = self.resolve_tokens(inner.next().unwrap(), structure, content, path);
+                consumes = self.resolve_tokens(inner.next().unwrap(), file_id);
             }
         }
 
@@ -447,24 +472,18 @@ impl TectAnalyzer {
         if let Some(outputs_pair) = inner.next() {
             for line in outputs_pair.into_inner() {
                 let list = line.into_inner().next().unwrap();
-                produces.push(self.resolve_tokens(list, structure, content, path));
+                produces.push(self.resolve_tokens(list, file_id));
             }
         }
 
-        if let Some(func) = structure.catalog.get_mut(name) {
+        if let Some(func) = self.structure.catalog.get_mut(name) {
             let f = Arc::get_mut(func).unwrap();
             f.consumes = consumes;
             f.produces = produces;
         }
     }
 
-    fn resolve_tokens(
-        &self,
-        pair: Pair<Rule>,
-        structure: &mut ProgramStructure,
-        content: &str,
-        path: &Path,
-    ) -> Vec<Token> {
+    fn resolve_tokens(&mut self, pair: Pair<Rule>, file_id: FileId) -> Vec<Token> {
         let mut tokens = Vec::new();
         for t_pair in pair.into_inner() {
             let inner = t_pair.into_inner().next().unwrap();
@@ -474,90 +493,65 @@ impl TectAnalyzer {
                     (
                         ident_p.as_str(),
                         Cardinality::Collection,
-                        Self::map_span(&ident_p),
+                        self.map_span(&ident_p, file_id),
                     )
                 }
-                _ => (inner.as_str(), Cardinality::Unitary, Self::map_span(&inner)),
+                _ => (
+                    inner.as_str(),
+                    Cardinality::Unitary,
+                    self.map_span(&inner, file_id),
+                ),
             };
 
-            let kind = if let Some(k) = structure.artifacts.get(name) {
+            let kind = if let Some(k) = self.structure.artifacts.get(name) {
                 k.clone()
             } else {
-                structure.diagnostics.push((
-                    path.to_path_buf(),
-                    Diagnostic {
-                        range: self.calculate_range(span, content),
-                        severity: Some(DiagnosticSeverity::INFORMATION),
-                        message: format!("Implicitly created variable '{}'.", name),
-                        ..Default::default()
-                    },
-                ));
+                self.report_info(
+                    file_id,
+                    Some(span),
+                    format!("Implicitly created variable '{}'.", name),
+                );
                 Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
             };
 
-            self.add_occurrence(kind.uid(), span, path, structure);
+            self.add_occurrence(kind.uid(), span);
             tokens.push(Token::new(kind, card));
         }
         tokens
     }
 
-    fn pest_error_to_diagnostic(&self, e: pest::error::Error<Rule>) -> Diagnostic {
-        let (start, end) = match e.line_col {
-            pest::error::LineColLocation::Pos((l, c)) => (
-                Position::new(l as u32 - 1, c as u32 - 1),
-                Position::new(l as u32 - 1, c as u32),
-            ),
-            pest::error::LineColLocation::Span((ls, cs), (le, ce)) => (
-                Position::new(ls as u32 - 1, cs as u32 - 1),
-                Position::new(le as u32 - 1, ce as u32 - 1),
-            ),
-        };
-
-        Diagnostic {
-            range: Range::new(start, end),
-            severity: Some(DiagnosticSeverity::ERROR),
-            message: format!("Syntax error: {}", e.variant.message()),
-            ..Default::default()
-        }
-    }
-
-    pub fn calculate_range(&self, span: Span, content: &str) -> Range {
-        let mut line = 0;
-        let mut col = 0;
-        let mut byte = 0;
-        let mut start_pos = Position::new(0, 0);
-        let mut end_pos = Position::new(0, 0);
-
-        for c in content.chars() {
-            let char_len = c.len_utf8();
-            if byte == span.start {
-                start_pos = Position::new(line, col);
-            }
-            if byte == span.end {
-                end_pos = Position::new(line, col);
+    fn collect_docs(&self, inner: &mut Pairs<Rule>) -> Option<String> {
+        let mut docs = Vec::new();
+        while let Some(p) = inner.peek() {
+            if p.as_rule() == Rule::doc_line {
+                let raw = inner.next().unwrap().as_str();
+                docs.push(raw.trim_start_matches('#').trim().to_string());
+            } else {
                 break;
             }
-            if c == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += c.len_utf16() as u32;
-            }
-            byte += char_len;
         }
-        if byte == span.end {
-            end_pos = Position::new(line, col);
+        if docs.is_empty() {
+            None
+        } else {
+            Some(docs.join("\n"))
         }
-
-        Range::new(start_pos, end_pos)
     }
 
-    fn semantic_error(&self, span: Span, msg: String, content: &str) -> Diagnostic {
-        Diagnostic {
-            range: self.calculate_range(span, content),
-            severity: Some(DiagnosticSeverity::ERROR),
-            message: msg,
-            ..Default::default()
+    /// Helper to convert (Line, Col) from Pest (1-based) to byte offset.
+    fn pos_to_offset(&self, content: &str, line: usize, col: usize) -> usize {
+        let mut curr_line = 1;
+        let mut curr_col = 1;
+        for (i, c) in content.char_indices() {
+            if curr_line == line && curr_col == col {
+                return i;
+            }
+            if c == '\n' {
+                curr_line += 1;
+                curr_col = 1;
+            } else {
+                curr_col += 1;
+            }
         }
+        content.len()
     }
 }

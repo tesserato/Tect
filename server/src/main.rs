@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Parser as ClapParser, Subcommand};
-use dashmap::DashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tower_lsp::{LspService, Server};
 
 mod analyzer;
@@ -10,6 +10,7 @@ mod engine;
 mod formatter;
 mod lsp;
 mod models;
+mod source_manager;
 mod vis_js;
 
 #[cfg(test)]
@@ -46,11 +47,17 @@ async fn main() -> Result<()> {
     match cmd {
         Commands::Build { input, output } => {
             let content = fs::read_to_string(&input)?;
-            // Must pass path for relative import resolution
-            let mut analyzer = analyzer::TectAnalyzer::new();
-            let structure = analyzer.analyze(&content, input);
+
+            // Initialize Workspace (Analyzer + VFS)
+            let mut workspace = analyzer::Workspace::new();
+
+            // Analyze the source. Note: analyze() mutates the workspace state in-place.
+            // We pass Some(content) to preload the file without reading from disk again.
+            workspace.analyze(input, Some(content));
+
+            // Run the Logic Engine on the resulting IR
             let mut flow = engine::Flow::new(true);
-            let graph = flow.simulate(&structure, &content);
+            let graph = flow.simulate(&workspace.structure);
 
             match output.extension().and_then(|s| s.to_str()) {
                 Some("html") => fs::write(output, vis_js::generate_interactive_html(&graph))?,
@@ -60,9 +67,9 @@ async fn main() -> Result<()> {
         Commands::Serve => {
             let (service, socket) = LspService::build(|client| lsp::Backend {
                 client,
-                document_state: DashMap::new(),
+                workspace: Mutex::new(analyzer::Workspace::new()),
             })
-            // Register custom request handler
+            // Register custom request handler for the Visualizer
             .custom_method("tect/getGraph", lsp::Backend::get_visual_graph)
             .finish();
 

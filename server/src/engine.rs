@@ -2,13 +2,14 @@
 //!
 //! Orchestrates the architectural simulation by consuming a [ProgramStructure].
 //! It tracks the movement of tokens through pools and handles branching.
+//!
+//! This module is decoupled from source text. It reports logical errors via
+//! [DiagnosticWithContext] which the LSP layer later resolves to file ranges.
 
-use crate::analyzer::TectAnalyzer;
 use crate::models::*;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity};
+use tower_lsp::lsp_types::DiagnosticSeverity;
 
 pub enum Consumed {
     AllTokens(Vec<Edge>),
@@ -149,7 +150,7 @@ pub struct Flow {
     pub edges: Vec<Edge>,
     pub pools: Vec<TokenPool>,
     pub deduplicate_edges: bool,
-    pub diagnostics: Vec<(PathBuf, Diagnostic)>,
+    pub diagnostics: Vec<DiagnosticWithContext>,
 }
 
 impl Flow {
@@ -163,9 +164,9 @@ impl Flow {
         }
     }
 
-    pub fn simulate(&mut self, structure: &ProgramStructure, content: &str) -> Graph {
-        let analyzer = TectAnalyzer::new();
-
+    /// Simulates the flow based on the global program structure.
+    /// Does not require source content as it produces span-based diagnostics.
+    pub fn simulate(&mut self, structure: &ProgramStructure) -> Graph {
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
             true,
@@ -224,27 +225,13 @@ impl Flow {
                     missing_list.join(", ")
                 );
 
-                // We use the passed content for range calculation.
-                // NOTE: If the step is in an imported file, 'content' (which is the root file)
-                // will yield incorrect ranges. This is a known limitation of this simplified recursion.
-                // A robust solution would store content per file or re-read it.
-                // For now, we only generate range if the step source is the current file.
-                // Otherwise we just default to 0,0 range but attach the correct file path.
-
-                // Hack: We can't easily check current file vs imported file range without loading content.
-                // But the diagnostic struct requires a range.
-                // Ideally, the Flow/Engine shouldn't care about Ranges, but it does for reporting.
-                // We will attach the diagnostic to the step.source_file.
-
-                self.diagnostics.push((
-                    step.source_file.clone(),
-                    Diagnostic {
-                        range: analyzer.calculate_range(step.span, content),
-                        severity: Some(DiagnosticSeverity::WARNING),
-                        message: msg,
-                        ..Default::default()
-                    },
-                ));
+                self.diagnostics.push(DiagnosticWithContext {
+                    file_id: step.span.file_id,
+                    span: Some(step.span),
+                    message: msg,
+                    severity: DiagnosticSeverity::WARNING,
+                    tags: vec![],
+                });
             }
 
             self.pools = next_pools;
