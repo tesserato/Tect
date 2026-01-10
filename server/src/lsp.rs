@@ -465,9 +465,25 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
-    pub async fn get_visual_graph(&self, _params: Value) -> LspResult<VisData> {
-        // Graph generation runs on the current global structure
-        let ws = self.workspace.lock().unwrap(); // Fixed: removed unused `mut`
+    /// Generates the visual graph.
+    ///
+    /// If the client provides a `uri` param, the server triggers a re-analysis rooted
+    /// at that specific file. This ensures the graph context switches correctly
+    /// between files (Issue #2).
+    pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
+        let uri_str = params.get("uri").and_then(|v| v.as_str());
+
+        let mut ws = self.workspace.lock().unwrap();
+
+        // Context Switching: Re-analyze rooted at the requested URI.
+        // We pass None for content so SourceManager uses its cache (in-memory changes).
+        if let Some(u) = uri_str {
+            if let Ok(uri) = Url::parse(u) {
+                if let Ok(path) = uri.to_file_path() {
+                    ws.analyze(path, None);
+                }
+            }
+        }
 
         let mut flow = Flow::new(true);
         let graph = flow.simulate(&ws.structure);

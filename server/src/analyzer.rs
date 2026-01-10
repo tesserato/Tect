@@ -49,7 +49,8 @@ impl Workspace {
         self.source_manager.load_file(root_id, root_content);
 
         let mut parse_queue = vec![root_id];
-        let mut visited = HashSet::new();
+        let mut visited_set = HashSet::new();
+        let mut visited_order = Vec::new(); // Deterministic order for processing
         let mut dependency_graph: HashMap<FileId, Vec<FileId>> = HashMap::new();
 
         // BFS to load and discover files
@@ -58,10 +59,11 @@ impl Workspace {
             let current_id = parse_queue[head];
             head += 1;
 
-            if visited.contains(&current_id) {
+            if visited_set.contains(&current_id) {
                 continue;
             }
-            visited.insert(current_id);
+            visited_set.insert(current_id);
+            visited_order.push(current_id);
 
             // Ensure loaded
             if self.source_manager.get_content(current_id).is_none() {
@@ -79,8 +81,6 @@ impl Workspace {
             }
 
             // Quick parse for imports to build graph
-            // Fix: Clone content to avoid holding immutable borrow of self.source_manager
-            // while calling self.scan_imports (mutable borrow of self).
             let content_owned = self
                 .source_manager
                 .get_content(current_id)
@@ -95,10 +95,8 @@ impl Workspace {
                         .or_default()
                         .push(imported_id);
 
-                    if !visited.contains(&imported_id) && !parse_queue.contains(&imported_id) {
+                    if !visited_set.contains(&imported_id) && !parse_queue.contains(&imported_id) {
                         parse_queue.push(imported_id);
-                    } else if visited.contains(&imported_id) {
-                        // Diamond dependency or cycle; graph will handle it.
                     }
                 }
             }
@@ -114,9 +112,18 @@ impl Workspace {
             return;
         }
 
-        // 3. Parse & Merge
-        for file_id in visited {
-            self.parse_file(file_id);
+        // 3. Multi-Pass Parsing
+        // We use `visited_order` (Vec) instead of `visited_set` (HashSet) to ensure
+        // deterministic results regardless of memory layout.
+
+        // Pass 1: Definitions
+        for file_id in &visited_order {
+            self.pass_definitions(*file_id);
+        }
+
+        // Pass 2: Resolution & Linking
+        for file_id in &visited_order {
+            self.pass_resolution(*file_id);
         }
 
         // 4. Validation (Unused Symbols)
@@ -208,14 +215,12 @@ impl Workspace {
         None
     }
 
-    fn parse_file(&mut self, file_id: FileId) {
+    // --- Pass 1: Definitions ---
+    fn pass_definitions(&mut self, file_id: FileId) {
         let content: &str = match self.source_manager.get_content(file_id) {
             Some(c) => c,
             None => return,
         };
-
-        // We clone content here because we need to reference it while mutating self via reports.
-        // This avoids borrow checker conflicts with self.report_error.
         let content_owned = content.to_string();
 
         let parse_res = TectParser::parse(Rule::program, &content_owned);
@@ -230,7 +235,7 @@ impl Workspace {
                         self.pos_to_offset(&content_owned, l, c)
                     }
                 };
-                let end_off = start_off; // Approximate for Pest error
+                let end_off = start_off;
                 self.report_error(
                     file_id,
                     Some(Span::new(file_id, start_off, end_off)),
@@ -240,28 +245,39 @@ impl Workspace {
             }
         };
 
-        let statements: Vec<Pair<Rule>> = pairs.into_inner().collect();
-
-        // Pass 1: Definitions
-        for pair in &statements {
+        for pair in pairs.into_inner() {
             match pair.as_rule() {
-                Rule::const_def => self.define_type(pair, "constant", file_id),
-                Rule::var_def => self.define_type(pair, "variable", file_id),
-                Rule::err_def => self.define_type(pair, "error", file_id),
-                Rule::group_def => self.define_group(pair, file_id),
-                Rule::func_def => self.define_function_skeleton(pair, file_id),
+                Rule::const_def => self.define_type(&pair, "constant", file_id),
+                Rule::var_def => self.define_type(&pair, "variable", file_id),
+                Rule::err_def => self.define_type(&pair, "error", file_id),
+                Rule::group_def => self.define_group(&pair, file_id),
+                Rule::func_def => self.define_function_skeleton(&pair, file_id),
                 _ => {}
             }
         }
+    }
 
-        // Pass 2: Linking
-        for pair in &statements {
+    // --- Pass 2: Resolution ---
+    fn pass_resolution(&mut self, file_id: FileId) {
+        let content: &str = match self.source_manager.get_content(file_id) {
+            Some(c) => c,
+            None => return,
+        };
+        let content_owned = content.to_string();
+
+        let parse_res = TectParser::parse(Rule::program, &content_owned);
+        let pairs = match parse_res {
+            Ok(mut p) => p.next().unwrap(),
+            Err(_) => return, // Handled in Pass 1
+        };
+
+        for pair in pairs.into_inner() {
             match pair.as_rule() {
-                Rule::func_def => self.link_function_contracts(pair, file_id),
+                Rule::func_def => self.link_function_contracts(&pair, file_id),
                 Rule::flow_step => {
                     let name = pair.as_str().trim();
                     if !name.is_empty() {
-                        let span = self.map_span(pair, file_id);
+                        let span = self.map_span(&pair, file_id);
                         self.structure.flow.push(FlowStep {
                             function_name: name.to_string(),
                             span,
@@ -537,7 +553,6 @@ impl Workspace {
         }
     }
 
-    /// Helper to convert (Line, Col) from Pest (1-based) to byte offset.
     fn pos_to_offset(&self, content: &str, line: usize, col: usize) -> usize {
         let mut curr_line = 1;
         let mut curr_col = 1;

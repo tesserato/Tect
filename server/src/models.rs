@@ -18,10 +18,8 @@ fn next_uid() -> u32 {
 
 // --- Source Management Types ---
 
-/// A unique identifier for a source file in the workspace.
 pub type FileId = u32;
 
-/// A region of text in a specific file, defined by byte offsets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Span {
     pub file_id: FileId,
@@ -39,8 +37,6 @@ impl Span {
     }
 }
 
-/// An intermediate diagnostic structure.
-/// Decouples the logic (Engine/Analyzer) from the presentation (LSP Range/URI).
 #[derive(Debug, Clone)]
 pub struct DiagnosticWithContext {
     pub file_id: FileId,
@@ -56,6 +52,22 @@ pub struct DiagnosticWithContext {
 pub enum Cardinality {
     Unitary,
     Collection,
+}
+
+/// Semantic relationship type for edges in the architectural graph.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EdgeRelation {
+    /// Standard flow of data from producer to consumer.
+    DataFlow,
+    /// Flow reaching a successful termination point.
+    TerminalFlow,
+    /// Flow reaching an error/exception state.
+    ErrorFlow,
+    /// (Reserved) Explicit control flow transfer.
+    ControlFlow,
+    /// (Reserved) Function invocation.
+    Call,
 }
 
 // --- Type Definitions (Archetypes) ---
@@ -290,8 +302,7 @@ pub struct Edge {
     pub from_node_uid: u32,
     pub to_node_uid: u32,
     pub token: Token,
-    /// Semantic label (e.g. "data_flow", "error_branch"). TODO enum?
-    pub relation: String,
+    pub relation: EdgeRelation,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

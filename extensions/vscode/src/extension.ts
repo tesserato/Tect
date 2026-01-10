@@ -13,14 +13,15 @@ import {
 let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    // 1. Create the Output Channel (Do not show yet)
+    // 0. Create the Output Channel
     const outputChannel = vscode.window.createOutputChannel("Tect Language Server");
     outputChannel.appendLine("------------------------------------------------");
     outputChannel.appendLine(`[${new Date().toISOString()}] Extension activate() called.`);
-
-    // 2. Show a visible popup to confirm activation event fired
+    // 1. Show a visible popup to confirm activation event fired
     vscode.window.showInformationMessage("Tect Extension is activating!");
 
+
+    // 2. Register Commands
     context.subscriptions.push(
         vscode.commands.registerCommand('tect.openPreview', () => {
             const editor = vscode.window.activeTextEditor;
@@ -30,12 +31,20 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // 3. Listen for active editor changes to update the preview context
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor && editor.document.languageId === 'tect') {
+                TectPreviewPanel.reviveOrUpdate(editor.document.uri, context.extensionUri);
+            }
+        })
+    );
+
     // --- Production Binary Discovery ---
     const platform = os.platform();
     const arch = os.arch();
 
     outputChannel.appendLine(`Environment: Platform=${platform}, Arch=${arch}`);
-    outputChannel.appendLine(`Extension Path: ${context.extensionPath}`);
 
     let binaryName: string;
     if (platform === 'win32') {
@@ -50,23 +59,17 @@ export function activate(context: vscode.ExtensionContext) {
     // 1. Try production path (inside extension folder)
     let serverModule = context.asAbsolutePath(path.join('bin', binaryName));
     let exists = fs.existsSync(serverModule);
-    outputChannel.appendLine(`Checking Path A (Production): "${serverModule}" -> Exists: ${exists}`);
 
-    // 2. Try development fallback (relative to source)
+    // 2. Try development fallback (relative to source for local dev)
     if (!exists) {
         outputChannel.appendLine("Path A failed. Attempting Path B (Dev/Fallback)...");
         const debugExec = platform === 'win32' ? 'tect.exe' : 'tect';
-        // Adjust this path if your folder structure is different
-        // Current assumption: extension.js is in /extensions/vscode/out/ or /dist/
-        // Target is /target/debug/
         serverModule = context.asAbsolutePath(path.join('..', '..', 'target', 'debug', debugExec));
         exists = fs.existsSync(serverModule);
-        outputChannel.appendLine(`Checking Path B (Dev): "${serverModule}" -> Exists: ${exists}`);
     }
 
     // 3. Final Critical Check
     if (!exists) {
-        // ERROR: Open the panel so the user can see what paths were checked
         outputChannel.show(true);
         const msg = `CRITICAL: Tect Server binary NOT found. Searched for: ${binaryName}`;
         outputChannel.appendLine(msg);
@@ -74,13 +77,10 @@ export function activate(context: vscode.ExtensionContext) {
         return;
     }
 
-    outputChannel.appendLine(`Resolved Server Binary: ${serverModule}`);
-
     // --- Permissions Check (Linux/Mac) ---
     if (platform !== 'win32') {
         try {
             fs.chmodSync(serverModule, '755');
-            outputChannel.appendLine("Permissions: chmod 755 applied successfully.");
         } catch (e) {
             outputChannel.appendLine(`Permissions Warning: Failed to chmod binary: ${e}`);
         }
@@ -97,42 +97,28 @@ export function activate(context: vscode.ExtensionContext) {
         documentSelector: [{ scheme: 'file', language: 'tect' }],
         synchronize: { fileEvents: vscode.workspace.createFileSystemWatcher('**/*.tect') },
         outputChannel: outputChannel,
-        revealOutputChannelOn: RevealOutputChannelOn.Error, // Only show automatically on Error
-        initializationOptions: {},
-        errorHandler: {
-            error: (error, message, count) => {
-                outputChannel.appendLine(`LSP Error: ${error} | ${message}`);
-                return { action: 1 }; // Shutdown
-            },
-            closed: () => {
-                outputChannel.appendLine("LSP Connection Closed unexpectedly.");
-                return { action: 1 }; // Do not restart
-            }
-        }
+        revealOutputChannelOn: RevealOutputChannelOn.Error,
+        initializationOptions: {}
     };
 
     // --- Start Client ---
     try {
         client = new LanguageClient('tectServer', 'Tect Language Server', serverOptions, clientOptions);
-
-        outputChannel.appendLine("Starting LanguageClient...");
         client.start().then(() => {
             outputChannel.appendLine(">>> LanguageClient Promise Resolved: Connection Established.");
             vscode.window.setStatusBarMessage("Tect Server: Active", 3000);
 
+            // Listen for custom notifications from server to update graph
             client.onNotification("tect/analysisFinished", (params: { uri: string }) => {
-                outputChannel.appendLine(`Analysis finished for: ${params.uri}`);
                 TectPreviewPanel.updateIfExists(params.uri);
             });
         }).catch(err => {
-            outputChannel.show(true); // Show panel on start failure
-            outputChannel.appendLine(`!!! LanguageClient Start Failed: ${err}`);
+            outputChannel.show(true);
             vscode.window.showErrorMessage(`Tect Server failed to start: ${err}`);
         });
 
     } catch (e) {
         outputChannel.show(true);
-        outputChannel.appendLine(`Exception during client creation: ${e}`);
         vscode.window.showErrorMessage(`Tect Extension Error: ${e}`);
     }
 }
@@ -141,14 +127,19 @@ export function deactivate(): Thenable<void> | undefined {
     return client ? client.stop() : undefined;
 }
 
+/**
+ * Manages the Tect Architecture Preview Webview.
+ */
 class TectPreviewPanel {
     public static currentPanel: TectPreviewPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private _disposables: vscode.Disposable[] = [];
+    private _uri: vscode.Uri;
 
     public static createOrShow(extensionUri: vscode.Uri, uri: vscode.Uri) {
         if (TectPreviewPanel.currentPanel) {
             TectPreviewPanel.currentPanel._panel.reveal(vscode.ViewColumn.Two);
+            TectPreviewPanel.currentPanel.setUri(uri);
             return;
         }
 
@@ -162,14 +153,30 @@ class TectPreviewPanel {
         TectPreviewPanel.currentPanel = new TectPreviewPanel(panel, extensionUri, uri);
     }
 
-    public static async updateIfExists(uri: string) {
+    /**
+     * Updates the existing panel to point to a new file if one exists,
+     * otherwise does nothing.
+     */
+    public static reviveOrUpdate(uri: vscode.Uri, extensionUri: vscode.Uri) {
         if (TectPreviewPanel.currentPanel) {
-            TectPreviewPanel.currentPanel.update();
+            TectPreviewPanel.currentPanel.setUri(uri);
         }
     }
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private _uri: vscode.Uri) {
+    /**
+     * Updates the content of the webview if it is currently viewing the specified URI.
+     */
+    public static async updateIfExists(uri: string) {
+        if (TectPreviewPanel.currentPanel) {
+            if (TectPreviewPanel.currentPanel._uri.toString() === uri) {
+                TectPreviewPanel.currentPanel.update();
+            }
+        }
+    }
+
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, uri: vscode.Uri) {
         this._panel = panel;
+        this._uri = uri;
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
         // Handle messages from the webview
@@ -177,7 +184,6 @@ class TectPreviewPanel {
             message => {
                 switch (message.command) {
                     case 'webviewReady':
-                        // The webview has finished loading JS and is ready for data
                         this.update();
                         return;
                 }
@@ -187,9 +193,21 @@ class TectPreviewPanel {
         );
 
         this._panel.webview.html = this._getHtmlForWebview();
+        this._updateTitle();
+    }
 
-        // Note: We do NOT call this.update() here anymore to avoid the race condition.
-        // We wait for the 'webviewReady' signal instead.
+    public setUri(uri: vscode.Uri) {
+        // Only update if the URI actually changed
+        if (this._uri.toString() !== uri.toString()) {
+            this._uri = uri;
+            this._updateTitle();
+            this.update();
+        }
+    }
+
+    private _updateTitle() {
+        const fileName = path.basename(this._uri.fsPath);
+        this._panel.title = `Tect: ${fileName}`;
     }
 
     public async update() {
@@ -239,44 +257,54 @@ class TectPreviewPanel {
                         if (message.command === 'update' && message.data) {
                             const data = message.data;
                             
-                            // Update datasets
+                            // 1. Destroy existing network to ensure clean state for new file/clusters
+                            if (network) {
+                                network.destroy();
+                                network = null;
+                            }
+
+                            // 2. Reset and populate datasets
                             nodes.clear();
                             edges.clear();
                             nodes.add(data.nodes);
                             edges.add(data.edges);
 
-                            if (!network) {
-                                const options = {
-                                    physics: { enabled: true, solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -100, springLength: 10 } },
-                                    interaction: { hover: true, navigationButtons: true }
-                                };
-                                network = new vis.Network(container, { nodes, edges }, options);
-                                
-                                // Auto-cluster
-                                data.groups.forEach(g => {
-                                    network.cluster(clusterBy(g));
-                                });
+                            // 3. Create fresh Network instance
+                            const options = {
+                                physics: { 
+                                    enabled: true, 
+                                    solver: 'forceAtlas2Based', 
+                                    forceAtlas2Based: { gravitationalConstant: -100, springLength: 10 } 
+                                },
+                                interaction: { hover: true, navigationButtons: true }
+                            };
+                            
+                            network = new vis.Network(container, { nodes, edges }, options);
+                            
+                            // 4. Apply Group Clustering
+                            data.groups.forEach(g => {
+                                network.cluster(clusterBy(g));
+                            });
 
-                                // Event: Double click to expand/collapse groups
-                                network.on("doubleClick", (params) => {
-                                    if (params.nodes.length > 0) {
-                                        const nodeId = params.nodes[0];
-                                        if (network.isCluster(nodeId)) {
-                                            network.openCluster(nodeId);
-                                        } else {
-                                            // Optional: Double clicking a node inside a group re-collapses it
-                                            const node = nodes.get(nodeId);
-                                            if (node && node.clusterGroup) {
-                                                network.cluster(clusterBy(node.clusterGroup));
-                                            }
+                            // 5. Interaction Events
+                            network.on("doubleClick", (params) => {
+                                if (params.nodes.length > 0) {
+                                    const nodeId = params.nodes[0];
+                                    if (network.isCluster(nodeId)) {
+                                        network.openCluster(nodeId);
+                                    } else {
+                                        // Optional: Re-collapse if clicking inside
+                                        const node = nodes.get(nodeId);
+                                        if (node && node.clusterGroup) {
+                                            network.cluster(clusterBy(node.clusterGroup));
                                         }
                                     }
-                                });
-                            }
+                                }
+                            });
                         }
                     });
 
-                    // Signal to VS Code that the webview script is loaded and ready to receive messages
+                    // Signal to VS Code that the webview script is loaded
                     vscode.postMessage({ command: 'webviewReady' });
                 </script>
             </body>

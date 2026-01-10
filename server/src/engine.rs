@@ -33,6 +33,8 @@ pub struct TokenPool {
 }
 
 impl TokenPool {
+    /// Creates a new pool seeded with a list of "External Input" tokens.
+    /// These are attributed to the `initial_node`.
     pub fn new(initial_requirements: Vec<Token>, initial_node: Arc<Node>) -> Self {
         let mut variables = Vec::new();
         let mut errors = Vec::new();
@@ -40,6 +42,7 @@ impl TokenPool {
         let mut token_to_origin_node = HashMap::new();
 
         for token in initial_requirements {
+            // Map the token UID to the artificial initial node.
             token_to_origin_node.insert(token.uid, initial_node.clone());
             match &token.kind {
                 Kind::Variable(..) => variables.push(token),
@@ -85,9 +88,10 @@ impl TokenPool {
                 Kind::Constant(..) => &self.constants,
             };
 
+            // Match based on Kind (Artifact ID), ignoring the specific Token ID instance
             let matched = pool
                 .iter()
-                .find(|t| t.kind == req.kind && !consumed_in_step.contains(t))
+                .find(|t| t.kind.uid() == req.kind.uid() && !consumed_in_step.contains(t))
                 .cloned();
 
             if let Some(t) = matched {
@@ -101,7 +105,7 @@ impl TokenPool {
                         from_node_uid: origin.uid,
                         to_node_uid: destination.uid,
                         token: t.clone(),
-                        relation: "data_flow".to_string(),
+                        relation: EdgeRelation::DataFlow,
                     });
                     consumed_in_step.push(t);
                 }
@@ -110,7 +114,11 @@ impl TokenPool {
 
         let missing: Vec<Token> = requirements
             .iter()
-            .filter(|req| !consumed_in_step.iter().any(|c| c.kind == req.kind))
+            .filter(|req| {
+                !consumed_in_step
+                    .iter()
+                    .any(|c| c.kind.uid() == req.kind.uid())
+            })
             .cloned()
             .collect();
 
@@ -165,7 +173,6 @@ impl Flow {
     }
 
     /// Simulates the flow based on the global program structure.
-    /// Does not require source content as it produces span-based diagnostics.
     pub fn simulate(&mut self, structure: &ProgramStructure) -> Graph {
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
@@ -175,13 +182,28 @@ impl Flow {
         ));
         self.nodes.push(initial_node.clone());
 
-        if let Some(first_step) = structure.flow.first() {
-            if let Some(func) = structure.catalog.get(&first_step.function_name) {
-                self.pools
-                    .push(TokenPool::new(func.consumes.clone(), initial_node.clone()));
+        // 1. Seed Initial Pool
+        // The rule is: "Only the inputs to the first function of each flow are considered present."
+        // In the IR, `structure.flow` is a flattened list of all steps from all files.
+        // We identify the "first function of each flow" by tracking the FileId.
+        // The first step encountered for a specific FileId is considered a Root Step for that file's flow.
+
+        let mut initial_tokens = Vec::new();
+        let mut seen_files = HashSet::new();
+
+        for step in &structure.flow {
+            // If this is the first step we've seen from this file, treat it as a start node.
+            if seen_files.insert(step.span.file_id) {
+                if let Some(func) = structure.catalog.get(&step.function_name) {
+                    initial_tokens.extend(func.consumes.clone());
+                }
             }
         }
 
+        self.pools
+            .push(TokenPool::new(initial_tokens, initial_node.clone()));
+
+        // 2. Simulation Loop
         for step in &structure.flow {
             let Some(func) = structure.catalog.get(&step.function_name) else {
                 continue;
@@ -217,6 +239,7 @@ impl Flow {
                 }
             }
 
+            // Only report starvation if the function actually required inputs
             if !step_executed_at_least_once && !func.consumes.is_empty() {
                 let missing_list: Vec<String> = missing_tokens_examples.into_iter().collect();
                 let msg = format!(
@@ -260,7 +283,7 @@ impl Flow {
                         from_node_uid: origin.uid,
                         to_node_uid: final_node.uid,
                         token,
-                        relation: "terminal_flow".into(),
+                        relation: EdgeRelation::TerminalFlow,
                     });
                 }
             }
@@ -270,7 +293,7 @@ impl Flow {
                         from_node_uid: origin.uid,
                         to_node_uid: fatal_node.uid,
                         token: err,
-                        relation: "error_flow".into(),
+                        relation: EdgeRelation::ErrorFlow,
                     });
                 }
             }

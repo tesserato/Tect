@@ -60,15 +60,26 @@ impl SourceManager {
     }
 
     /// Updates or loads file content.
-    /// If explicit_content is provided (e.g. from LSP didChange), it uses that.
-    /// Otherwise, it attempts to read from disk.
-    /// Returns true if successful.
+    ///
+    /// Logic:
+    /// 1. If `explicit_content` is provided (e.g., from LSP didChange), update memory.
+    /// 2. If no `explicit_content` but file is already in memory, do nothing (preserve unsaved changes).
+    /// 3. If file not in memory, read from disk.
+    ///
+    /// Returns true if content is available (from memory or disk).
     pub fn load_file(&mut self, id: FileId, explicit_content: Option<String>) -> bool {
+        // Case 1: Explicit update (e.g. user typing)
         if let Some(content) = explicit_content {
             self.update_content(id, content);
             return true;
         }
 
+        // Case 2: Already loaded (preserve potential unsaved state)
+        if self.contents.contains_key(&id) {
+            return true;
+        }
+
+        // Case 3: Load from disk
         if let Some(path) = self.get_path(id).cloned() {
             if let Ok(content) = fs::read_to_string(&path) {
                 self.update_content(id, content);
