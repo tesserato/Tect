@@ -1,0 +1,58 @@
+{
+    "Constant Definition": {
+        "prefix": "constant",
+        "body": [
+            "# **${1:Name}**",
+            "# ${2:Description}",
+            "constant ${1:Name}"
+        ],
+        "description": "Define an immutable global artifact"
+    },
+    "Variable Definition": {
+        "prefix": "variable",
+        "body": [
+            "# **${1:Name}**",
+            "# ${2:Description}",
+            "variable ${1:Name}"
+        ],
+        "description": "Define a mutable global artifact"
+    },
+    "Error Definition": {
+        "prefix": "error",
+        "body": [
+            "# **${1:Name}**",
+            "# ${2:Description}",
+            "error ${1:Name}"
+        ],
+        "description": "Define an error artifact"
+    },
+    "Group Definition": {
+        "prefix": "group",
+        "body": [
+            "# **${1:Name} Group**",
+            "# ${2:Description}",
+            "group ${1:Name}"
+        ],
+        "description": "Define an architectural group"
+    },
+    "Function Definition": {
+        "prefix": "function",
+        "body": [
+            "# **${1:Name}**",
+            "# ${2:Description}",
+            "function ${1:Name} ${3:Inputs}",
+            "\t> ${4:Result}"
+        ],
+        "description": "Define a function contract"
+    },
+    "Group Function Definition": {
+        "prefix": "gfunc",
+        "body": [
+            "# **${2:Name}**",
+            "# ${3:Description}",
+            "${1:Group} function ${2:Name} ${4:Inputs}",
+            "\t> ${5:Result}"
+        ],
+        "description": "Define a function belonging to a group"
+    }
+}

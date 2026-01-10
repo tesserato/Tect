@@ -24,10 +24,9 @@
         "dist/**",
         "bin/**",
         "syntaxes/**",
-        "LICENSE"
-    ],
-    "activationEvents": [
-        "onLanguage:tect"
+        "LICENSE",
+        "language-configuration.json",
+        "snippets.json"
     ],
     "contributes": {
         "languages": [
@@ -39,7 +38,8 @@
                 ],
                 "extensions": [
                     ".tect"
-                ]
+                ],
+                "configuration": "./language-configuration.json"
             }
         ],
         "grammars": [
@@ -47,6 +47,12 @@
                 "language": "tect",
                 "scopeName": "source.tect",
                 "path": "./syntaxes/tect.tmLanguage.json"
+            }
+        ],
+        "snippets": [
+            {
+                "language": "tect",
+                "path": "./snippets.json"
             }
         ],
         "commands": [
