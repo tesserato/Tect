@@ -485,10 +485,13 @@ impl Workspace {
         }
 
         let mut produces = Vec::new();
+        // Check if optional output block exists
         if let Some(outputs_pair) = inner.next() {
-            for line in outputs_pair.into_inner() {
-                let list = line.into_inner().next().unwrap();
-                produces.push(self.resolve_tokens(list, file_id));
+            if outputs_pair.as_rule() == Rule::func_outputs {
+                for line in outputs_pair.into_inner() {
+                    let list = line.into_inner().next().unwrap();
+                    produces.push(self.resolve_tokens(list, file_id));
+                }
             }
         }
 

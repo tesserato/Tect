@@ -2,13 +2,13 @@
 WHITESPACE = _{ " " | "\t" }
 
 /// Newline characters (supports Unix and Windows)
-ln         = _{ "\r\n" | "\n" }
+ln = _{ "\r\n" | "\n" }
 
 /// Single line comments starting with '#'
-comment  = @{ "#" ~ (!ln ~ ANY)* }
+comment = @{ "#" ~ (!ln ~ ANY)* }
 
 /// Documentation lines (comments immediately preceding a definition)
-doc_line =  { comment ~ ln }
+doc_line = { comment ~ ln }
 
 /// Standard alphanumeric identifier starting with a letter
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -38,10 +38,10 @@ import_stmt = { kw_import ~ string_literal }
 const_def = { doc_line* ~ kw_constant ~ ident }
 
 /// Global variable definition
-var_def   = { doc_line* ~ kw_variable ~ ident }
+var_def = { doc_line* ~ kw_variable ~ ident }
 
 /// Architectural error definition
-err_def   = { doc_line* ~ kw_error ~ ident }
+err_def = { doc_line* ~ kw_error ~ ident }
 
 /// Logical group definition
 group_def = { doc_line* ~ kw_group ~ ident }
@@ -54,13 +54,7 @@ output_line = { (">" | "|") ~ token_list }
 
 /// Function Contract Definition
 func_def = {
-    doc_line* ~
-    (!kw_function ~ ident)? ~ // Optional Group Prefix
-    kw_function ~
-    ident ~                   // Function Name
-    token_list? ~             // Input Arguments (no parens)
-    (ln | WHITESPACE)* ~
-    func_outputs
+    doc_line* ~ (!kw_function ~ ident)? ~ kw_function ~ ident ~ token_list? ~ (ln | WHITESPACE)* ~ func_outputs?
 }
 
 /// The block of output branches associated with a function

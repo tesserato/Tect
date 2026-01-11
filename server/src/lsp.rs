@@ -14,7 +14,7 @@ use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tower_lsp::jsonrpc::Result as LspResult;
+use tower_lsp::jsonrpc::{Error as LspError, Result as LspResult};
 use tower_lsp::lsp_types::notification::Notification;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
@@ -467,26 +467,36 @@ impl LanguageServer for Backend {
 impl Backend {
     /// Generates the visual graph.
     ///
-    /// If the client provides a `uri` param, the server triggers a re-analysis rooted
-    /// at that specific file. This ensures the graph context switches correctly
-    /// between files (Issue #2).
+    /// This method enforces a strict Context Switch. It validates the URI
+    /// and triggers a re-analysis rooted at that specific file. This ensures
+    /// the graph always reflects the currently active file (fixing Issue 2).
+    /// If the file is invalid or missing, it returns an error instead of stale data.
     pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
-        let uri_str = params.get("uri").and_then(|v| v.as_str());
+        let uri_str = params
+            .get("uri")
+            .and_then(|v| v.as_str())
+            .ok_or(LspError::invalid_params("Missing 'uri' parameter"))?;
+
+        let uri =
+            Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI format"))?;
+        let path = uri
+            .to_file_path()
+            .map_err(|_| LspError::invalid_params("Invalid file path"))?;
 
         let mut ws = self.workspace.lock().unwrap();
 
-        // Context Switching: Re-analyze rooted at the requested URI.
-        // We pass None for content so SourceManager uses its cache (in-memory changes).
-        if let Some(u) = uri_str {
-            if let Ok(uri) = Url::parse(u) {
-                if let Ok(path) = uri.to_file_path() {
-                    ws.analyze(path, None);
-                }
-            }
-        }
+        // Always re-analyze to ensure we are showing the graph for the REQUESTED file,
+        // not whatever happened to be analyzed last. We pass None for content
+        // so the SourceManager uses its in-memory cache (preserving unsaved changes).
+        ws.analyze(path, None);
 
+        // Even if analyze() encountered syntax errors (Issue 1), the structure
+        // is reset to a clean state (empty or partial). We simulate this
+        // to produce a "blank" or partial graph, rather than crashing or showing
+        // the previous file's graph.
         let mut flow = Flow::new(true);
         let graph = flow.simulate(&ws.structure);
+
         Ok(vis_js::produce_vis_data(&graph))
     }
 
