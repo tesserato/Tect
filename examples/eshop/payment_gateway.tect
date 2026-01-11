@@ -1,0 +1,47 @@
+# ============================================================
+# Module: Payment Gateway
+# Defines the core types and contracts for payment processing.
+# ============================================================
+
+# ------------------------------------------------------------
+# Type Definitions
+# ------------------------------------------------------------
+
+# **Credit Card**
+# Raw card sensitive data (PAN, CVV, Expiry).
+variable CreditCard
+
+# **Secure Token**
+# A PCI-DSS compliant token representing the card.
+variable SecureToken
+
+# **Transaction Receipt**
+# Digital proof of a successful charge.
+constant Receipt
+
+# **Gateway Error**
+# Represents network failures or bank declinals.
+error GatewayError
+
+# ------------------------------------------------------------
+# Group Definitions
+# ------------------------------------------------------------
+
+group Tokenization
+group Banking
+
+# ------------------------------------------------------------
+# Function Contracts
+# ------------------------------------------------------------
+
+# **Tokenize Card**
+# Exchanges raw data for a safe token via the vault.
+Tokenization function Tokenize CreditCard
+    > SecureToken
+    | GatewayError
+
+# **Execute Charge**
+# Captures funds from the issuing bank using the token.
+Banking function ExecuteCharge SecureToken
+    > Receipt
+    | GatewayError

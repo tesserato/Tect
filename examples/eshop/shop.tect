@@ -1,0 +1,62 @@
+# ============================================================
+# Application: E-Commerce Shop
+# Orchestrates the checkout process using the Payment Gateway.
+# ============================================================
+
+# Import the library definitions
+import "./payment_gateway.tect"
+
+# ------------------------------------------------------------
+# Local Definitions
+# ------------------------------------------------------------
+
+# **User Cart**
+# The collection of items the user intends to purchase.
+variable UserCart
+
+# **Order Invoice**
+# The finalized bill ready for payment.
+variable OrderInvoice
+
+# **Shipping Label**
+# Generated only after payment is confirmed.
+constant ShippingLabel
+
+group OrderSystem
+group Logistics
+
+# ------------------------------------------------------------
+# Local Functions
+# ------------------------------------------------------------
+
+# **Draft Order**
+# Validates inventory and creates an invoice from the cart.
+OrderSystem function DraftOrder UserCart
+    > OrderInvoice
+
+# **Request Payment**
+# Prompts the user for payment details based on the invoice.
+# *Produces the imported `CreditCard` type.*
+OrderSystem function RequestPayment OrderInvoice
+    > CreditCard
+
+# **Dispatch Item**
+# Consumes the imported `Receipt` to trigger shipping.
+Logistics function DispatchItem Receipt
+    > ShippingLabel
+
+# ------------------------------------------------------------
+# Execution Flow
+# ------------------------------------------------------------
+
+# 1. Local: Prepare the order
+DraftOrder
+RequestPayment
+
+# 2. Imported: Process the payment
+# (These functions come from payment_gateway.tect)
+Tokenize
+ExecuteCharge
+
+# 3. Local: Fulfill the order
+DispatchItem

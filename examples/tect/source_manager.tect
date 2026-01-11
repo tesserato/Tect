@@ -1,0 +1,36 @@
+# ============================================================
+# Module: Source Manager
+# Handles file I/O and caching.
+# Source: server/src/source_manager.rs
+# ============================================================
+
+import "./models.tect"
+
+group SourceManager
+
+# **Source Manager State**
+# The internal HashMap of paths to contents.
+variable SourceManagerState
+
+# **File Path**
+# OS filesystem path.
+constant FilePath
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Get ID**
+# Gets or creates a FileId for a path.
+SourceManager function GetId FilePath, SourceManagerState
+    > FileId
+
+# **Load File**
+# Reads from disk or updates from memory buffer.
+SourceManager function LoadFile FileId, RawContent, SourceManagerState
+    > SourceManagerState
+
+# **Get Content**
+# Retrieves string content from the cache.
+SourceManager function GetContent FileId, SourceManagerState
+    > RawContent

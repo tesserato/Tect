@@ -1,0 +1,39 @@
+# ============================================================
+# Module: Engine
+# Architectural Simulation.
+# Source: server/src/engine.rs
+# ============================================================
+
+import "./models.tect"
+
+group Engine
+
+# **Token Pool**
+# The collection of currently available tokens (Variables/Constants).
+variable TokenPool
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Seed Initial Pool**
+# Identifies external inputs (Flow Roots) to start simulation.
+Engine function SeedInitialPool ProgramStructure
+    > TokenPool
+
+# **Try Consume**
+# Attempts to match required tokens against the pool.
+Engine function TryConsume [Token], TokenPool
+    > [Token]
+    | Diagnostic
+
+# **Produce Tokens**
+# Adds function outputs to the pool.
+Engine function ProduceTokens [Token], TokenPool
+    > TokenPool
+
+# **Simulate Flow**
+# The main loop generating the graph.
+Engine function SimulateFlow ProgramStructure
+    > Graph
+    | Diagnostic

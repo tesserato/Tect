@@ -1,146 +1,148 @@
 # ============================================================
-# Tect Architecture
+# Tect Self-Definition
 #
-# This example models the data flow of the Tect Compiler,
-# Language Server, and VS Code Extension.
+# A one-to-one architectural model of the Tect Language Server,
+# Compiler, and VS Code Extension logic.
+#
+# Mapped files:
+# - Server: server/src/*.rs
+# - Client: extensions/vscode/src/extension.ts
 # ============================================================
 
 # ------------------------------------------------------------
-# 1. Data Definitions
+# 1. Data Types (Rust Structs & TS Interfaces)
 # ------------------------------------------------------------
 
-# **Raw Source**
-# The `.tect` file content modified by the user in the editor.
-variable RawSource
+# **Raw Content**
+# The string content of the file currently being edited.
+# *Rust Type: `String`*
+variable RawContent
+
+# **File URI**
+# The unique identifier for the document (e.g., file:///...).
+# *Rust Type: `Url` / `PathBuf`*
+constant FileUri
 
 # **Program Structure (IR)**
 # The Intermediate Representation produced by the Analyzer.
-# Corresponds to `struct ProgramStructure` in `server/src/models.rs`.
+# Contains the symbol table, artifact catalog, and flow steps.
+# *Rust Struct: `models::ProgramStructure`*
 variable ProgramStructure
 
-# **Simulated Graph**
-# The final logical graph produced by the Engine after processing flows.
-# Corresponds to `struct Graph` in `server/src/models.rs`.
-variable SimulatedGraph
+# **Diagnostics**
+# Compilation errors (Syntax, Import cycles, Logic starvation).
+# *Rust Struct: `models::DiagnosticWithContext`*
+error Diagnostics
+
+# **Logical Graph**
+# The simulated result containing Nodes and Edges with relation types.
+# *Rust Struct: `models::Graph`*
+variable LogicalGraph
 
 # **Visualization Payload**
-# The JSON data structure formatted for Vis.js network visualization.
-# Corresponds to `struct VisData` in `server/src/vis_js.rs`.
-variable VisPayload
+# The JSON data formatted specifically for the Vis.js library.
+# Contains styling, colors, and physics settings.
+# *Rust Struct: `vis_js::VisData`*
+variable VisData
 
-# **Interactive Preview**
-# The rendered HTML/JS webview displayed inside VS Code.
-variable InteractivePreview
-
-# **Static HTML File**
-# The output file generated when using the CLI `build` command.
-constant StaticHTML
-
-# **Syntax Error**
-# Produced when `pest` fails to parse the grammar or `analyzer.rs` 
-# finds undefined symbols.
-error SyntaxError
-
-# **LSP Diagnostics**
-# Error markers sent back to the editor to underline issues.
-variable LSPDiagnostics
-
-variable UnusedVariable
+# **Webview Message**
+# The final signal sent to the editor to redraw the preview.
+# *TS Interface: `{ command: 'update', data: VisData }`*
+variable WebviewMessage
 
 # ------------------------------------------------------------
-# 2. Group Definitions
+# 2. Component Groups (Modules)
 # ------------------------------------------------------------
 
-# **Client (VS Code)**
-# The TypeScript extension handling UI and process management.
-# Source: `extensions/vscode/src/extension.ts`
+# **VS Code Client**
+# Handles UI, Input events, and the Webview panel.
+# *File: `extension.ts`*
 group Client
 
+# **LSP Server**
+# Handles JSON-RPC communication and workspace state locking.
+# *File: `lsp.rs`*
+group LspServer
+
 # **Compiler Frontend**
-# The Rust logic for parsing and symbol resolution.
-# Source: `server/src/analyzer.rs`
+# Responsible for Parsing (Pest), Dependency Resolution, and IR generation.
+# *File: `analyzer.rs`*
 group Frontend
 
 # **Logic Engine**
-# The Rust logic for token simulation and graph generation.
-# Source: `server/src/engine.rs`
+# Responsible for Token Pool simulation and Flow analysis.
+# *File: `engine.rs`*
 group Engine
 
 # **Presentation Layer**
-# The logic for formatting output (JSON/HTML).
-# Source: `server/src/vis_js.rs`
+# Translates logical graphs into visual JSON.
+# *File: `vis_js.rs`*
 group Presentation
 
-group UnusedGroup
-
 # ------------------------------------------------------------
-# 3. Function Contracts
+# 3. Functional Pipeline
 # ------------------------------------------------------------
 
-# **User Edit**
-# The user types into the editor. The Client captures these changes
-# via `didChange` events.
-Client function UserEdit
-    > RawSource
+# **Did Change Text Document**
+# Triggered when the user types in the editor.
+# Captures the new text and file path.
+Client function OnTextChange
+    > RawContent, FileUri
 
-# **Analyze Source**
-# The Analyzer parses the raw text.
-# It produces valid IR or a set of syntax errors.
-# *Impl: `TectAnalyzer::analyze`*
-Frontend function Analyze RawSource
+# **Analyze Workspace**
+# 1. Updates the Virtual File System (`SourceManager`).
+# 2. Performs Multi-Pass parsing (Definitions -> Resolution).
+# 3. Detects import cycles.
+# *Method: `Workspace::analyze`*
+Frontend function Analyze RawContent, FileUri
     > ProgramStructure
-    | SyntaxError
-
-# **Report Diagnostics**
-# Converts syntax errors into LSP Diagnostics to be shown in the editor.
-# *Impl: `lsp.rs` publish_diagnostics*
-Client function ReportDiagnostics SyntaxError
-    > LSPDiagnostics
+    | Diagnostics
 
 # **Simulate Flow**
-# The Engine consumes the IR, moves tokens through pools, and
-# generates the final node/edge graph.
-# *Impl: `Flow::simulate`*
+# 1. Seeds the `TokenPool` with external inputs.
+# 2. Simulates token consumption/production step-by-step.
+# 3. Generates the Node/Edge graph.
+# *Method: `Flow::simulate`*
 Engine function Simulate ProgramStructure
-    > SimulatedGraph
+    > LogicalGraph
+    | Diagnostics
 
-# **Generate Vis Data**
-# Converts the raw graph into styling-rich JSON for Vis.js.
-# *Impl: `vis_js::produce_vis_data`*
-Presentation function GenerateVisData SimulatedGraph
-    > VisPayload
+# **Produce Vis Data**
+# Translates the Logic Graph into a styled visual format.
+# Applies color coding based on `EdgeRelation` and Node `Kind`.
+# *Method: `vis_js::produce_vis_data`*
+Presentation function SerializeToJSON LogicalGraph
+    > VisData
 
-# **Render Webview**
-# The Extension receives the JSON payload via custom LSP Request
-# and updates the Webview panel.
-# *Impl: `TectPreviewPanel.update`*
-Client function RenderWebview VisPayload
-    > InteractivePreview
+# **Send Custom Notification**
+# Sends the `tect/analysisFinished` or `tect/getGraph` response
+# back to the client via JSON-RPC.
+LspServer function SendRPC VisData
+    > WebviewMessage
 
-# **Generate Static HTML**
-# Used by the CLI. Wraps the VisPayload in a standalone HTML template.
-# *Impl: `vis_js::generate_interactive_html`*
-Presentation function GenerateStaticHTML SimulatedGraph
-    > StaticHTML
-
+# **Update Preview**
+# The Webview receives the message, destroys the old network,
+# and re-renders the new architecture.
+# *Method: `TectPreviewPanel.update`*
+Client function RenderGraph WebviewMessage
 # ------------------------------------------------------------
-# 4. Architectural Flow (The Live Preview Pipeline)
+# 4. The Live Preview Flow
 # ------------------------------------------------------------
 
 # 1. User types code
-UserEdit
+OnTextChange
 
-# 2. Rust Server analyzes it
+# 2. Rust analyzes structure (Pass 1 & 2)
 Analyze
 
-# 3. (Branch) If errors, report them to VS Code
-ReportDiagnostics
-
-# 4. If valid, the Engine simulates the architecture
+# 3. Engine simulates data flow
 Simulate
 
-# 5. Convert to Visual JSON
-GenerateVisData
+# 4. Convert logic to graphics
+SerializeToJSON
 
-# 6. Send to VS Code to render the graph
-RenderWebview
+# 5. Send over LSP
+SendRPC
+
+# 6. Render in VS Code
+RenderGraph

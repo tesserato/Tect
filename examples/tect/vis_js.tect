@@ -1,0 +1,31 @@
+# ============================================================
+# Module: Vis JS
+# Data translation for the frontend.
+# Source: server/src/vis_js.rs
+# ============================================================
+
+import "./models.tect"
+
+group Presentation
+
+# **Vis Data**
+# JSON payload formatted for Vis.js Network.
+variable VisData
+
+# **HTML Output**
+# Standalone HTML string.
+constant HTMLOutput
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Produce Vis Data**
+# Translates Logic Graph to Visual JSON.
+Presentation function ProduceVisData Graph
+    > VisData
+
+# **Generate HTML**
+# Embeds VisData into an HTML template.
+Presentation function GenerateHTML Graph
+    > HTMLOutput

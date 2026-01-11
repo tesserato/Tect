@@ -1,0 +1,38 @@
+# ============================================================
+# Module: Models
+# Defines the core architectural entities and IR.
+# Source: server/src/models.rs
+# ============================================================
+
+# **File ID**
+# Unique integer identifier for a file.
+constant FileId
+
+# **Span**
+# Byte-offset range in a source file.
+constant Span
+
+# **Raw Content**
+# String content of a file.
+variable RawContent
+
+# **Program Structure**
+# The Intermediate Representation (IR).
+# Contains artifacts, groups, and flow steps.
+variable ProgramStructure
+
+# **Graph**
+# The final logical graph with Nodes and Edges.
+variable Graph
+
+# **Diagnostic**
+# Compiler errors or warnings (Syntax, Starvation, Cycles).
+error Diagnostic
+
+# **Token**
+# A specific instance of an artifact usage (Unitary/Collection).
+constant Token
+
+# **Function**
+# The definition of a contract.
+constant FunctionDefinition

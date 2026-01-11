@@ -1,0 +1,50 @@
+# ============================================================
+# Tect Architecture: Main Flow
+#
+# This represents the "Live Preview" pipeline triggered
+# when a user edits a file in VS Code.
+# ============================================================
+
+import "./extension.tect"
+import "./lsp.tect"
+import "./analyzer.tect"
+import "./engine.tect"
+import "./vis_js.tect"
+
+# ------------------------------------------------------------
+# 1. Input Phase
+# ------------------------------------------------------------
+
+# User types in VS Code
+Activate
+HandleDidChange
+
+# ------------------------------------------------------------
+# 2. Analysis Phase (Server)
+# ------------------------------------------------------------
+
+# Workspace manager loads file
+LoadFile
+
+# Analyzer parses definitions and resolves links
+AnalyzeWorkspace
+
+# ------------------------------------------------------------
+# 3. Logic Phase (Server)
+# ------------------------------------------------------------
+
+# Engine simulates data flow
+SimulateFlow
+
+# ------------------------------------------------------------
+# 4. Presentation Phase (Server -> Client)
+# ------------------------------------------------------------
+
+# Convert to JSON
+ProduceVisData
+
+# Send via JSON-RPC
+GetVisualGraph
+
+# Render in VS Code
+RenderGraph

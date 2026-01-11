@@ -1,0 +1,31 @@
+# ============================================================
+# Module: Client
+# VS Code Extension Host.
+# Source: extensions/vscode/src/extension.ts
+# ============================================================
+
+import "./lsp.tect"
+
+group Client
+
+# **User Input**
+# Typing events or command execution.
+variable UserInput
+
+# **Webview Panel**
+# The HTML preview window.
+variable WebviewPanel
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Activate Extension**
+# Spawns the LSP Client binary.
+Client function Activate UserInput
+    > LSPMessage
+
+# **Render Graph**
+# Updates the Webview with new data.
+Client function RenderGraph VisData
+    > WebviewPanel

@@ -1,0 +1,38 @@
+# ============================================================
+# Module: LSP
+# Language Server Protocol implementation.
+# Source: server/src/lsp.rs
+# ============================================================
+
+import "./models.tect"
+import "./vis_js.tect"
+
+group LSP
+
+# **LSP Message**
+# JSON-RPC messages exchanged with Client.
+variable LSPMessage
+
+# **URI**
+# Document identifier.
+constant URI
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Handle Did Change**
+# Responds to text edits.
+LSP function HandleDidChange LSPMessage
+    > URI, RawContent
+
+# **Publish Diagnostics**
+# Sends errors back to the editor.
+LSP function PublishDiagnostics [Diagnostic]
+    > LSPMessage
+
+# **Get Visual Graph**
+# Custom Request handler for graph data.
+LSP function GetVisualGraph URI
+    > VisData
+    | Diagnostic

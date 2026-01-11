@@ -1,0 +1,46 @@
+# ============================================================
+# Module: Analyzer
+# Parsing and Semantic Analysis.
+# Source: server/src/analyzer.rs
+# ============================================================
+
+import "./models.tect"
+import "./source_manager.tect"
+
+group Analyzer
+
+# **Dependency Graph**
+# Internal graph for cycle detection.
+variable DepGraph
+
+# ------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------
+
+# **Scan Imports**
+# Parses the file to find `import` statements.
+Analyzer function ScanImports RawContent
+    > [FilePath]
+
+# **Detect Cycle**
+# DFS traversal to find circular dependencies.
+Analyzer function DetectCycle DepGraph
+    > Diagnostic
+
+# **Pass 1: Definitions**
+# Parses artifacts, groups, and function skeletons.
+Analyzer function PassDefinitions RawContent
+    > ProgramStructure
+    | Diagnostic
+
+# **Pass 2: Resolution**
+# Links function contracts and flow steps.
+Analyzer function PassResolution RawContent
+    > ProgramStructure
+    | Diagnostic
+
+# **Analyze Workspace**
+# The main coordinator function.
+Analyzer function AnalyzeWorkspace FilePath, RawContent, SourceManagerState
+    > ProgramStructure
+    | Diagnostic
