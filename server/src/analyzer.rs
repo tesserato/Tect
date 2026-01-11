@@ -131,6 +131,7 @@ impl Workspace {
     }
 
     /// Scans a file for import statements to build the dependency graph.
+    /// Explicitly validates file existence and reports errors if missing.
     fn scan_imports(&mut self, content: &str, file_id: FileId) -> Vec<(PathBuf, Span)> {
         let mut results = Vec::new();
         if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
@@ -151,10 +152,20 @@ impl Workspace {
                                 PathBuf::from(rel_path)
                             };
 
-                            // Canonicalize to handle ./ ../ and symlinks ensuring unique FileIds
-                            let target = std::fs::canonicalize(&target_raw).unwrap_or(target_raw);
-
-                            results.push((target, span));
+                            // Explicitly check for existence via canonicalization
+                            match std::fs::canonicalize(&target_raw) {
+                                Ok(target) => {
+                                    results.push((target, span));
+                                }
+                                Err(_) => {
+                                    // Report specific error on the import line
+                                    self.report_error(
+                                        file_id,
+                                        Some(span),
+                                        format!("Import not found: '{}'", target_raw.display()),
+                                    );
+                                }
+                            }
                         }
                     }
                 }
