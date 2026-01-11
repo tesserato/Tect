@@ -45,7 +45,10 @@ impl Workspace {
         self.structure = ProgramStructure::default();
 
         // 1. Dependency Discovery
-        let root_id = self.source_manager.get_id(&root_path);
+        // We attempt to canonicalize the root path to ensure consistency with imports
+        let normalized_root = std::fs::canonicalize(&root_path).unwrap_or(root_path);
+
+        let root_id = self.source_manager.get_id(&normalized_root);
         self.source_manager.load_file(root_id, root_content);
 
         let mut parse_queue = vec![root_id];
@@ -66,18 +69,18 @@ impl Workspace {
             visited_order.push(current_id);
 
             // Ensure loaded
-            if self.source_manager.get_content(current_id).is_none()
-                && !self.source_manager.load_file(current_id, None)
-            {
-                self.report_error(
-                    current_id,
-                    None,
-                    format!(
-                        "Failed to read file: {:?}",
-                        self.source_manager.get_path(current_id)
-                    ),
-                );
-                continue;
+            if self.source_manager.get_content(current_id).is_none() {
+                if !self.source_manager.load_file(current_id, None) {
+                    self.report_error(
+                        current_id,
+                        None,
+                        format!(
+                            "Failed to read file: {:?}",
+                            self.source_manager.get_path(current_id)
+                        ),
+                    );
+                    continue;
+                }
             }
 
             // Quick parse for imports to build graph
@@ -113,9 +116,6 @@ impl Workspace {
         }
 
         // 3. Multi-Pass Parsing
-        // We use `visited_order` (Vec) instead of `visited_set` (HashSet) to ensure
-        // deterministic results regardless of memory layout.
-
         // Pass 1: Definitions
         for file_id in &visited_order {
             self.pass_definitions(*file_id);
@@ -144,11 +144,16 @@ impl Workspace {
                         let rel_path = &str_lit[1..str_lit.len() - 1]; // strip quotes
 
                         if let Some(base_path) = self.source_manager.get_path(file_id) {
-                            let target: PathBuf = if let Some(parent) = base_path.parent() {
+                            // Resolve path relative to current file
+                            let target_raw: PathBuf = if let Some(parent) = base_path.parent() {
                                 parent.join(rel_path)
                             } else {
                                 PathBuf::from(rel_path)
                             };
+
+                            // Canonicalize to handle ./ ../ and symlinks ensuring unique FileIds
+                            let target = std::fs::canonicalize(&target_raw).unwrap_or(target_raw);
+
                             results.push((target, span));
                         }
                     }
