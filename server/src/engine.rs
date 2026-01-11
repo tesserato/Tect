@@ -174,25 +174,33 @@ impl Flow {
 
     /// Simulates the flow based on the global program structure.
     pub fn simulate(&mut self, structure: &ProgramStructure) -> Graph {
+        // Prepare artificial nodes (but do not add them to graph yet)
         let initial_node = Arc::new(Node::new_artificial(
             "InitialNode".to_string(),
             true,
             false,
             false,
         ));
-        self.nodes.push(initial_node.clone());
+
+        let final_node = Arc::new(Node::new_artificial(
+            "FinalNode".to_string(),
+            false,
+            true,
+            false,
+        ));
+
+        let fatal_node = Arc::new(Node::new_artificial(
+            "FatalErrors".to_string(),
+            false,
+            false,
+            true,
+        ));
 
         // 1. Seed Initial Pool
-        // The rule is: "Only the inputs to the first function of each flow are considered present."
-        // In the IR, `structure.flow` is a flattened list of all steps from all files.
-        // We identify the "first function of each flow" by tracking the FileId.
-        // The first step encountered for a specific FileId is considered a Root Step for that file's flow.
-
         let mut initial_tokens = Vec::new();
         let mut seen_files = HashSet::new();
 
         for step in &structure.flow {
-            // If this is the first step we've seen from this file, treat it as a start node.
             if seen_files.insert(step.span.file_id) {
                 if let Some(func) = structure.catalog.get(&step.function_name) {
                     initial_tokens.extend(func.consumes.clone());
@@ -239,7 +247,6 @@ impl Flow {
                 }
             }
 
-            // Only report starvation if the function actually required inputs
             if !step_executed_at_least_once && !func.consumes.is_empty() {
                 let missing_list: Vec<String> = missing_tokens_examples.into_iter().collect();
                 let msg = format!(
@@ -260,25 +267,17 @@ impl Flow {
             self.pools = next_pools;
         }
 
-        let final_node = Arc::new(Node::new_artificial(
-            "FinalNode".to_string(),
-            false,
-            true,
-            false,
-        ));
-        let fatal_node = Arc::new(Node::new_artificial(
-            "FatalErrors".to_string(),
-            false,
-            false,
-            true,
-        ));
-        self.nodes.push(final_node.clone());
-        self.nodes.push(fatal_node.clone());
+        // 3. Process Leftovers and Lazily Add Boundary Nodes
+        let mut has_terminal_flow = false;
+        let mut has_error_flow = false;
 
         for pool in &self.pools {
             let leftovers = pool.get_leftover_tokens();
+
+            // Check for valid leftovers (FinalNode)
             for token in leftovers.variables.into_iter().chain(leftovers.constants) {
                 if let Some(origin) = pool.token_to_origin_node.get(&token.uid) {
+                    has_terminal_flow = true;
                     self.edges.push(Edge {
                         from_node_uid: origin.uid,
                         to_node_uid: final_node.uid,
@@ -287,8 +286,11 @@ impl Flow {
                     });
                 }
             }
+
+            // Check for error leftovers (FatalErrors)
             for err in leftovers.errors {
                 if let Some(origin) = pool.token_to_origin_node.get(&err.uid) {
+                    has_error_flow = true;
                     self.edges.push(Edge {
                         from_node_uid: origin.uid,
                         to_node_uid: fatal_node.uid,
@@ -297,6 +299,27 @@ impl Flow {
                     });
                 }
             }
+        }
+
+        // 4. Finalize Nodes List
+        // Add InitialNode only if it has outgoing edges
+        if self
+            .edges
+            .iter()
+            .any(|e| e.from_node_uid == initial_node.uid)
+        {
+            // Insert at the beginning for aesthetics
+            self.nodes.insert(0, initial_node.clone());
+        }
+
+        // Add FinalNode if used
+        if has_terminal_flow {
+            self.nodes.push(final_node.clone());
+        }
+
+        // Add FatalErrors if used
+        if has_error_flow {
+            self.nodes.push(fatal_node.clone());
         }
 
         if self.deduplicate_edges {
