@@ -3,16 +3,18 @@ use crate::engine::Flow;
 use crate::vis_js;
 use std::fs;
 use std::path::PathBuf;
+use tower_lsp::lsp_types::Url;
 
 #[test]
 fn generate_blog_architecture_json() -> std::io::Result<()> {
     // 1. Read and Analyze source file
     let input_path = "../examples/dsbg.tect";
     let content = fs::read_to_string(input_path).expect("Failed to read dsbg.tect");
-    let path = PathBuf::from(input_path);
+    let path = fs::canonicalize(PathBuf::from(input_path))?;
+    let uri = Url::from_file_path(path).unwrap();
 
     let mut workspace = crate::analyzer::Workspace::new();
-    workspace.analyze(path, Some(content.clone()));
+    workspace.analyze(uri, Some(content.clone()));
     let structure = &workspace.structure;
 
     // 2. Simulate Flow

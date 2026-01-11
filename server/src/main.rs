@@ -3,6 +3,7 @@ use clap::{Parser as ClapParser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use tower_lsp::lsp_types::Url;
 use tower_lsp::{LspService, Server};
 
 mod analyzer;
@@ -48,12 +49,15 @@ async fn main() -> Result<()> {
         Commands::Build { input, output } => {
             let content = fs::read_to_string(&input)?;
 
+            // Canonicalize to absolute path then convert to file:// URL
+            let abs_path = fs::canonicalize(&input)?;
+            let root_uri = Url::from_file_path(abs_path).expect("Invalid file path");
+
             // Initialize Workspace (Analyzer + VFS)
             let mut workspace = analyzer::Workspace::new();
 
-            // Analyze the source. Note: analyze() mutates the workspace state in-place.
-            // We pass Some(content) to preload the file without reading from disk again.
-            workspace.analyze(input, Some(content));
+            // Analyze the source using the URL
+            workspace.analyze(root_uri, Some(content));
 
             // Run the Logic Engine on the resulting IR
             let mut flow = engine::Flow::new(true);

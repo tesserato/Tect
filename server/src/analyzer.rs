@@ -10,9 +10,8 @@ use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
-use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
+use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag, Url};
 
 #[derive(Parser)]
 #[grammar = "tect.pest"]
@@ -39,21 +38,18 @@ impl Workspace {
         }
     }
 
-    /// Entry point: Analyze a project starting from a root file.
+    /// Entry point: Analyze a project starting from a root URI.
     /// If content is provided, it uses that (useful for unsaved editor buffers).
-    pub fn analyze(&mut self, root_path: PathBuf, root_content: Option<String>) {
+    pub fn analyze(&mut self, root_uri: Url, root_content: Option<String>) {
         self.structure = ProgramStructure::default();
 
         // 1. Dependency Discovery
-        // We attempt to canonicalize the root path to ensure consistency with imports
-        let normalized_root = std::fs::canonicalize(&root_path).unwrap_or(root_path);
-
-        let root_id = self.source_manager.get_id(&normalized_root);
+        let root_id = self.source_manager.get_id(&root_uri);
         self.source_manager.load_file(root_id, root_content);
 
         let mut parse_queue = vec![root_id];
         let mut visited_set = HashSet::new();
-        let mut visited_order = Vec::new(); // Deterministic order for processing
+        let mut visited_order = Vec::new();
         let mut dependency_graph: HashMap<FileId, Vec<FileId>> = HashMap::new();
 
         // BFS to load and discover files
@@ -76,7 +72,7 @@ impl Workspace {
                         None,
                         format!(
                             "Failed to read file: {:?}",
-                            self.source_manager.get_path(current_id)
+                            self.source_manager.get_uri(current_id)
                         ),
                     );
                     continue;
@@ -91,8 +87,8 @@ impl Workspace {
 
             if let Some(content) = content_owned {
                 let imports = self.scan_imports(&content, current_id);
-                for (path, _span) in imports {
-                    let imported_id = self.source_manager.get_id(path);
+                for (uri, _span) in imports {
+                    let imported_id = self.source_manager.get_id(&uri);
                     dependency_graph
                         .entry(current_id)
                         .or_default()
@@ -131,8 +127,8 @@ impl Workspace {
     }
 
     /// Scans a file for import statements to build the dependency graph.
-    /// Explicitly validates file existence and reports errors if missing.
-    fn scan_imports(&mut self, content: &str, file_id: FileId) -> Vec<(PathBuf, Span)> {
+    /// Resolves imports relative to the current file's URI and validates existence.
+    fn scan_imports(&mut self, content: &str, file_id: FileId) -> Vec<(Url, Span)> {
         let mut results = Vec::new();
         if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
             if let Some(root) = pairs.next() {
@@ -144,27 +140,37 @@ impl Workspace {
                         let str_lit = inner.next().unwrap().as_str();
                         let rel_path = &str_lit[1..str_lit.len() - 1]; // strip quotes
 
-                        if let Some(base_path) = self.source_manager.get_path(file_id) {
-                            // Resolve path relative to current file
-                            let target_raw: PathBuf = if let Some(parent) = base_path.parent() {
-                                parent.join(rel_path)
-                            } else {
-                                PathBuf::from(rel_path)
-                            };
+                        // Fix: Clone base_uri to avoid conflicting borrow with self.report_error
+                        let base_uri = self.source_manager.get_uri(file_id).cloned();
 
-                            // Explicitly check for existence via canonicalization
-                            match std::fs::canonicalize(&target_raw) {
-                                Ok(target) => {
-                                    results.push((target, span));
-                                }
-                                Err(_) => {
-                                    // Report specific error on the import line
+                        if let Some(base_uri) = base_uri {
+                            // Use Url::join to handle relative paths (./, ../) correctly
+                            if let Ok(target_uri) = base_uri.join(rel_path) {
+                                // Only check filesystem existence if it's a file scheme
+                                if let Ok(path) = target_uri.to_file_path() {
+                                    if path.exists() {
+                                        results.push((target_uri, span));
+                                    } else {
+                                        self.report_error(
+                                            file_id,
+                                            Some(span),
+                                            format!("Import not found: '{}'", path.display()),
+                                        );
+                                    }
+                                } else {
+                                    // Non-file URIs not supported for import verification yet
                                     self.report_error(
                                         file_id,
                                         Some(span),
-                                        format!("Import not found: '{}'", target_raw.display()),
+                                        format!("Unsupported import scheme: '{}'", target_uri),
                                     );
                                 }
+                            } else {
+                                self.report_error(
+                                    file_id,
+                                    Some(span),
+                                    format!("Invalid import path: '{}'", rel_path),
+                                );
                             }
                         }
                     }
@@ -208,11 +214,7 @@ impl Workspace {
                     let cycle_path: Vec<String> = path_stack
                         .iter()
                         .chain(std::iter::once(&neighbor))
-                        .filter_map(|id| {
-                            self.source_manager
-                                .get_path(*id)
-                                .map(|p: &PathBuf| p.to_string_lossy().to_string())
-                        })
+                        .filter_map(|id| self.source_manager.get_uri(*id).map(|u| u.to_string()))
                         .collect();
                     return Some(cycle_path.join(" -> "));
                 }

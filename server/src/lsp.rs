@@ -73,21 +73,20 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, p: HoverParams) -> LspResult<Option<Hover>> {
-        let uri = &p.text_document_position_params.text_document.uri;
+        let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
 
         // Acquire lock
         let mut ws = self.workspace.lock().unwrap();
-        let path = uri.to_file_path().unwrap();
 
         // Ensure we have content for this file to check words
-        let file_id = ws.source_manager.get_id(&path);
+        let file_id = ws.source_manager.get_id(&uri);
         ws.source_manager.load_file(file_id, None);
 
         let Some(content) = ws
             .source_manager
             .get_content(file_id)
-            .map(|s: &str| s.to_string())
+            .map(|s| s.to_string())
         else {
             return Ok(None);
         };
@@ -169,7 +168,7 @@ impl LanguageServer for Backend {
         &self,
         p: GotoDefinitionParams,
     ) -> LspResult<Option<GotoDefinitionResponse>> {
-        let uri = &p.text_document_position_params.text_document.uri;
+        let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
 
         let mut ws_guard = self.workspace.lock().unwrap();
@@ -179,21 +178,21 @@ impl LanguageServer for Backend {
             ref mut source_manager,
         } = *ws_guard;
 
-        let path = uri.to_file_path().unwrap();
-        let file_id = source_manager.get_id(&path);
+        let file_id = source_manager.get_id(&uri);
         source_manager.load_file(file_id, None);
 
-        let Some(content) = source_manager
-            .get_content(file_id)
-            .map(|s: &str| s.to_string())
-        else {
+        let Some(content) = source_manager.get_content(file_id).map(|s| s.to_string()) else {
             return Ok(None);
         };
 
         if let Some((word, _)) = Self::get_word_at(&content, pos) {
             if let Some(meta) = self.find_meta(&word, structure) {
-                if let Some(target_path) = source_manager.get_path(meta.definition_span.file_id) {
-                    let target_uri = Url::from_file_path(target_path).unwrap();
+                // Clone the URI to drop the immutable borrow of source_manager
+                if let Some(target_uri) = source_manager
+                    .get_uri(meta.definition_span.file_id)
+                    .cloned()
+                {
+                    // Now we can borrow source_manager mutably
                     let range = source_manager.resolve_range(meta.definition_span);
                     return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         target_uri, range,
@@ -208,8 +207,7 @@ impl LanguageServer for Backend {
         &self,
         p: DocumentSymbolParams,
     ) -> LspResult<Option<DocumentSymbolResponse>> {
-        let uri = &p.text_document.uri;
-        let path = uri.to_file_path().unwrap();
+        let uri = p.text_document.uri;
 
         let mut ws_guard = self.workspace.lock().unwrap();
         // Split borrow
@@ -218,7 +216,7 @@ impl LanguageServer for Backend {
             ref mut source_manager,
         } = *ws_guard;
 
-        let file_id = source_manager.get_id(&path);
+        let file_id = source_manager.get_id(&uri);
         // Ensure loaded for range calculation
         source_manager.load_file(file_id, None);
 
@@ -252,7 +250,7 @@ impl LanguageServer for Backend {
     }
 
     async fn rename(&self, p: RenameParams) -> LspResult<Option<WorkspaceEdit>> {
-        let uri = &p.text_document_position.text_document.uri;
+        let uri = p.text_document_position.text_document.uri;
         let pos = p.text_document_position.position;
         let new_name = p.new_name;
 
@@ -263,14 +261,10 @@ impl LanguageServer for Backend {
             ref mut source_manager,
         } = *ws_guard;
 
-        let path = uri.to_file_path().unwrap();
-        let file_id = source_manager.get_id(&path);
+        let file_id = source_manager.get_id(&uri);
         source_manager.load_file(file_id, None);
 
-        let Some(content) = source_manager
-            .get_content(file_id)
-            .map(|s: &str| s.to_string())
-        else {
+        let Some(content) = source_manager.get_content(file_id).map(|s| s.to_string()) else {
             return Ok(None);
         };
 
@@ -279,8 +273,8 @@ impl LanguageServer for Backend {
                 let mut changes = HashMap::new();
 
                 for span in &meta.occurrences {
-                    if let Some(target_path) = source_manager.get_path(span.file_id) {
-                        let target_uri = Url::from_file_path(target_path).unwrap();
+                    // Clone URI to allow mutable borrow later
+                    if let Some(target_uri) = source_manager.get_uri(span.file_id).cloned() {
                         let range = source_manager.resolve_range(*span);
                         changes
                             .entry(target_uri)
@@ -299,7 +293,7 @@ impl LanguageServer for Backend {
     }
 
     async fn references(&self, p: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
-        let uri = &p.text_document_position.text_document.uri;
+        let uri = p.text_document_position.text_document.uri;
         let pos = p.text_document_position.position;
 
         let mut ws_guard = self.workspace.lock().unwrap();
@@ -309,14 +303,10 @@ impl LanguageServer for Backend {
             ref mut source_manager,
         } = *ws_guard;
 
-        let path = uri.to_file_path().unwrap();
-        let file_id = source_manager.get_id(&path);
+        let file_id = source_manager.get_id(&uri);
         source_manager.load_file(file_id, None);
 
-        let Some(content) = source_manager
-            .get_content(file_id)
-            .map(|s: &str| s.to_string())
-        else {
+        let Some(content) = source_manager.get_content(file_id).map(|s| s.to_string()) else {
             return Ok(None);
         };
 
@@ -325,11 +315,12 @@ impl LanguageServer for Backend {
                 let locs = meta
                     .occurrences
                     .iter()
-                    .map(|span| {
-                        let target_path = source_manager.get_path(span.file_id).unwrap();
-                        let target_uri = Url::from_file_path(target_path).unwrap();
-                        let range = source_manager.resolve_range(*span);
-                        Location::new(target_uri, range)
+                    .filter_map(|span| {
+                        // Clone URI to allow mutable borrow in resolve_range
+                        source_manager.get_uri(span.file_id).cloned().map(|uri| {
+                            let range = source_manager.resolve_range(*span);
+                            Location::new(uri, range)
+                        })
                     })
                     .collect();
 
@@ -365,18 +356,17 @@ impl LanguageServer for Backend {
     }
 
     async fn signature_help(&self, p: SignatureHelpParams) -> LspResult<Option<SignatureHelp>> {
-        let uri = &p.text_document_position_params.text_document.uri;
+        let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
 
         let mut ws = self.workspace.lock().unwrap();
-        let path = uri.to_file_path().unwrap();
-        let file_id = ws.source_manager.get_id(&path);
+        let file_id = ws.source_manager.get_id(&uri);
         ws.source_manager.load_file(file_id, None);
 
         let Some(content) = ws
             .source_manager
             .get_content(file_id)
-            .map(|s: &str| s.to_string())
+            .map(|s| s.to_string())
         else {
             return Ok(None);
         };
@@ -400,8 +390,7 @@ impl LanguageServer for Backend {
     }
 
     async fn inlay_hint(&self, p: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
-        let uri = &p.text_document.uri;
-        let path = uri.to_file_path().unwrap();
+        let uri = p.text_document.uri;
 
         let mut ws_guard = self.workspace.lock().unwrap();
         // Split borrow
@@ -410,7 +399,7 @@ impl LanguageServer for Backend {
             ref mut source_manager,
         } = *ws_guard;
 
-        let file_id = source_manager.get_id(&path);
+        let file_id = source_manager.get_id(&uri);
         // Resolve range relies on content loaded
         source_manager.load_file(file_id, None);
 
@@ -444,8 +433,8 @@ impl LanguageServer for Backend {
 
     async fn formatting(&self, p: DocumentFormattingParams) -> LspResult<Option<Vec<TextEdit>>> {
         let mut ws = self.workspace.lock().unwrap();
-        let path = p.text_document.uri.to_file_path().unwrap();
-        let file_id = ws.source_manager.get_id(&path);
+        let uri = p.text_document.uri;
+        let file_id = ws.source_manager.get_id(&uri);
 
         // We ensure loaded because we might be formatting a file we haven't visited in graph yet
         ws.source_manager.load_file(file_id, None);
@@ -468,9 +457,7 @@ impl Backend {
     /// Generates the visual graph.
     ///
     /// This method enforces a strict Context Switch. It validates the URI
-    /// and triggers a re-analysis rooted at that specific file. This ensures
-    /// the graph always reflects the currently active file (fixing Issue 2).
-    /// If the file is invalid or missing, it returns an error instead of stale data.
+    /// and triggers a re-analysis rooted at that specific file.
     pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
         let uri_str = params
             .get("uri")
@@ -479,21 +466,13 @@ impl Backend {
 
         let uri =
             Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI format"))?;
-        let path = uri
-            .to_file_path()
-            .map_err(|_| LspError::invalid_params("Invalid file path"))?;
 
         let mut ws = self.workspace.lock().unwrap();
 
-        // Always re-analyze to ensure we are showing the graph for the REQUESTED file,
-        // not whatever happened to be analyzed last. We pass None for content
-        // so the SourceManager uses its in-memory cache (preserving unsaved changes).
-        ws.analyze(path, None);
+        // Always re-analyze rooted at the requested URI.
+        // We pass None for content so the SourceManager uses its in-memory cache.
+        ws.analyze(uri, None);
 
-        // Even if analyze() encountered syntax errors (Issue 1), the structure
-        // is reset to a clean state (empty or partial). We simulate this
-        // to produce a "blank" or partial graph, rather than crashing or showing
-        // the previous file's graph.
         let mut flow = Flow::new(true);
         let graph = flow.simulate(&ws.structure);
 
@@ -502,18 +481,13 @@ impl Backend {
 
     /// Triggers a full analysis of the dependency graph starting from the changed file.
     async fn process_change(&self, uri: Url, content: Option<String>) {
-        let path = uri.to_file_path().unwrap();
-
         // Scope for the lock
         let (mut all_diagnostics, _) = {
             let mut ws_guard = self.workspace.lock().unwrap();
 
-            // Analyze the project.
-            // Design Decision: We treat the active file as the entry point for analysis.
-            // This ensures the graph relevant to what the user is editing is updated.
-            ws_guard.analyze(path, content);
+            ws_guard.analyze(uri.clone(), content);
 
-            // Run Engine if no fatal errors are present in the static analysis
+            // Run Engine if no fatal errors
             if !ws_guard
                 .structure
                 .diagnostics
@@ -525,8 +499,7 @@ impl Backend {
                 ws_guard.structure.diagnostics.extend(flow.diagnostics);
             }
 
-            // Resolve diagnostics from internal Context-Aware format to LSP format
-            // Here we need to split the borrow to iterate structure.diagnostics while calling source_manager.resolve_range
+            // Resolve diagnostics
             let Workspace {
                 ref structure,
                 ref mut source_manager,
@@ -536,8 +509,8 @@ impl Backend {
             let mut file_ids = Vec::new();
 
             for diag_ctx in &structure.diagnostics {
-                if let Some(path) = source_manager.get_path(diag_ctx.file_id) {
-                    let uri = Url::from_file_path(path).unwrap();
+                // Clone URI to release borrow on source_manager
+                if let Some(uri) = source_manager.get_uri(diag_ctx.file_id).cloned() {
                     let range = if let Some(span) = diag_ctx.span {
                         source_manager.resolve_range(span)
                     } else {
@@ -564,8 +537,7 @@ impl Backend {
             (resolved, file_ids)
         };
 
-        // Ensure we publish empty diagnostics for the current file if it has none,
-        // effectively clearing old errors from the editor view.
+        // Ensure we publish empty diagnostics for the current file to clear old errors
         all_diagnostics.entry(uri.clone()).or_default();
 
         for (furi, diags) in all_diagnostics {

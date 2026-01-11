@@ -1,6 +1,6 @@
 use crate::analyzer::{Rule, TectParser, Workspace};
 use pest::Parser;
-use std::path::PathBuf;
+use tower_lsp::lsp_types::Url;
 
 /// Verifies that data artifacts can be defined correctly.
 #[test]
@@ -23,8 +23,9 @@ fn test_parse_function_no_parens() {
 fn test_doc_comment_association() {
     let input = "# Doc 1\n# Doc 2\nconstant Credentials";
     let mut a = Workspace::new();
+    let uri = Url::parse("file:///test.tect").unwrap();
     // analyze modifies structure in-place
-    a.analyze(PathBuf::from("test.tect"), Some(input.to_string()));
+    a.analyze(uri, Some(input.to_string()));
 
     let s = a.structure.artifacts.get("Credentials").unwrap();
 
@@ -40,7 +41,8 @@ fn test_doc_comment_association() {
 fn test_strict_newline_doc_separation() {
     let input = "# Header\n\n# Doc\nconstant C";
     let mut a = Workspace::new();
-    a.analyze(PathBuf::from("test.tect"), Some(input.to_string()));
+    let uri = Url::parse("file:///test.tect").unwrap();
+    a.analyze(uri, Some(input.to_string()));
 
     let s = a.structure.artifacts.get("C").unwrap();
 

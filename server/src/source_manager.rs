@@ -1,20 +1,20 @@
 //! # Source Manager
 //!
 //! Acts as the Virtual File System (VFS) and source of truth for file contents.
-//! Handles Path <-> FileId mapping, lazy loading of files, and resolving
+//! Handles Url <-> FileId mapping, lazy loading of files, and resolving
 //! byte-offset Spans to LSP Line/Column Ranges.
 
 use crate::models::{FileId, Span};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tower_lsp::lsp_types::{Position, Range};
+use tower_lsp::lsp_types::{Position, Range, Url};
 
 /// Manages source files, their contents, and their unique IDs.
 pub struct SourceManager {
-    file_map: HashMap<PathBuf, FileId>,
-    id_map: HashMap<FileId, PathBuf>,
+    file_map: HashMap<Url, FileId>,
+    id_map: HashMap<FileId, Url>,
     contents: HashMap<FileId, String>,
     line_indices: HashMap<FileId, Vec<usize>>,
     next_id: AtomicU32,
@@ -37,21 +37,20 @@ impl SourceManager {
         }
     }
 
-    /// Gets or creates a FileId for a path.
+    /// Gets or creates a FileId for a URI.
     /// Does NOT read the content immediately.
-    pub fn get_id<P: AsRef<Path>>(&mut self, path: P) -> FileId {
-        let path = path.as_ref().to_path_buf();
-        if let Some(&id) = self.file_map.get(&path) {
+    pub fn get_id(&mut self, uri: &Url) -> FileId {
+        if let Some(&id) = self.file_map.get(uri) {
             id
         } else {
             let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-            self.file_map.insert(path.clone(), id);
-            self.id_map.insert(id, path);
+            self.file_map.insert(uri.clone(), id);
+            self.id_map.insert(id, uri.clone());
             id
         }
     }
 
-    pub fn get_path(&self, id: FileId) -> Option<&PathBuf> {
+    pub fn get_uri(&self, id: FileId) -> Option<&Url> {
         self.id_map.get(&id)
     }
 
@@ -64,26 +63,29 @@ impl SourceManager {
     /// Logic:
     /// 1. If `explicit_content` is provided (e.g., from LSP didChange), update memory.
     /// 2. If no `explicit_content` but file is already in memory, do nothing (preserve unsaved changes).
-    /// 3. If file not in memory, read from disk.
+    /// 3. If file not in memory, attempt to read from disk using the URI path.
     ///
-    /// Returns true if content is available (from memory or disk).
+    /// Returns true if content is available.
     pub fn load_file(&mut self, id: FileId, explicit_content: Option<String>) -> bool {
-        // Case 1: Explicit update (e.g. user typing)
+        // Case 1: Explicit update
         if let Some(content) = explicit_content {
             self.update_content(id, content);
             return true;
         }
 
-        // Case 2: Already loaded (preserve potential unsaved state)
+        // Case 2: Already loaded
         if self.contents.contains_key(&id) {
             return true;
         }
 
         // Case 3: Load from disk
-        if let Some(path) = self.get_path(id).cloned() {
-            if let Ok(content) = fs::read_to_string(&path) {
-                self.update_content(id, content);
-                return true;
+        if let Some(uri) = self.get_uri(id) {
+            // Only file:// schemes can be read from disk
+            if let Ok(path) = uri.to_file_path() {
+                if let Ok(content) = fs::read_to_string(path) {
+                    self.update_content(id, content);
+                    return true;
+                }
             }
         }
         false
@@ -121,16 +123,13 @@ impl SourceManager {
             return default;
         };
 
-        // Helper to find position
         let find_pos = |offset: usize| -> Position {
-            // Binary search for line
             let line = match indices.binary_search(&offset) {
                 Ok(i) => i,
                 Err(i) => i - 1,
             };
             let line_start = indices[line];
 
-            // Calculate column (UTF-16 code units for LSP compatibility)
             if offset < line_start {
                 return Position::new(line as u32, 0);
             }
@@ -142,8 +141,6 @@ impl SourceManager {
         };
 
         let start = find_pos(span.start);
-
-        // Handle end position
         let end_offset = span.end.min(content.len());
         let end = find_pos(end_offset);
 
