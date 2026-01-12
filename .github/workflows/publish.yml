@@ -19,11 +19,11 @@ jobs:
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
                       suffix: ".exe"
-                    # MacOS Intel
-                    - os: macos-13
+                    # Build Mac Intel on Mac ARM (Cross-compile is native on macOS)
+                    - os: macos-latest
                       target: x86_64-apple-darwin
                       suffix: ""
-                    # MacOS ARM (M1/M2)
+                    # Build Mac ARM on Mac ARM
                     - os: macos-latest
                       target: aarch64-apple-darwin
                       suffix: ""
@@ -37,7 +37,6 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Build Binary
-              # Run from root (workspace context). Cargo will build the 'server' member.
               run: cargo build --release --target ${{ matrix.target }}
 
             - name: Prepare Artifact
@@ -45,20 +44,27 @@ jobs:
               run: |
                   mkdir -p staging
 
-                  # The target directory is at the root, so we remove 'server/' prefix
-                  # Cargo always puts artifacts in target/<triple>/release/ when --target is passed
-                  SRC_PATH="target/${{ matrix.target }}/release/tect${{ matrix.suffix }}"
+                  # Target release directory
+                  REL_DIR="target/${{ matrix.target }}/release"
 
-                  echo "Looking for binary at: $SRC_PATH"
+                  # Find binary case-insensitively (Tect or tect), ensuring we get the file with correct suffix
+                  # We use -iname to match Tect/tect, and verify it exists
+                  BIN_NAME="tect${{ matrix.suffix }}"
 
-                  if [ ! -f "$SRC_PATH" ]; then
-                    echo "::error::Binary not found at $SRC_PATH"
-                    # Fallback debug: list directories to help diagnose if it happens again
-                    ls -R target
+                  # Find the file in the release dir. 
+                  # On Windows, we need the one ending in .exe
+                  BIN_PATH=$(find "$REL_DIR" -maxdepth 1 -iname "$BIN_NAME" -type f | head -n 1)
+
+                  echo "Found binary at: $BIN_PATH"
+
+                  if [ -z "$BIN_PATH" ]; then
+                    echo "::error::Binary not found in $REL_DIR matching $BIN_NAME"
+                    ls -la "$REL_DIR"
                     exit 1
                   fi
 
-                  cp "$SRC_PATH" staging/tect${{ matrix.suffix }}
+                  # Copy to staging with the lowercase name expected by the extension
+                  cp "$BIN_PATH" staging/tect${{ matrix.suffix }}
 
             - name: Upload Artifact
               uses: actions/upload-artifact@v4
@@ -88,6 +94,7 @@ jobs:
             - name: Prepare Extension Assets
               run: |
                   mkdir -p extensions/vscode/bin
+                  # Copy root license if it exists
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
 
             - name: Download All Binaries
@@ -99,7 +106,7 @@ jobs:
 
             - name: Place Binaries
               run: |
-                  # Move binaries to the expected location with platform-specific names
+                  # Move binaries to extensions/vscode/bin with platform-specific names
 
                   # Linux
                   cp downloaded-bins/binary-x86_64-unknown-linux-gnu/tect extensions/vscode/bin/tect-x86_64-unknown-linux-gnu
@@ -116,7 +123,8 @@ jobs:
                   cp downloaded-bins/binary-aarch64-apple-darwin/tect extensions/vscode/bin/tect-aarch64-apple-darwin
                   chmod +x extensions/vscode/bin/tect-aarch64-apple-darwin
 
-                  ls -l extensions/vscode/bin/
+                  # Debug: Show structure
+                  ls -R extensions/vscode/bin/
 
             - name: Publish to Marketplace
               working-directory: ./extensions/vscode
