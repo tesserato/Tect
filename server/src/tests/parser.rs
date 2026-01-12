@@ -1,5 +1,7 @@
 use crate::analyzer::{Rule, TectParser};
-use crate::models::{Cardinality, Constant, Error, Function, Group, Kind, Token, Variable};
+use crate::models::{
+    hash_name, Cardinality, Constant, Error, Function, Group, Kind, Token, Variable,
+};
 use pest::Parser;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -201,7 +203,9 @@ fn parse_token_list(pair: pest::iterators::Pair<Rule>, registry: &SymbolRegistry
             .unwrap_or_else(|| Kind::Variable(Arc::new(Variable::new(name.to_string(), None))));
 
         // Use constructor to ensure UID encapsulation
-        tokens.push(Token::new(kind, cardinality));
+        // For testing, we don't care about precise context hash, just name hash
+        let uid = hash_name(name);
+        tokens.push(Token::new(kind, cardinality, uid));
     }
     tokens
 }

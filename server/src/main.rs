@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser as ClapParser, Subcommand};
 use colored::Colorize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -17,6 +17,7 @@ mod formatter;
 mod lsp;
 mod models;
 mod source_manager;
+// mod vis_js;
 
 #[cfg(test)]
 mod tests;
@@ -311,6 +312,7 @@ async fn handle_serve() -> Result<()> {
         client,
         workspace: Mutex::new(analyzer::Workspace::new()),
         open_documents: Mutex::new(HashSet::new()),
+        graph_cache: Mutex::new(HashMap::new()),
     })
     .custom_method("tect/getGraph", lsp::Backend::get_visual_graph)
     .finish();

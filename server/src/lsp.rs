@@ -9,10 +9,12 @@ use crate::analyzer::Workspace;
 use crate::engine::Flow;
 use crate::export::vis_js::{self, VisData};
 use crate::formatter::format_tect_source;
-use crate::models::{Cardinality, Function, Kind, ProgramStructure, SymbolMetadata, Token};
+use crate::models::{Cardinality, Function, Graph, Kind, ProgramStructure, SymbolMetadata, Token};
 use regex::Regex;
 use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use tower_lsp::jsonrpc::{Error as LspError, Result as LspResult};
 use tower_lsp::lsp_types::notification::Notification;
@@ -30,9 +32,19 @@ impl Notification for AnalysisFinished {
 pub struct Backend {
     pub client: Client,
     pub workspace: Mutex<Workspace>,
-    /// Tracks which files are currently open in the client to perform
-    /// "Sweep Analysis" (updating diagnostics for all visible files).
+    /// Tracks which files are currently open in the client.
     pub open_documents: Mutex<HashSet<Url>>,
+    /// Caches the hash of the last successfully simulated graph per file.
+    /// Used to suppress unnecessary UI updates.
+    pub graph_cache: Mutex<HashMap<Url, u64>>,
+}
+
+impl Backend {
+    fn compute_graph_hash(graph: &Graph) -> u64 {
+        let mut s = DefaultHasher::new();
+        graph.hash(&mut s);
+        s.finish()
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -78,13 +90,9 @@ impl LanguageServer for Backend {
             let mut docs = self.open_documents.lock().unwrap();
             docs.remove(&p.text_document.uri);
         }
-        // Optional: We could clear diagnostics for this file here,
-        // but VS Code usually handles that cleanup automatically on close.
     }
 
     async fn did_change(&self, p: DidChangeTextDocumentParams) {
-        // We use .last() to ensure we pick up the final state of the document
-        // in case multiple change events are batched together (e.g. during paste).
         if let Some(c) = p.content_changes.into_iter().last() {
             self.process_change(p.text_document.uri, Some(c.text)).await;
         }
@@ -94,15 +102,12 @@ impl LanguageServer for Backend {
         let uri = p.text_document_position_params.text_document.uri;
         let pos = p.text_document_position_params.position;
 
-        // Acquire lock
         let mut ws = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws.current_root.as_ref() != Some(&uri) {
             ws.analyze(uri.clone(), None);
         }
 
-        // Ensure we have content for this file to check words
         let file_id = ws.source_manager.get_id(&uri);
         ws.source_manager.load_file(file_id, None);
 
@@ -115,6 +120,7 @@ impl LanguageServer for Backend {
         };
 
         if let Some((word, range)) = Self::get_word_at(&content, pos) {
+            // ... (Keyword check code same as before) ...
             let kw_doc = match word.as_str() {
                 "constant" => Some("Defines an immutable global architectural artifact."),
                 "variable" => Some("Defines a mutable or stateful architectural artifact."),
@@ -196,12 +202,10 @@ impl LanguageServer for Backend {
 
         let mut ws_guard = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws_guard.current_root.as_ref() != Some(&uri) {
             ws_guard.analyze(uri.clone(), None);
         }
 
-        // Split borrow: access structure (read) and source_manager (mut)
         let Workspace {
             ref structure,
             ref mut source_manager,
@@ -217,12 +221,10 @@ impl LanguageServer for Backend {
 
         if let Some((word, _)) = Self::get_word_at(&content, pos) {
             if let Some(meta) = self.find_meta(&word, structure) {
-                // Clone the URI to drop the immutable borrow of source_manager
                 if let Some(target_uri) = source_manager
                     .get_uri(meta.definition_span.file_id)
                     .cloned()
                 {
-                    // Now we can borrow source_manager mutably
                     let range = source_manager.resolve_range(meta.definition_span);
                     return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
                         target_uri, range,
@@ -241,12 +243,10 @@ impl LanguageServer for Backend {
 
         let mut ws_guard = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws_guard.current_root.as_ref() != Some(&uri) {
             ws_guard.analyze(uri.clone(), None);
         }
 
-        // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
@@ -254,7 +254,6 @@ impl LanguageServer for Backend {
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
-        // Ensure loaded for range calculation
         source_manager.load_file(file_id, None);
 
         let mut symbols = Vec::new();
@@ -293,12 +292,10 @@ impl LanguageServer for Backend {
 
         let mut ws_guard = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws_guard.current_root.as_ref() != Some(&uri) {
             ws_guard.analyze(uri.clone(), None);
         }
 
-        // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
@@ -317,7 +314,6 @@ impl LanguageServer for Backend {
                 let mut changes = HashMap::new();
 
                 for span in &meta.occurrences {
-                    // Clone URI to allow mutable borrow later
                     if let Some(target_uri) = source_manager.get_uri(span.file_id).cloned() {
                         let range = source_manager.resolve_range(*span);
                         changes
@@ -342,12 +338,10 @@ impl LanguageServer for Backend {
 
         let mut ws_guard = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws_guard.current_root.as_ref() != Some(&uri) {
             ws_guard.analyze(uri.clone(), None);
         }
 
-        // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
@@ -367,7 +361,6 @@ impl LanguageServer for Backend {
                     .occurrences
                     .iter()
                     .filter_map(|span| {
-                        // Clone URI to allow mutable borrow in resolve_range
                         source_manager.get_uri(span.file_id).cloned().map(|uri| {
                             let range = source_manager.resolve_range(*span);
                             Location::new(uri, range)
@@ -412,7 +405,6 @@ impl LanguageServer for Backend {
 
         let mut ws = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws.current_root.as_ref() != Some(&uri) {
             ws.analyze(uri.clone(), None);
         }
@@ -451,12 +443,10 @@ impl LanguageServer for Backend {
 
         let mut ws_guard = self.workspace.lock().unwrap();
 
-        // Ensure consistency on tab switch
         if ws_guard.current_root.as_ref() != Some(&uri) {
             ws_guard.analyze(uri.clone(), None);
         }
 
-        // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
@@ -464,7 +454,6 @@ impl LanguageServer for Backend {
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
-        // Resolve range relies on content loaded
         source_manager.load_file(file_id, None);
 
         let mut hints = Vec::new();
@@ -500,7 +489,6 @@ impl LanguageServer for Backend {
         let uri = p.text_document.uri;
         let file_id = ws.source_manager.get_id(&uri);
 
-        // We ensure loaded because we might be formatting a file we haven't visited in graph yet
         ws.source_manager.load_file(file_id, None);
 
         if let Some(content) = ws.source_manager.get_content(file_id) {
@@ -518,10 +506,6 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
-    /// Generates the visual graph.
-    ///
-    /// This method enforces a strict Context Switch. It validates the URI
-    /// and triggers a re-analysis rooted at that specific file.
     pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
         let uri_str = params
             .get("uri")
@@ -533,8 +517,6 @@ impl Backend {
 
         let mut ws = self.workspace.lock().unwrap();
 
-        // Always re-analyze rooted at the requested URI.
-        // We pass None for content so the SourceManager uses its in-memory cache.
         ws.analyze(uri, None);
 
         let mut flow = Flow::new(true);
@@ -543,20 +525,10 @@ impl Backend {
         Ok(vis_js::produce_vis_data(&graph))
     }
 
-    /// Triggers a full analysis update.
-    ///
-    /// Updates the VFS with the changed content, then "sweeps" through all
-    /// currently open documents. It re-analyzes each open document to ensure
-    /// that if a dependency changed (e.g. child.tect), the importer (e.g. parent.tect)
-    /// immediately reflects the new errors/state.
     async fn process_change(&self, changed_uri: Url, content: Option<String>) {
         let open_docs: Vec<Url> = {
             let docs = self.open_documents.lock().unwrap();
             let mut list: Vec<Url> = docs.iter().cloned().collect();
-            // Optimization: Ensure the file being edited is analyzed LAST.
-            // This ensures the `Workspace` state left behind corresponds to what
-            // the user is currently looking at, which helps with immediate subsequent
-            // requests like Hover or Completion.
             if let Some(pos) = list.iter().position(|u| u == &changed_uri) {
                 list.remove(pos);
             }
@@ -564,46 +536,49 @@ impl Backend {
             list
         };
 
-        // We accumulate diagnostics for ALL open files before publishing.
         let mut all_file_diagnostics: HashMap<Url, Vec<Diagnostic>> = HashMap::new();
-
-        // 0. Pre-populate map with empty vectors for all open docs.
-        // This ensures that if a file now has 0 errors, we send an empty list
-        // to clear the old red squiggles in the client.
         for uri in &open_docs {
             all_file_diagnostics.insert(uri.clone(), Vec::new());
         }
 
+        let mut graph_to_notify: Option<Url> = None;
+
         {
             let mut ws_guard = self.workspace.lock().unwrap();
 
-            // 1. Update VFS for the changed file explicitly first
-            // (We pass content only for the changed file; for others in the loop, we use VFS/Disk)
             if let Some(c) = content {
                 let id = ws_guard.source_manager.get_id(&changed_uri);
                 ws_guard.source_manager.load_file(id, Some(c));
             }
 
-            // 2. Sweep Analysis: Re-analyze EVERY open document.
             for doc_uri in open_docs {
                 ws_guard.analyze(doc_uri.clone(), None);
 
-                // Run Engine if no fatal syntax errors
-                if !ws_guard
+                let has_errors = ws_guard
                     .structure
                     .diagnostics
                     .iter()
-                    .any(|d| d.severity == DiagnosticSeverity::ERROR)
-                {
+                    .any(|d| d.severity == DiagnosticSeverity::ERROR);
+
+                if !has_errors {
                     let mut flow = Flow::new(true);
-                    let _graph = flow.simulate(&ws_guard.structure);
+                    let graph = flow.simulate(&ws_guard.structure);
                     ws_guard.structure.diagnostics.extend(flow.diagnostics);
+
+                    // --- Differential Graph Check ---
+                    // Only for the actively edited file do we care about notifying the graph
+                    if doc_uri == changed_uri {
+                        let new_hash = Self::compute_graph_hash(&graph);
+                        let mut cache = self.graph_cache.lock().unwrap();
+                        let last_hash = cache.get(&doc_uri).cloned().unwrap_or(0);
+
+                        if new_hash != last_hash {
+                            cache.insert(doc_uri.clone(), new_hash);
+                            graph_to_notify = Some(doc_uri.clone());
+                        }
+                    }
                 }
 
-                // Collect diagnostics for this specific document root
-                // Note: analyze() might produce diagnostics for imported files too.
-
-                // Clone diagnostics to break borrow of ws_guard structure
                 let current_diagnostics = ws_guard.structure.diagnostics.clone();
 
                 for diag_ctx in current_diagnostics {
@@ -628,25 +603,25 @@ impl Backend {
                         };
 
                         let entry = all_file_diagnostics.entry(uri).or_default();
-                        // Deduplication: Avoid sending identical diagnostics
                         if !entry.contains(&lsp_diag) {
                             entry.push(lsp_diag);
                         }
                     }
                 }
             }
-        } // Lock released here
+        }
 
-        // 3. Publish diagnostics for every file we touched (and cleared)
         for (furi, diags) in all_file_diagnostics {
             self.client.publish_diagnostics(furi, diags, None).await;
         }
 
-        self.client
-            .send_notification::<AnalysisFinished>(
-                serde_json::json!({ "uri": changed_uri.to_string() }),
-            )
-            .await;
+        if let Some(uri) = graph_to_notify {
+            self.client
+                .send_notification::<AnalysisFinished>(
+                    serde_json::json!({ "uri": uri.to_string() }),
+                )
+                .await;
+        }
     }
 
     fn find_meta<'a>(

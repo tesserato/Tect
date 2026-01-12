@@ -4,16 +4,25 @@
 //! and the diagnostic structures used across the compiler pipeline.
 
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
 
-// --- ID Registry ---
-static GLOBAL_UID_COUNTER: AtomicU32 = AtomicU32::new(1);
+// --- Hashing Helper ---
 
-fn next_uid() -> u32 {
-    GLOBAL_UID_COUNTER.fetch_add(1, Ordering::SeqCst)
+pub fn hash_name(name: &str) -> u32 {
+    let mut s = DefaultHasher::new();
+    name.hash(&mut s);
+    (s.finish() & 0xFFFFFFFF) as u32
+}
+
+pub fn hash_context(base: &str, ctx: &str) -> u32 {
+    let mut s = DefaultHasher::new();
+    base.hash(&mut s);
+    ctx.hash(&mut s);
+    (s.finish() & 0xFFFFFFFF) as u32
 }
 
 // --- Source Management Types ---
@@ -58,15 +67,10 @@ pub enum Cardinality {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EdgeRelation {
-    /// Standard flow of data from producer to consumer.
     DataFlow,
-    /// Flow reaching a successful termination point.
     TerminalFlow,
-    /// Flow reaching an error/exception state.
     ErrorFlow,
-    /// (Reserved) Explicit control flow transfer.
     ControlFlow,
-    /// (Reserved) Function invocation.
     Call,
 }
 
@@ -82,7 +86,7 @@ pub struct Group {
 impl Group {
     pub fn new(name: String, documentation: Option<String>) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
         }
@@ -99,7 +103,7 @@ pub struct Constant {
 impl Constant {
     pub fn new(name: String, documentation: Option<String>) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
         }
@@ -116,7 +120,7 @@ pub struct Variable {
 impl Variable {
     pub fn new(name: String, documentation: Option<String>) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
         }
@@ -133,7 +137,7 @@ pub struct Error {
 impl Error {
     pub fn new(name: String, documentation: Option<String>) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
         }
@@ -183,16 +187,17 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(kind: Kind, cardinality: Cardinality) -> Self {
+    /// Creates a token with a deterministic UID based on context.
+    pub fn new(kind: Kind, cardinality: Cardinality, uid: u32) -> Self {
         Self {
-            uid: next_uid(),
+            uid,
             kind,
             cardinality,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Function {
     pub uid: u32,
     pub name: String,
@@ -211,7 +216,7 @@ impl Function {
         group: Option<Arc<Group>>,
     ) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
             consumes,
@@ -226,7 +231,7 @@ impl Function {
         group: Option<Arc<Group>>,
     ) -> Self {
         Self {
-            uid: next_uid(),
+            uid: hash_name(&name),
             name,
             documentation,
             consumes: Vec::new(),
@@ -257,19 +262,34 @@ pub struct FlowStep {
 
 // --- Flow Entities ---
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Node {
     pub uid: u32,
-    pub function: Arc<Function>,
+    pub function: Arc<Function>, // Arc<Function> doesn't derive Hash by default on the pointer, but we need content hash.
+    // However, for graph diffing, we can rely on UID.
+    // Note: We implement Hash manually or rely on `uid` for identity.
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
 }
 
+// We rely on UID for identity equality in Sets/Maps usually,
+// but for 'Differential Updates', we need to hash content.
+// Since Function UIDs are deterministic hashes of names, we can rely on Node UID.
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.uid == other.uid
+            && self.is_artificial_graph_start == other.is_artificial_graph_start
+            && self.is_artificial_graph_end == other.is_artificial_graph_end
+            && self.is_artificial_error_termination == other.is_artificial_error_termination
+    }
+}
+impl Eq for Node {}
+
 impl Node {
     pub fn new(function: Arc<Function>) -> Self {
         Self {
-            uid: next_uid(),
+            uid: function.uid,
             function,
             is_artificial_graph_start: false,
             is_artificial_graph_end: false,
@@ -278,6 +298,7 @@ impl Node {
     }
 
     pub fn new_artificial(name: String, is_start: bool, is_end: bool, is_error: bool) -> Self {
+        let uid = hash_name(&name);
         let func = Arc::new(Function::new(
             name,
             Some("Engine-generated boundary node".to_string()),
@@ -286,7 +307,7 @@ impl Node {
             None,
         ));
         Self {
-            uid: next_uid(),
+            uid,
             function: func,
             is_artificial_graph_start: is_start,
             is_artificial_graph_end: is_end,
@@ -297,7 +318,7 @@ impl Node {
 
 // --- Graph Entities ---
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Edge {
     pub from_node_uid: u32,
     pub to_node_uid: u32,
@@ -305,7 +326,7 @@ pub struct Edge {
     pub relation: EdgeRelation,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,

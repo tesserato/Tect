@@ -7,7 +7,6 @@
 use crate::models::{FileId, Span};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use tower_lsp::lsp_types::{Position, Range, Url};
 

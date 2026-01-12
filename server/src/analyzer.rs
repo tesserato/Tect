@@ -487,12 +487,16 @@ impl Workspace {
             }
         }
         let _kw = inner.next();
-        let name = inner.next().unwrap().as_str();
+        let name_p = inner.next().unwrap();
+        let name = name_p.as_str();
+
+        // Stable context seed: Function name
+        let func_ctx = name;
 
         let mut consumes = Vec::new();
         if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::token_list {
-                consumes = self.resolve_tokens(inner.next().unwrap(), file_id);
+                consumes = self.resolve_tokens(inner.next().unwrap(), file_id, func_ctx, "in");
             }
         }
 
@@ -500,9 +504,14 @@ impl Workspace {
         // Check if optional output block exists
         if let Some(outputs_pair) = inner.next() {
             if outputs_pair.as_rule() == Rule::func_outputs {
-                for line in outputs_pair.into_inner() {
+                for (i, line) in outputs_pair.into_inner().enumerate() {
                     let list = line.into_inner().next().unwrap();
-                    produces.push(self.resolve_tokens(list, file_id));
+                    produces.push(self.resolve_tokens(
+                        list,
+                        file_id,
+                        func_ctx,
+                        &format!("out_{}", i),
+                    ));
                 }
             }
         }
@@ -514,9 +523,15 @@ impl Workspace {
         }
     }
 
-    fn resolve_tokens(&mut self, pair: Pair<Rule>, file_id: FileId) -> Vec<Token> {
+    fn resolve_tokens(
+        &mut self,
+        pair: Pair<Rule>,
+        file_id: FileId,
+        ctx_func: &str,
+        ctx_dir: &str,
+    ) -> Vec<Token> {
         let mut tokens = Vec::new();
-        for t_pair in pair.into_inner() {
+        for (i, t_pair) in pair.into_inner().enumerate() {
             let inner = t_pair.into_inner().next().unwrap();
             let (name, card, span) = match inner.as_rule() {
                 Rule::collection => {
@@ -534,11 +549,16 @@ impl Workspace {
                 ),
             };
 
-            // STRICT MODE: All types must be defined explicitly.
             if let Some(kind) = self.structure.artifacts.get(name) {
                 let k = kind.clone();
                 self.add_occurrence(k.uid(), span);
-                tokens.push(Token::new(k, card));
+
+                // Deterministic UID for this token usage
+                // hash(FunctionName + Direction + Index + TypeName)
+                let token_sig = format!("{}:{}:{}:{}", ctx_func, ctx_dir, i, name);
+                let uid = hash_name(&token_sig);
+
+                tokens.push(Token::new(k, card, uid));
             } else {
                 self.report_error(
                     file_id,

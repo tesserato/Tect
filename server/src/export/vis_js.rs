@@ -12,6 +12,8 @@ pub struct VisData {
     pub nodes: Vec<VisNode>,
     pub edges: Vec<VisEdge>,
     pub groups: Vec<String>,
+    /// Maps Group Name -> Hex Color. ensures JS and Rust agree on colors.
+    pub group_colors: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -54,6 +56,7 @@ pub struct VisNode {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VisEdge {
+    pub id: String, // Explicit deterministic ID for updates
     pub from: u32,
     pub to: u32,
     pub label: String,
@@ -68,11 +71,17 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
     let mut vis_nodes = Vec::new();
     let mut vis_edges = Vec::new();
     let mut groups = HashSet::new();
+    let mut group_colors = HashMap::new();
 
     for n in &graph.nodes {
         let group_name = n.function.group.as_ref().map(|g| g.name.clone());
         if let Some(ref g) = group_name {
             groups.insert(g.clone());
+            // Pre-calculate the authoritative color for this group
+            if !group_colors.contains_key(g) {
+                let (hex, _) = Theme::get_group_color(g);
+                group_colors.insert(g.clone(), hex);
+            }
         }
 
         let style = Theme::get_node_style(n);
@@ -118,7 +127,11 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
 
         let (color, _) = Theme::get_token_color(&e.token.kind);
 
+        // Deterministic Edge ID: "FromUID-ToUID-TokenUID"
+        let edge_id = format!("{}-{}-{}", e.from_node_uid, e.to_node_uid, e.token.uid);
+
         vis_edges.push(VisEdge {
+            id: edge_id,
             from: e.from_node_uid,
             to: e.to_node_uid,
             label: if is_many {
@@ -143,6 +156,7 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
         nodes: vis_nodes,
         edges: vis_edges,
         groups: groups.into_iter().collect(),
+        group_colors,
     }
 }
 
@@ -151,14 +165,8 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
     let nodes_json = serde_json::to_string(&data.nodes).unwrap();
     let edges_json = serde_json::to_string(&data.edges).unwrap();
     let groups_json = serde_json::to_string(&data.groups).unwrap();
-
-    // Generate Dynamic Color Map for Clusters
-    let mut color_map = HashMap::new();
-    for group in &data.groups {
-        let (hex, _) = Theme::get_group_color(group);
-        color_map.insert(group, hex);
-    }
-    let color_map_json = serde_json::to_string(&color_map).unwrap();
+    // Use the computed map from produce_vis_data, which is already authoritative
+    let color_map_json = serde_json::to_string(&data.group_colors).unwrap();
 
     format!(
         r#"<!DOCTYPE html>
