@@ -5,6 +5,10 @@ use crate::models::{EdgeRelation, Graph};
 use std::collections::HashMap;
 use std::fmt::Write;
 
+/// Generates a Graphviz DOT representation of the graph.
+///
+/// This produces a standard `.dot` string with clusters for groups, styled nodes for functions,
+/// and edges for data/control flow.
 pub fn export(graph: &Graph) -> String {
     let mut out = String::new();
 
@@ -92,12 +96,14 @@ pub fn export(graph: &Graph) -> String {
     out
 }
 
+/// Sanitize string for use as a DOT identifier.
 fn sanitize_id(s: &str) -> String {
     s.chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect()
 }
 
+/// Escapes HTML special characters for HTML-like labels in DOT.
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")

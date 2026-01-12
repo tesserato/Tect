@@ -31,12 +31,14 @@ impl Notification for AnalysisFinished {
 
 /// The Backend holds the workspace state protected by a Mutex.
 pub struct Backend {
+    /// The LSP client handle for sending notifications and requests.
     pub client: Client,
+    /// The shared workspace state, protected by a mutex for thread safety.
     pub workspace: Mutex<Workspace>,
-    /// Tracks which files are currently open in the client.
+    /// Tracks which files are currently open in the editor (managed by didOpen/didClose).
     pub open_documents: Mutex<HashSet<Url>>,
     /// Caches the hash of the last successfully simulated graph per file.
-    /// Used to suppress unnecessary UI updates.
+    /// Used to suppress unnecessary UI updates unless the graph structure actually changes.
     pub graph_cache: Mutex<HashMap<Url, u64>>,
 }
 
@@ -53,23 +55,33 @@ impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
+                // We support full text sync to ensure the server always has the complete file content.
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                // Tooltips
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                // Go to definition
                 definition_provider: Some(OneOf::Left(true)),
+                // Formatting
                 document_formatting_provider: Some(OneOf::Left(true)),
+                // Outline/Structure
                 document_symbol_provider: Some(OneOf::Left(true)),
+                // Rename symbol
                 rename_provider: Some(OneOf::Left(true)),
+                // Find references
                 references_provider: Some(OneOf::Left(true)),
+                // Autocomplete
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![" ".to_string()]),
                     ..Default::default()
                 }),
+                // Signature help
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec![" ".to_string()]),
                     ..Default::default()
                 }),
+                // Inlay hints (type annotations)
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
@@ -145,6 +157,7 @@ impl LanguageServer for Backend {
                 }));
             }
 
+            // Lookup symbol documentation
             let markdown = if let Some(kind) = ws.structure.artifacts.get(&word) {
                 format!(
                     "### {}: `{}`\n\n---\n\n{}",
@@ -612,6 +625,7 @@ impl Backend {
 
                     // --- Differential Graph Check ---
                     // Only for the actively edited file do we care about notifying the graph
+                    // This mechanism prevents re-rendering the UI graph if logic hasn't changed.
                     if doc_uri == changed_uri {
                         let new_hash = Self::compute_graph_hash(&graph);
                         let mut cache = self.graph_cache.lock().unwrap();
@@ -742,6 +756,7 @@ impl Backend {
                 );
 
                 // Resolve relative to base_uri
+                // The LSP client will handle the "goto" effectively if we provide a valid link
                 if let Ok(target) = base_uri.join(rel_path) {
                     return Some((target, range));
                 }

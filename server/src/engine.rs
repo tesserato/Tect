@@ -11,17 +11,31 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tower_lsp::lsp_types::DiagnosticSeverity;
 
+/// Result of a consumption attempt by a node.
 pub enum Consumed {
+    /// All required tokens were found and consumed. Returns the edges created.
     AllTokens(Vec<Edge>),
+    /// Some tokens were missing. Returns the list of missing tokens.
     SomeTokens(Vec<Token>),
 }
 
+/// Represents tokens that were not consumed during the simulation step.
 pub struct Leftovers {
+    /// Unused variable tokens.
     pub variables: Vec<Token>,
+    /// Unhandled error tokens.
     pub errors: Vec<Token>,
+    /// Unused constant tokens.
     pub constants: Vec<Token>,
 }
 
+/// Evaluates the availability of tokens for a specific execution path.
+///
+/// A `TokenPool` represents the state of available data at a specific point in the
+/// execution flow (similar to a scope or frame). It tracks:
+/// - Available variables, errors, and constants.
+/// - The origin node of each token (for backtracking edges).
+/// - Which nodes have been expanded (visited).
 #[derive(Clone)]
 pub struct TokenPool {
     pub variables: Vec<Token>,
@@ -60,6 +74,11 @@ impl TokenPool {
         }
     }
 
+    /// Adds new tokens produced by a node to the pool.
+    ///
+    /// If the producer node was already expanded (visited), the tokens are marked
+    /// with `Cardinality::Collection` to represent that they might be produced multiple times
+    /// (e.g., in a loop).
     pub fn produce(&mut self, tokens: Vec<Token>, producer: Arc<Node>) {
         let is_expanded = self.expanded_nodes.contains(&producer.uid);
         for mut token in tokens {
@@ -76,6 +95,16 @@ impl TokenPool {
         }
     }
 
+    /// attempts to fulfill the input requirements of a destination node from the pool.
+    ///
+    /// # Logic
+    /// - Matches requirements against available tokens by Kind UID.
+    /// - Checks for infinite loops/recursion (Unitary requirement satisfying Collection token).
+    /// - Creates data flow edges for consumed tokens.
+    ///
+    /// # Returns
+    /// - `Consumed::AllTokens` with edges if successful.
+    /// - `Consumed::SomeTokens` with missing requirements if failed.
     pub fn try_to_consume(&mut self, requirements: Vec<Token>, destination: Arc<Node>) -> Consumed {
         let mut edges = Vec::new();
         let mut consumed_in_step: Vec<Token> = Vec::new();
@@ -139,6 +168,7 @@ impl TokenPool {
         }
     }
 
+    /// Returns a snapshot of unused tokens.
     pub fn get_leftover_tokens(&self) -> Leftovers {
         Leftovers {
             variables: self.variables.clone(),
@@ -153,11 +183,17 @@ impl TokenPool {
     }
 }
 
+/// Manages the full architectural flow simulation.
 pub struct Flow {
+    /// Ordered list of nodes derived from the simulation.
     pub nodes: Vec<Arc<Node>>,
+    /// List of all data flow and control edges.
     pub edges: Vec<Edge>,
+    /// Active token pools (representing parallel branches of execution).
     pub pools: Vec<TokenPool>,
+    /// Whether to remove duplicate edges in the final graph.
     pub deduplicate_edges: bool,
+    /// Diagnostics collected during simulation (e.g., flow errors).
     pub diagnostics: Vec<DiagnosticWithContext>,
 }
 

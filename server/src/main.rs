@@ -21,7 +21,8 @@ mod source_manager;
 #[cfg(test)]
 mod tests;
 
-/// Architectural specification language & visualizer.
+
+/// Command-line interface definition for Tect.
 #[derive(ClapParser)]
 #[command(
     name = "tect",
@@ -152,15 +153,15 @@ fn handle_build(input: PathBuf, output: PathBuf) -> Result<()> {
     let root_uri =
         Url::from_file_path(abs_path).map_err(|_| anyhow::anyhow!("Invalid file path"))?;
 
-    // 1. Analyze
+    // 1. Analyze: Parse and resolve the project structure
     let mut workspace = analyzer::Workspace::new();
     workspace.analyze(root_uri, Some(content));
 
-    // 2. Simulate
+    // 2. Simulate: Run the flow engine to determine graph edges
     let mut flow = engine::Flow::new(true);
     let graph = flow.simulate(&workspace.structure);
 
-    // 3. Export based on extension
+    // 3. Export: Generate output based on file extension
     let extension = output
         .extension()
         .and_then(|s| s.to_str())
@@ -226,7 +227,7 @@ fn handle_check(input: PathBuf) -> Result<()> {
     let mut workspace = analyzer::Workspace::new();
     workspace.analyze(root_uri, Some(content));
 
-    // Run engine only if no fatal parsing errors
+    // Run engine only if no fatal parsing errors to avoid cascading noise
     let has_fatal = workspace
         .structure
         .diagnostics

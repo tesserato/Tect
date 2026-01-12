@@ -17,13 +17,19 @@ use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag, Url};
 #[grammar = "tect.pest"]
 pub struct TectParser;
 
-/// The orchestrator for analysis.
-/// Holds the Virtual File System (SourceManager) and the resulting IR (ProgramStructure).
+/// The orchestrator for the analysis pipeline.
+///
+/// `Workspace` manages the state of the compiler service, including:
+/// - The virtual file system (`SourceManager`).
+/// - The global program structure (symbol table, flow graph, etc.).
+/// - Context tracking for the current analysis session.
 pub struct Workspace {
+    /// Manages file contents and ID mapping.
     pub source_manager: SourceManager,
+    /// The resulting Intermediate Representation (IR) after analysis.
     pub structure: ProgramStructure,
-    /// Tracks the URI used as the entry point for the current `structure`.
-    /// Used to detect context switches (e.g. tab changes).
+    /// Tracks the URI used as the entry point for the current analysis session.
+    /// This is used to detect context switches (e.g., when the user switches tabs).
     pub current_root: Option<Url>,
 }
 
@@ -34,6 +40,7 @@ impl Default for Workspace {
 }
 
 impl Workspace {
+    /// Creates a new, empty workspace.
     pub fn new() -> Self {
         Self {
             source_manager: SourceManager::new(),
@@ -42,8 +49,17 @@ impl Workspace {
         }
     }
 
-    /// Entry point: Analyze a project starting from a root URI.
-    /// If content is provided, it uses that (useful for unsaved editor buffers).
+    /// Entry point: Analyzes the project starting from a root URI.
+    ///
+    /// This method performs a full semantic analysis of the project. It follows these steps:
+    /// 1. **Dependency Discovery**: Recursively scans imports starting from the root file to build the dependency graph.
+    /// 2. **Cycle Detection**: Checks for circular dependencies in the graph.
+    /// 3. **Multi-Pass Parsing**:
+    ///     - **Pass 1 (Definitions)**: Parses all files to populate the symbol table (constants, variables, functions).
+    ///     - **Pass 2 (Resolution)**: Parses files again to link function contracts and flow steps to defined symbols.
+    /// 4. **Validation**: Checks for unused symbols and other global consistency rules.
+    ///
+    /// The `root_content` argument provides the current in-memory content of the root file (e.g., unsaved changes).
     pub fn analyze(&mut self, root_uri: Url, root_content: Option<String>) {
         self.current_root = Some(root_uri.clone());
         self.structure = ProgramStructure::default();
@@ -132,7 +148,10 @@ impl Workspace {
     }
 
     /// Scans a file for import statements to build the dependency graph.
-    /// Resolves imports relative to the current file's URI and validates existence.
+    ///
+    /// This does a shallow parse of the file to find `import` statements.
+    /// It resolves relative paths (e.g., `./utils.tect`) against the file's URI
+    /// and ensures the target file exists either in memory or on disk.
     fn scan_imports(&mut self, content: &str, file_id: FileId) -> Vec<(Url, Span)> {
         let mut results = Vec::new();
         if let Ok(mut pairs) = TectParser::parse(Rule::program, content) {
@@ -184,7 +203,9 @@ impl Workspace {
         results
     }
 
-    /// Detects cycles in the dependency graph using DFS.
+    /// Detects cycles in the dependency graph using Depth-First Search (DFS).
+    ///
+    /// Returns `Some(String)` containing the cycle path if one is detected, or `None` otherwise.
     fn detect_cycle(&self, root: FileId, graph: &HashMap<FileId, Vec<FileId>>) -> Option<String> {
         let mut visited = HashSet::new();
         let mut recursion_stack = HashSet::new();
@@ -238,6 +259,15 @@ impl Workspace {
     }
 
     // --- Pass 1: Definitions ---
+
+    /// Pass 1 traverses the file to register all top-level definitions.
+    ///
+    /// This includes:
+    /// - Constants, Variables, Errors (Artifacts)
+    /// - Groups
+    /// - Function skeletons (name, group, docs), but NOT their contracts.
+    ///
+    /// This ensures that symbols are available for resolution in Pass 2, regardless of definition order.
     fn pass_definitions(&mut self, file_id: FileId) {
         let content: &str = match self.source_manager.get_content(file_id) {
             Some(c) => c,
@@ -280,6 +310,13 @@ impl Workspace {
     }
 
     // --- Pass 2: Resolution ---
+
+    /// Pass 2 resolves symbol references and constructs the full logical model.
+    ///
+    /// This includes:
+    /// - Parsing function signatures (inputs/outputs) and linking them to defined artifacts.
+    /// - Building the flow sequence and linking flow steps to functions.
+    /// - Validating that all referenced symbols exist.
     fn pass_resolution(&mut self, file_id: FileId) {
         let content: &str = match self.source_manager.get_content(file_id) {
             Some(c) => c,
@@ -523,6 +560,14 @@ impl Workspace {
         }
     }
 
+
+
+    /// Resolves a list of tokens string representations into concrete `Token` instances.
+    ///
+    /// This function:
+    /// 1. LOOKS UP the artifact definition in the symbol table.
+    /// 2. Creates a unique, deterministic UID for this specific usage of the token (context-dependent).
+    /// 3. Validates that the artifact is defined.
     fn resolve_tokens(
         &mut self,
         pair: Pair<Rule>,

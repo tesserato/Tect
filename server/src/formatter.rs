@@ -6,12 +6,27 @@
 use crate::analyzer::{Rule, TectParser};
 use pest::Parser;
 
+/// Represents a formatted block of code.
+///
+/// A block corresponds to a logical unit in the source (e.g., a function definition,
+/// a comment, or an import statement) that has been individually formatted.
 struct Block {
+    /// The formatted text content of the block.
     content: String,
+    /// The start byte position in the original source.
     start_pos: usize,
+    /// The end byte position in the original source.
     end_pos: usize,
 }
 
+/// Formats the given Tect source code string.
+///
+/// This function parses the input code, standardizes the formatting of individual components
+/// (like functions and token lists), and reconstructs the file. It attempts to preserve
+/// vertical spacing (blank lines) from the original source where appropriate.
+///
+/// # Returns
+/// `Some(String)` containing the formatted code if parsing succeeds, or `None` if parsing fails.
 pub fn format_tect_source(content: &str) -> Option<String> {
     let mut blocks = Vec::new();
 
@@ -71,6 +86,9 @@ pub fn format_tect_source(content: &str) -> Option<String> {
     Some(result)
 }
 
+/// Formats a list of tokens (e.g., in a function signature) into a standard string representation.
+///
+/// Example: converts `[A, B, C]` or `A, B` into a comma-separated string `A, B, C`.
 fn format_token_list(pair: pest::iterators::Pair<Rule>) -> String {
     pair.into_inner()
         .map(|t| {
@@ -88,6 +106,12 @@ fn format_token_list(pair: pest::iterators::Pair<Rule>) -> String {
         .join(", ")
 }
 
+/// Formats a function definition node.
+///
+/// This rebuilds the function definition from its parts:
+/// 1. Documentation comments.
+/// 2. Header (Group, Function Keyword, Name, Input tokens).
+/// 3. Output sections (indented).
 fn format_function(pair: pest::iterators::Pair<Rule>) -> String {
     let mut inner = pair.clone().into_inner();
     let mut parts = Vec::new();
