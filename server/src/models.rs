@@ -245,8 +245,6 @@ pub struct ProgramStructure {
     pub catalog: HashMap<String, Arc<Function>>,
     pub flow: Vec<FlowStep>,
     pub symbol_table: HashMap<u32, SymbolMetadata>,
-    /// Tracks UIDs of artifacts that were implicitly created (not explicitly defined)
-    pub implicit_artifacts: HashSet<u32>,
     #[serde(skip)]
     pub diagnostics: Vec<DiagnosticWithContext>,
 }

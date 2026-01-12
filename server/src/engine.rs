@@ -250,7 +250,7 @@ impl Flow {
             if !step_executed_at_least_once && !func.consumes.is_empty() {
                 let missing_list: Vec<String> = missing_tokens_examples.into_iter().collect();
                 let msg = format!(
-                    "Flow starvation: Function '{}' could not execute. Missing inputs: [{}]",
+                    "Flow Error: Function '{}' could not execute. Missing inputs: [{}]",
                     func.name,
                     missing_list.join(", ")
                 );
@@ -259,7 +259,7 @@ impl Flow {
                     file_id: step.span.file_id,
                     span: Some(step.span),
                     message: msg,
-                    severity: DiagnosticSeverity::WARNING,
+                    severity: DiagnosticSeverity::ERROR, // STRICT MODE: Starvation is fatal
                     tags: vec![],
                 });
             }
@@ -294,9 +294,25 @@ impl Flow {
                     self.edges.push(Edge {
                         from_node_uid: origin.uid,
                         to_node_uid: fatal_node.uid,
-                        token: err,
+                        token: err.clone(),
                         relation: EdgeRelation::ErrorFlow,
                     });
+
+                    // STRICT MODE: Unhandled errors are warnings.
+                    // Locate the function definition that produced this error to attach the warning.
+                    if let Some(meta) = structure.symbol_table.get(&origin.function.uid) {
+                        self.diagnostics.push(DiagnosticWithContext {
+                            file_id: meta.definition_span.file_id,
+                            span: Some(meta.definition_span),
+                            message: format!(
+                                "Unhandled Error: '{}' is produced by '{}' but never consumed (rescued).",
+                                err.kind.name(),
+                                origin.function.name
+                            ),
+                            severity: DiagnosticSeverity::WARNING,
+                            tags: vec![],
+                        });
+                    }
                 }
             }
         }
