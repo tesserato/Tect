@@ -9,17 +9,18 @@ use std::hash::{Hash, Hasher};
 
 /// Hex colors for the group palette.
 /// High contrast, distinct colors chosen for visibility against dark backgrounds.
+/// Excludes Status Colors: Red (Error), Emerald (Start/End).
 pub const GROUP_PALETTE: &[&str] = &[
     "#2563eb", // Blue 600
-    "#dc2626", // Red 600
-    "#059669", // Emerald 600
     "#d97706", // Amber 600
     "#7c3aed", // Violet 600
     "#db2777", // Pink 600
     "#0891b2", // Cyan 600
     "#ea580c", // Orange 600
     "#4f46e5", // Indigo 600
-    "#be123c", // Rose 700
+    "#c026d3", // Fuchsia 600
+    "#0284c7", // Sky 600
+    "#ca8a04", // Yellow 600
 ];
 
 pub struct Style {

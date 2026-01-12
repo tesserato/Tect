@@ -192,14 +192,14 @@ class TectPreviewPanel {
         if (!client) return;
         try {
             const visData = await client.sendRequest("tect/getGraph", { uri: this._uri.toString() });
-            
+
             const config = vscode.workspace.getConfiguration("tect");
             const visConfig = config.get("visConfig") || {};
 
-            this._panel.webview.postMessage({ 
-                command: 'update', 
+            this._panel.webview.postMessage({
+                command: 'update',
                 data: visData,
-                config: visConfig 
+                config: visConfig
             });
         } catch (e) {
             console.error("Failed to fetch graph data", e);
@@ -231,22 +231,23 @@ class TectPreviewPanel {
 
     private async exportContent(format: string) {
         if (!client) return;
-        
+
         let fileExt = "";
         let filterName = "";
-        
+
         switch (format) {
             case 'dot': fileExt = 'dot'; filterName = 'Graphviz DOT'; break;
             case 'mermaid': fileExt = 'mmd'; filterName = 'Mermaid Diagram'; break;
             case 'tex': fileExt = 'tex'; filterName = 'LaTeX TikZ'; break;
             case 'json': fileExt = 'json'; filterName = 'JSON Data'; break;
+            case 'html': fileExt = 'html'; filterName = 'HTML File'; break;
             default: return;
         }
 
         try {
-            const content = await client.sendRequest<string>("tect/exportGraph", { 
+            const content = await client.sendRequest<string>("tect/exportGraph", {
                 uri: this._uri.toString(),
-                format: format 
+                format: format
             });
 
             const uri = await vscode.window.showSaveDialog({
@@ -345,6 +346,7 @@ class TectPreviewPanel {
                     <div class="context-item" onclick="requestExport('dot')">Export as DOT</div>
                     <div class="context-item" onclick="requestExport('tex')">Export as LaTeX</div>
                     <div class="context-item" onclick="requestExport('json')">Export as JSON</div>
+                    <div class="context-item" onclick="requestExport('html')">Export as HTML</div>
                 </div>
 
                 <script>
