@@ -1,285 +1,69 @@
-# tect
-A meta-programming language for reasoning about code architecture.
+# Tect - Architectural Specification Language & Tooling
 
+Tect is a lightweight (less than 10 keywords), type-safe language for defining software architectures as code. It compiles architectural definitions into logical graphs, simulates data flow to detect starvation or cycles, and generates high-quality diagrams for documentation and analysis.
 
+## Features
 
-# kinds
+- **Architecture as Code**: Define constants, variables, errors, and groups using a clean, declarative syntax.
+- **Flow Simulation**: The engine simulates token consumption and production to verify that every function has the required inputs and every error is handled.
+- **Live Visualization**: Interactive force-directed graphs to explore complex systems.
+- **Universal Export**: Generate artifacts for any use case:
+  - **HTML**: Interactive web graph with physics controls.
+  - **Mermaid/DOT**: For embedding in Markdown/Wikis.
+  - **LaTeX (TikZ)**: For academic papers and publication-quality PDFs.
+  - **JSON**: For programmatic analysis.
 
-data
-error recuperable errors : warning if not dealt with
-group
-function
-flow?
-ok? 
-panic? Irrecuperable error, aborts program
+## Quick Start
 
-# keywords
-loop?
-match?
+### 1. Installation
 
-# types
+#### VS Code Extension
+For the best experience, install the **Tect** [extension for VS Code](https://marketplace.visualstudio.com/items?itemName=tesserato.tect). It provides:
+- Syntax highlighting and snippets.
+- Live architecture preview.
+- Go-to-definition (supports files and symbols).
+- Real-time error reporting.
+  
 
-data Table
-data pathString
-data BooleanShouldSave
-
-error FileNotFound
-error 
-# functions
-
-receive errors and or data and can output multiple combinations of errors and data
-
-function loadTable(pathString) > Table | FileNotFound
-function saveTable(Table, pathString) > ok | panic
-
-
-The program maintains a pool of types (multiset).
-
-Each function:
-
-consumes some types from the pool (its inputs)
-
-adds some types to the pool (its outcomes)
-
-Execution proceeds step by step.
-
-At the end of the flow:
-
-the pool must be empty
-
-except for errors
-
-Any unconsumed error is fatal.
-
-
-
-# Example login
-what about this:
-
-data Credentials
-data Session
-data UserProfile
-
-error InvalidPassword
-error DatabaseOffline
-error UserNotFound
-
-function Authenticate(Credentials)
-  > Session
-  | InvalidPassword
-  | DatabaseOffline
-
-function FetchProfile(Session)
-  > UserProfile
-  | UserNotFound
-  | DatabaseOffline
-
-
-Authenticate # Credentials > Session | InvalidPassword | DatabaseOffline
-FetchProfile {
-    InvalidPassword { stop }
-    UserNotFound     { stop }
-    DatabaseOffline  { retry }
-}
-
-# Example DSBG
-
-mut data InitialCommand 
-mut data PathToConfig 
-data SourceFile 
-mut data Article 
-mut data Html 
-data Settings 
-data Templates 
-data Success
-
-error FSError
-error InitialCommandMalformedError
-error FileNotFoundError
-error ConfigurationMalformedError
-error FileSystemError
-error MetadataError
-error TemplateError
-
-function ScanFS(Settings)
-    > [SourceFile]
-    | [FSError]
-
-
-function ProcessInitialCommand(InitialCommand)
-    > Configuration
-    | PathToConfiguration
-    | InitialCommandMalformedError
-
-function ReadConfiguration(PathToConfiguration)
-    > Configuration
-    | FileNotFoundError
-    | ConfigurationMalformedError
-
-function PrepareOutput(Settings)
-    > Settings
-    | FileSystemError
-
-function DeployStaticAssets(Settings)
-    > Settings
-    | FileSystemError
-
-function ExtractMetadata(SourceFile)
-    > Article
-    | MetadataError
-
-function ResolveResources(Article)
-    > Article
-    | FileSystemError
-
-function RenderPage(Article)
-    > String
-    | TemplateError
-
-function FinalizeSite(Settings)
-    > String
-    | TemplateError
-
-
-ProcessInitialCommand
-ReadConfiguration
-
-
-PrepareOutput
-DeployStaticAssets
-
-
-ExtractMetadata
-ResolveResources
-RenderPage
-
-
-FinalizeSite
-
-# Tect Language Specification (v0.0.0)
-
-Tect is a domain-specific language for modeling architectural data flows. It focuses on how information is consumed, transformed, and propagated through a system, treating architecture as a **Directed Acyclic Graph of Token Pools**.
-
-## 1. Naming & Lexical Rules
-*   **Types (Definitions)**: Must start with an **Uppercase** letter (`Settings`, `FileSystemError`).
-*   **Logic (Functions/Groups)**: Must start with an **Uppercase** letter in definitions to match the grammar, though the underlying engine treats them as logical identifiers.
-*   **Comments**: Lines starting with `#` are comments.
-*   **Doc-Comments**: Comments immediately preceding a definition or statement are captured as metadata for visualization tooltips.
-
-## 2. Type Definitions
-Definitions establish the "artifacts" that exist within the system's scope.
-
-### 2.1 Artifact Mutability
-*   **`constant`**: Immutable data. Once a constant is in the pool, it can be read by any number of functions. It is never "consumed" or removed.
-*   **`variable`**: Mutable data. When a function takes a `variable` as input, that token is **moved** out of the pool. If the data needs to persist, the function must explicitly output it again.
-*   **`error`**: Architectural failure states. These behave like **variables**; they must be consumed by a function (error handler) or they will result in a fatal state.
-
-```tect
-constant Settings          # Persists globally
-variable InitialCommand    # Consumed upon use
-error FileSystemError      # Must be handled or becomes Fatal
+#### Alternatively, install CLI only via [crates.io](https://crates.io/crates/Tect)
+```bash
+cargo install Tect
 ```
 
-### 2.2 Groups
-Groups define logical boundaries or tiers. Functions defined within a group are visually clustered together.
+### 2. Define Architecture (`system.tect`)
 ```tect
-group Ingestion
-group Environment
+# Define artifacts
+constant Config
+variable UserData
+error DbError
+
+# Define groups
+group Database
+group API
+
+# Define contracts
+Database function LoadUser Config
+    > UserData
+    | DbError
+
+API function Serve UserData
+    > Response
 ```
 
-## 3. Function Contracts
-Functions define the transformation logic and branching possibilities of the architecture.
+### 3. CLI Usage
+```bash
+# Verify logic (check for cycles, starvation, unused symbols)
+tect check system.tect
 
-### 3.1 Syntax
-`[GroupName] function Name(Input1, Input2, ...) > OutputGroupA | OutputGroupB`
+# Format code
+tect fmt system.tect
 
-### 3.2 Cardinality & Expansion
-*   **Unitary (`Type`)**: The function requires a single instance of the token.
-*   **Collection (`[Type]`)**: The function requires the entire set of available tokens of that type.
-*   **Expansion Mechanic**: If a function requests a **Unitary** token but only a **Collection** is available in the pool, the Tect engine triggers an **Expansion**. This represents a loop or parallel process where the function is executed once for every item in the collection.
+# Generate interactive HTML graph
+tect build system.tect -o architecture.html
 
-### 3.3 Output Branching
-Outputs are grouped by line or separated by pipes (`|`).
-*   The `>` indicates the primary production.
-*   Each `|` represents an **Alternative Branch**. The engine creates a separate "Pool" for each branch, allowing the architecture to represent success and failure paths simultaneously.
-
-```tect
-# Consumes a collection, produces a collection
-function ScanFS(Settings) 
-    > [SourceFile] 
-    | [FileSystemError]
-
-# Consumes a single item (triggers expansion if SourceFile is a collection)
-function ParseMarkdown(SourceFile)
-    > Article
-    | FileSystemError
+# Generate LaTeX/TikZ for PDF
+tect build system.tect -o architecture.tex
 ```
-
-## 4. Flows
-A Flow is a sequence of function identifiers. The engine executes them in order, attempting to satisfy their input requirements from the current **Token Pool**.
-
-### 4.1 The Execution Cycle
-1.  **Seed**: The flow starts at an `InitialNode` which populates the pool with the inputs required by the first function.
-2.  **Consumption**: For every function in the flow:
-    *   The engine looks for matching types in the pool.
-    *   `variable` and `error` tokens are removed. `constant` tokens are referenced.
-3.  **Production**: The function adds its outputs to the pool. If multiple output groups exist (pipes), the flow branches into multiple parallel pool states.
-
-### 4.2 Terminal Routing
-At the end of the flow, the engine performs a cleanup:
-*   **Terminal Success**: Any remaining `variable` or `constant` tokens are routed to the `FinalNode`.
-*   **Terminal Failure**: Any unconsumed `error` tokens are routed to the `FatalErrors` node.
-
-## 5. Full Architectural Example
-```tect
-# Definitions
-constant Settings
-variable InitialCommand
-error FileSystemError
-
-# Contracts
-group Environment function ProcessCLI(InitialCommand)
-    > Settings
-    | FileSystemError
-
-group Ingestion function ScanFS(Settings)
-    > [SourceFile]
-    | [FileSystemError]
-
-# Flow
-ProcessCLI
-ScanFS
-```
-
----
-
-### Behavior Matrix
-
-| Declaration | Persistence | Consumption Rule | Terminal Target |
-| :--- | :--- | :--- | :--- |
-| `constant` | **Permanent** | Reference-only (Never removed) | `FinalNode` |
-| `variable` | **Linear** | Move-semantics (Removed on use) | `FinalNode` |
-| `error` | **Linear** | Move-semantics (Removed on use) | `FatalErrors` |
-| `Type` | **Unitary** | Requires 1 item; triggers expansion if Collection found | N/A |
-| `[Type]` | **Collection** | Requires all items of type | N/A |
-
-# TODO
-make syntax and semantic highlight compatible - offload as much as possible to syntax
-
-integration tests: run all examples in samples folder (rename to examples), through all possible means, and compare outputs with pre curated default files
-
-remove hardcoded html
-
-add icon (vscode files too)
-
-improve CLI help message
-Add 'tect.visConfig' setting for custom graph physics
-
-is it possible to track usage of variables and constants globally?
-
-should lsp.rs be broken down?
-
-highlight the whole import path when ctrl click
 
 
 
