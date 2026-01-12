@@ -28,15 +28,23 @@ mod tests;
 /// type-safe language. It simulates data flow, detects architectural errors
 /// (like cycles or starvation), and exports diagrams to various formats.
 ///
-/// [COMMON WORKFLOWS]
+/// =========================================================================
+/// COMMON WORKFLOWS
+/// =========================================================================
 ///
 /// 1. Define architecture in .tect files
-/// 2. Verify logic:
+///    (See examples in the repo for syntax)
+///
+/// 2. Verify logic (Check for starvation, cycles, unused symbols):
 ///    $ tect check main.tect
-/// 3. Generate diagrams:
-///    $ tect build main.tect -o arch.html  (Interactive)
-///    $ tect build main.tect -o arch.mmd   (Mermaid)
-///    $ tect build main.tect -o arch.tex   (LaTeX/TikZ)
+///
+/// 3. Generate diagrams (Export to standard formats):
+///    $ tect build main.tect -o arch.html  (Interactive HTML with Physics)
+///    $ tect build main.tect -o arch.mmd   (Mermaid for Markdown)
+///    $ tect build main.tect -o arch.tex   (LaTeX/TikZ for Papers)
+///
+/// =========================================================================
+///
 #[derive(ClapParser)]
 #[command(name = "tect")]
 #[command(author = "Tesserato")]
@@ -62,18 +70,23 @@ enum Commands {
     ///
     /// .html   Interactive Web Graph (Vis.js)
     ///         Best for: Exploring complex architectures with physics.
+    ///         Features: Search, Physics toggles, Clustering.
     ///
     /// .mmd    Mermaid.js Diagram
     ///         Best for: Embedding in GitHub/GitLab READMEs, Notion, or Obsidian.
+    ///         Renders directly in many markdown previewers.
     ///
     /// .tex    TikZ/LaTeX (LuaLaTeX)
     ///         Best for: Publication-quality PDF documents and academic papers.
+    ///         Uses the `force` graph library for auto-layout.
     ///
     /// .dot    Graphviz DOT
     ///         Best for: Interoperability with Graphviz tools (dot, neato, fdp).
+    ///         Standard format for graph processing.
     ///
     /// .json   Raw Data
     ///         Best for: Custom tooling or programmatic analysis.
+    ///         Contains the full node/edge list and group metadata.
     #[command(visible_alias = "b")]
     #[command(verbatim_doc_comment)]
     Build {

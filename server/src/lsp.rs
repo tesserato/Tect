@@ -565,6 +565,7 @@ impl Backend {
             "json" => {
                 Ok(serde_json::to_string_pretty(&graph).map_err(|e| LspError::internal_error())?)
             }
+            "html" => Ok(vis_js::generate_interactive_html(&graph)),
             _ => Err(LspError::invalid_params("Unknown format")),
         }
     }
