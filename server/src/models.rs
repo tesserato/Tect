@@ -4,7 +4,6 @@
 //! and the diagnostic structures used across the compiler pipeline.
 
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -14,13 +13,16 @@ use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
 
 /// Computes a deterministic hash for a given name string.
 ///
-/// This function uses the default hasher to generate a `u32` hash from the input string.
-/// Ideally, a stable hasher should be used if cross-platform determinism is required beyond
-/// a single runtime execution.
+/// This function uses a custom FNV-1a implementation to ensure cross-platform
+/// and cross-run determinism, which is essential for consistent UIDs in
+/// serialized outputs (like JSON or stable graph generation).
 pub fn hash_name(name: &str) -> u32 {
-    let mut s = DefaultHasher::new();
-    name.hash(&mut s);
-    (s.finish() & 0xFFFFFFFF) as u32
+    let mut hash: u32 = 0x811c9dc5;
+    for byte in name.bytes() {
+        hash ^= byte as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash
 }
 
 // --- Source Management Types ---
