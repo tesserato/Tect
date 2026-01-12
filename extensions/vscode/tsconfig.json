@@ -10,7 +10,8 @@
         "sourceMap": true,
         "rootDir": "src",
         "strict": true,
-        "noImplicitAny": true
+        "noImplicitAny": true,
+        "skipLibCheck": true
     },
     "exclude": [
         "node_modules",

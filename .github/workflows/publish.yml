@@ -19,11 +19,11 @@ jobs:
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
                       suffix: ".exe"
-                    # Build Mac Intel on Mac ARM (Cross-compile is native on macOS)
+                    # MacOS Intel
                     - os: macos-latest
                       target: x86_64-apple-darwin
                       suffix: ""
-                    # Build Mac ARM on Mac ARM
+                    # MacOS ARM
                     - os: macos-latest
                       target: aarch64-apple-darwin
                       suffix: ""
@@ -47,12 +47,8 @@ jobs:
                   # Target release directory
                   REL_DIR="target/${{ matrix.target }}/release"
 
-                  # Find binary case-insensitively (Tect or tect), ensuring we get the file with correct suffix
-                  # We use -iname to match Tect/tect, and verify it exists
+                  # Find binary case-insensitively (Tect or tect)
                   BIN_NAME="tect${{ matrix.suffix }}"
-
-                  # Find the file in the release dir. 
-                  # On Windows, we need the one ending in .exe
                   BIN_PATH=$(find "$REL_DIR" -maxdepth 1 -iname "$BIN_NAME" -type f | head -n 1)
 
                   echo "Found binary at: $BIN_PATH"
@@ -63,7 +59,6 @@ jobs:
                     exit 1
                   fi
 
-                  # Copy to staging with the lowercase name expected by the extension
                   cp "$BIN_PATH" staging/tect${{ matrix.suffix }}
 
             - name: Upload Artifact
@@ -88,14 +83,22 @@ jobs:
             - name: Install Dependencies & Compile
               working-directory: ./extensions/vscode
               run: |
+                  # 'npm ci' requires package-lock.json to exist in the repo
                   npm ci
                   npm run compile
 
             - name: Prepare Extension Assets
               run: |
                   mkdir -p extensions/vscode/bin
-                  # Copy root license if it exists
+
+                  # Copy root LICENSE to extension folder (Overwrite if exists to ensure sync)
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
+
+                  # SAFETY FALLBACK: Only copy root README if the extension doesn't have one
+                  if [ ! -f extensions/vscode/README.md ] && [ -f README.md ]; then 
+                    echo "Extension README missing, copying root README."
+                    cp README.md extensions/vscode/README.md
+                  fi
 
             - name: Download All Binaries
               uses: actions/download-artifact@v4
@@ -123,7 +126,6 @@ jobs:
                   cp downloaded-bins/binary-aarch64-apple-darwin/tect extensions/vscode/bin/tect-aarch64-apple-darwin
                   chmod +x extensions/vscode/bin/tect-aarch64-apple-darwin
 
-                  # Debug: Show structure
                   ls -R extensions/vscode/bin/
 
             - name: Publish to Marketplace
