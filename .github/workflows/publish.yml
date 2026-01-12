@@ -44,9 +44,7 @@ jobs:
               run: |
                   mkdir -p staging
 
-                  # Target release directory
                   REL_DIR="target/${{ matrix.target }}/release"
-
                   # Find binary case-insensitively (Tect or tect)
                   BIN_NAME="tect${{ matrix.suffix }}"
                   BIN_PATH=$(find "$REL_DIR" -maxdepth 1 -iname "$BIN_NAME" -type f | head -n 1)
@@ -83,7 +81,7 @@ jobs:
             - name: Install Dependencies & Compile
               working-directory: ./extensions/vscode
               run: |
-                  # 'npm ci' requires package-lock.json to exist in the repo
+                  # Requires package-lock.json to exist in the repo
                   npm ci
                   npm run compile
 
@@ -91,12 +89,10 @@ jobs:
               run: |
                   mkdir -p extensions/vscode/bin
 
-                  # Copy root LICENSE to extension folder (Overwrite if exists to ensure sync)
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
 
-                  # SAFETY FALLBACK: Only copy root README if the extension doesn't have one
+                  # Only copy root README if the extension doesn't have one
                   if [ ! -f extensions/vscode/README.md ] && [ -f README.md ]; then 
-                    echo "Extension README missing, copying root README."
                     cp README.md extensions/vscode/README.md
                   fi
 
@@ -109,8 +105,6 @@ jobs:
 
             - name: Place Binaries
               run: |
-                  # Move binaries to extensions/vscode/bin with platform-specific names
-
                   # Linux
                   cp downloaded-bins/binary-x86_64-unknown-linux-gnu/tect extensions/vscode/bin/tect-x86_64-unknown-linux-gnu
                   chmod +x extensions/vscode/bin/tect-x86_64-unknown-linux-gnu
@@ -130,4 +124,5 @@ jobs:
 
             - name: Publish to Marketplace
               working-directory: ./extensions/vscode
-              run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }} --packagePath .
+              # Removed '--packagePath .' which caused EISDIR
+              run: npx @vscode/vsce publish --pat ${{ secrets.VSCE_PAT }}
