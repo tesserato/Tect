@@ -4,7 +4,7 @@
 //! and the diagnostic structures used across the compiler pipeline.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
@@ -245,6 +245,8 @@ pub struct ProgramStructure {
     pub catalog: HashMap<String, Arc<Function>>,
     pub flow: Vec<FlowStep>,
     pub symbol_table: HashMap<u32, SymbolMetadata>,
+    /// Tracks UIDs of artifacts that were implicitly created (not explicitly defined)
+    pub implicit_artifacts: HashSet<u32>,
     #[serde(skip)]
     pub diagnostics: Vec<DiagnosticWithContext>,
 }

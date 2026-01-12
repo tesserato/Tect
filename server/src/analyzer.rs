@@ -127,7 +127,8 @@ impl Workspace {
             self.pass_resolution(*file_id);
         }
 
-        // 4. Validation (Unused Symbols)
+        // 4. Validation (Unused Symbols & Implicit Flow Usage)
+        self.check_flow_implicits();
         self.check_unused_symbols();
     }
 
@@ -317,6 +318,40 @@ impl Workspace {
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    fn check_flow_implicits(&mut self) {
+        // Iterate over the flow to find steps that use functions with implicit variables
+        let flow_steps = self.structure.flow.clone(); // Clone to iterate while mutating diagnostics
+        for step in flow_steps {
+            if let Some(func) = self.structure.catalog.get(&step.function_name) {
+                let mut implicits = Vec::new();
+
+                // Check inputs and outputs for implicit tokens
+                for token in func.consumes.iter().chain(func.produces.iter().flatten()) {
+                    if self
+                        .structure
+                        .implicit_artifacts
+                        .contains(&token.kind.uid())
+                    {
+                        implicits.push(token.kind.name().to_string());
+                    }
+                }
+
+                if !implicits.is_empty() {
+                    implicits.sort();
+                    implicits.dedup();
+                    self.report_info(
+                        step.span.file_id,
+                        Some(step.span),
+                        format!(
+                            "Flow step uses implicitly created variables: {}",
+                            implicits.join(", ")
+                        ),
+                    );
+                }
             }
         }
     }
@@ -544,15 +579,38 @@ impl Workspace {
                 ),
             };
 
+            // Fix Identity Mismatch:
+            // Ensure implicit variables are registered so they share the same UID
             let kind = if let Some(k) = self.structure.artifacts.get(name) {
                 k.clone()
             } else {
+                let new_kind = Kind::Variable(Arc::new(Variable::new(name.to_string(), None)));
+                let uid = new_kind.uid();
+
+                // 1. Register artifact globally
+                self.structure
+                    .artifacts
+                    .insert(name.to_string(), new_kind.clone());
+
+                // 2. Register metadata for occurrences
+                self.structure.symbol_table.insert(
+                    uid,
+                    SymbolMetadata {
+                        name: name.to_string(),
+                        definition_span: span, // Use first occurrence as def
+                        occurrences: vec![],
+                    },
+                );
+
+                // 3. Mark as implicit for diagnostics
+                self.structure.implicit_artifacts.insert(uid);
+
                 self.report_info(
                     file_id,
                     Some(span),
                     format!("Implicitly created variable '{}'.", name),
                 );
-                Kind::Variable(Arc::new(Variable::new(name.to_string(), None)))
+                new_kind
             };
 
             self.add_occurrence(kind.uid(), span);
