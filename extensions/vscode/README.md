@@ -19,9 +19,11 @@ Visualize your architecture in real-time as you type.
 
 ## Requirements
 
-This extension requires the `tect` language server binary.
-1. If you have Rust installed, the extension will attempt to use a locally compiled binary.
-2. Ensure the `tect` binary is in your system PATH or the extension bundle.
+This extension comes bundled with the pre-compiled `tect` Language Server for **Windows**, **macOS** (Intel & Apple Silicon), and **Linux**.
+
+You do **not** need to install Rust or compile anything manually. Just install the extension and start editing.
+
+*(Note for Contributors: If you are developing Tect itself and running the extension in debug mode, it will fallback to looking for a local cargo build in your target directory.)*
 
 ## Extension Settings
 
@@ -42,14 +44,3 @@ You can customize the visual graph physics and layout via your `settings.json`:
   }
 }
 ```
-
-## Release Notes
-
-### 0.0.4
-- Added "Go to Definition" for import paths.
-- Added Right-Click context menu for exporting graph to multiple formats.
-- Improved graph color palette for better visibility.
-- Added toolbar controls for physics and clustering.
-
-### 0.0.1
-- Initial release with syntax highlighting and basic LSP support.
