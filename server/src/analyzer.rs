@@ -22,6 +22,9 @@ pub struct TectParser;
 pub struct Workspace {
     pub source_manager: SourceManager,
     pub structure: ProgramStructure,
+    /// Tracks the URI used as the entry point for the current `structure`.
+    /// Used to detect context switches (e.g. tab changes).
+    pub current_root: Option<Url>,
 }
 
 impl Default for Workspace {
@@ -35,12 +38,14 @@ impl Workspace {
         Self {
             source_manager: SourceManager::new(),
             structure: ProgramStructure::default(),
+            current_root: None,
         }
     }
 
     /// Entry point: Analyze a project starting from a root URI.
     /// If content is provided, it uses that (useful for unsaved editor buffers).
     pub fn analyze(&mut self, root_uri: Url, root_content: Option<String>) {
+        self.current_root = Some(root_uri.clone());
         self.structure = ProgramStructure::default();
 
         // 1. Dependency Discovery
@@ -140,29 +145,28 @@ impl Workspace {
                         let str_lit = inner.next().unwrap().as_str();
                         let rel_path = &str_lit[1..str_lit.len() - 1]; // strip quotes
 
-                        // Fix: Clone base_uri to avoid conflicting borrow with self.report_error
+                        // Clone base_uri to avoid conflicting borrow
                         let base_uri = self.source_manager.get_uri(file_id).cloned();
 
                         if let Some(base_uri) = base_uri {
                             // Use Url::join to handle relative paths (./, ../) correctly
                             if let Ok(target_uri) = base_uri.join(rel_path) {
-                                // Only check filesystem existence if it's a file scheme
-                                if let Ok(path) = target_uri.to_file_path() {
-                                    if path.exists() {
-                                        results.push((target_uri, span));
-                                    } else {
-                                        self.report_error(
-                                            file_id,
-                                            Some(span),
-                                            format!("Import not found: '{}'", path.display()),
-                                        );
-                                    }
+                                let target_id = self.source_manager.get_id(&target_uri);
+                                let is_in_memory =
+                                    self.source_manager.get_content(target_id).is_some();
+                                let exists_on_disk = target_uri
+                                    .to_file_path()
+                                    .map(|p| p.exists())
+                                    .unwrap_or(false);
+
+                                // Check memory first (unsaved files), then disk
+                                if is_in_memory || exists_on_disk {
+                                    results.push((target_uri, span));
                                 } else {
-                                    // Non-file URIs not supported for import verification yet
                                     self.report_error(
                                         file_id,
                                         Some(span),
-                                        format!("Unsupported import scheme: '{}'", target_uri),
+                                        format!("Import not found: '{}'", rel_path),
                                     );
                                 }
                             } else {

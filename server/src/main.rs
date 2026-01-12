@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser as ClapParser, Subcommand};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -72,6 +73,7 @@ async fn main() -> Result<()> {
             let (service, socket) = LspService::build(|client| lsp::Backend {
                 client,
                 workspace: Mutex::new(analyzer::Workspace::new()),
+                open_documents: Mutex::new(HashSet::new()),
             })
             // Register custom request handler for the Visualizer
             .custom_method("tect/getGraph", lsp::Backend::get_visual_graph)

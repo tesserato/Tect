@@ -12,7 +12,7 @@ use crate::models::{Cardinality, Function, Kind, ProgramStructure, SymbolMetadat
 use crate::vis_js::{self, VisData};
 use regex::Regex;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tower_lsp::jsonrpc::{Error as LspError, Result as LspResult};
 use tower_lsp::lsp_types::notification::Notification;
@@ -30,6 +30,9 @@ impl Notification for AnalysisFinished {
 pub struct Backend {
     pub client: Client,
     pub workspace: Mutex<Workspace>,
+    /// Tracks which files are currently open in the client to perform
+    /// "Sweep Analysis" (updating diagnostics for all visible files).
+    pub open_documents: Mutex<HashSet<Url>>,
 }
 
 #[tower_lsp::async_trait]
@@ -62,12 +65,27 @@ impl LanguageServer for Backend {
     }
 
     async fn did_open(&self, p: DidOpenTextDocumentParams) {
+        {
+            let mut docs = self.open_documents.lock().unwrap();
+            docs.insert(p.text_document.uri.clone());
+        }
         self.process_change(p.text_document.uri, Some(p.text_document.text))
             .await;
     }
 
+    async fn did_close(&self, p: DidCloseTextDocumentParams) {
+        {
+            let mut docs = self.open_documents.lock().unwrap();
+            docs.remove(&p.text_document.uri);
+        }
+        // Optional: We could clear diagnostics for this file here,
+        // but VS Code usually handles that cleanup automatically on close.
+    }
+
     async fn did_change(&self, p: DidChangeTextDocumentParams) {
-        if let Some(c) = p.content_changes.into_iter().next() {
+        // We use .last() to ensure we pick up the final state of the document
+        // in case multiple change events are batched together (e.g. during paste).
+        if let Some(c) = p.content_changes.into_iter().last() {
             self.process_change(p.text_document.uri, Some(c.text)).await;
         }
     }
@@ -78,6 +96,11 @@ impl LanguageServer for Backend {
 
         // Acquire lock
         let mut ws = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws.current_root.as_ref() != Some(&uri) {
+            ws.analyze(uri.clone(), None);
+        }
 
         // Ensure we have content for this file to check words
         let file_id = ws.source_manager.get_id(&uri);
@@ -172,10 +195,17 @@ impl LanguageServer for Backend {
         let pos = p.text_document_position_params.position;
 
         let mut ws_guard = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws_guard.current_root.as_ref() != Some(&uri) {
+            ws_guard.analyze(uri.clone(), None);
+        }
+
         // Split borrow: access structure (read) and source_manager (mut)
         let Workspace {
             ref structure,
             ref mut source_manager,
+            ..
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
@@ -210,10 +240,17 @@ impl LanguageServer for Backend {
         let uri = p.text_document.uri;
 
         let mut ws_guard = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws_guard.current_root.as_ref() != Some(&uri) {
+            ws_guard.analyze(uri.clone(), None);
+        }
+
         // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
+            ..
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
@@ -255,10 +292,17 @@ impl LanguageServer for Backend {
         let new_name = p.new_name;
 
         let mut ws_guard = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws_guard.current_root.as_ref() != Some(&uri) {
+            ws_guard.analyze(uri.clone(), None);
+        }
+
         // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
+            ..
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
@@ -297,10 +341,17 @@ impl LanguageServer for Backend {
         let pos = p.text_document_position.position;
 
         let mut ws_guard = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws_guard.current_root.as_ref() != Some(&uri) {
+            ws_guard.analyze(uri.clone(), None);
+        }
+
         // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
+            ..
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
@@ -360,6 +411,12 @@ impl LanguageServer for Backend {
         let pos = p.text_document_position_params.position;
 
         let mut ws = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws.current_root.as_ref() != Some(&uri) {
+            ws.analyze(uri.clone(), None);
+        }
+
         let file_id = ws.source_manager.get_id(&uri);
         ws.source_manager.load_file(file_id, None);
 
@@ -393,10 +450,17 @@ impl LanguageServer for Backend {
         let uri = p.text_document.uri;
 
         let mut ws_guard = self.workspace.lock().unwrap();
+
+        // Ensure consistency on tab switch
+        if ws_guard.current_root.as_ref() != Some(&uri) {
+            ws_guard.analyze(uri.clone(), None);
+        }
+
         // Split borrow
         let Workspace {
             ref structure,
             ref mut source_manager,
+            ..
         } = *ws_guard;
 
         let file_id = source_manager.get_id(&uri);
@@ -479,73 +543,109 @@ impl Backend {
         Ok(vis_js::produce_vis_data(&graph))
     }
 
-    /// Triggers a full analysis of the dependency graph starting from the changed file.
-    async fn process_change(&self, uri: Url, content: Option<String>) {
-        // Scope for the lock
-        let (mut all_diagnostics, _) = {
-            let mut ws_guard = self.workspace.lock().unwrap();
-
-            ws_guard.analyze(uri.clone(), content);
-
-            // Run Engine if no fatal errors
-            if !ws_guard
-                .structure
-                .diagnostics
-                .iter()
-                .any(|d| d.severity == DiagnosticSeverity::ERROR)
-            {
-                let mut flow = Flow::new(true);
-                let _graph = flow.simulate(&ws_guard.structure);
-                ws_guard.structure.diagnostics.extend(flow.diagnostics);
+    /// Triggers a full analysis update.
+    ///
+    /// Updates the VFS with the changed content, then "sweeps" through all
+    /// currently open documents. It re-analyzes each open document to ensure
+    /// that if a dependency changed (e.g. child.tect), the importer (e.g. parent.tect)
+    /// immediately reflects the new errors/state.
+    async fn process_change(&self, changed_uri: Url, content: Option<String>) {
+        let open_docs: Vec<Url> = {
+            let docs = self.open_documents.lock().unwrap();
+            let mut list: Vec<Url> = docs.iter().cloned().collect();
+            // Optimization: Ensure the file being edited is analyzed LAST.
+            // This ensures the `Workspace` state left behind corresponds to what
+            // the user is currently looking at, which helps with immediate subsequent
+            // requests like Hover or Completion.
+            if let Some(pos) = list.iter().position(|u| u == &changed_uri) {
+                list.remove(pos);
             }
-
-            // Resolve diagnostics
-            let Workspace {
-                ref structure,
-                ref mut source_manager,
-            } = *ws_guard;
-
-            let mut resolved = HashMap::new();
-            let mut file_ids = Vec::new();
-
-            for diag_ctx in &structure.diagnostics {
-                // Clone URI to release borrow on source_manager
-                if let Some(uri) = source_manager.get_uri(diag_ctx.file_id).cloned() {
-                    let range = if let Some(span) = diag_ctx.span {
-                        source_manager.resolve_range(span)
-                    } else {
-                        Range::default()
-                    };
-
-                    let lsp_diag = Diagnostic {
-                        range,
-                        severity: Some(diag_ctx.severity),
-                        message: diag_ctx.message.clone(),
-                        source: Some("tect".into()),
-                        tags: if diag_ctx.tags.is_empty() {
-                            None
-                        } else {
-                            Some(diag_ctx.tags.clone())
-                        },
-                        ..Default::default()
-                    };
-
-                    resolved.entry(uri).or_insert_with(Vec::new).push(lsp_diag);
-                    file_ids.push(diag_ctx.file_id);
-                }
-            }
-            (resolved, file_ids)
+            list.push(changed_uri.clone());
+            list
         };
 
-        // Ensure we publish empty diagnostics for the current file to clear old errors
-        all_diagnostics.entry(uri.clone()).or_default();
+        // We accumulate diagnostics for ALL open files before publishing.
+        let mut all_file_diagnostics: HashMap<Url, Vec<Diagnostic>> = HashMap::new();
 
-        for (furi, diags) in all_diagnostics {
+        // 0. Pre-populate map with empty vectors for all open docs.
+        // This ensures that if a file now has 0 errors, we send an empty list
+        // to clear the old red squiggles in the client.
+        for uri in &open_docs {
+            all_file_diagnostics.insert(uri.clone(), Vec::new());
+        }
+
+        {
+            let mut ws_guard = self.workspace.lock().unwrap();
+
+            // 1. Update VFS for the changed file explicitly first
+            // (We pass content only for the changed file; for others in the loop, we use VFS/Disk)
+            if let Some(c) = content {
+                let id = ws_guard.source_manager.get_id(&changed_uri);
+                ws_guard.source_manager.load_file(id, Some(c));
+            }
+
+            // 2. Sweep Analysis: Re-analyze EVERY open document.
+            for doc_uri in open_docs {
+                ws_guard.analyze(doc_uri.clone(), None);
+
+                // Run Engine if no fatal syntax errors
+                if !ws_guard
+                    .structure
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.severity == DiagnosticSeverity::ERROR)
+                {
+                    let mut flow = Flow::new(true);
+                    let _graph = flow.simulate(&ws_guard.structure);
+                    ws_guard.structure.diagnostics.extend(flow.diagnostics);
+                }
+
+                // Collect diagnostics for this specific document root
+                // Note: analyze() might produce diagnostics for imported files too.
+
+                // Clone diagnostics to break borrow of ws_guard structure
+                let current_diagnostics = ws_guard.structure.diagnostics.clone();
+
+                for diag_ctx in current_diagnostics {
+                    if let Some(uri) = ws_guard.source_manager.get_uri(diag_ctx.file_id).cloned() {
+                        let range = if let Some(span) = diag_ctx.span {
+                            ws_guard.source_manager.resolve_range(span)
+                        } else {
+                            Range::default()
+                        };
+
+                        let lsp_diag = Diagnostic {
+                            range,
+                            severity: Some(diag_ctx.severity),
+                            message: diag_ctx.message.clone(),
+                            source: Some("tect".into()),
+                            tags: if diag_ctx.tags.is_empty() {
+                                None
+                            } else {
+                                Some(diag_ctx.tags.clone())
+                            },
+                            ..Default::default()
+                        };
+
+                        let entry = all_file_diagnostics.entry(uri).or_default();
+                        // Deduplication: Avoid sending identical diagnostics
+                        if !entry.contains(&lsp_diag) {
+                            entry.push(lsp_diag);
+                        }
+                    }
+                }
+            }
+        } // Lock released here
+
+        // 3. Publish diagnostics for every file we touched (and cleared)
+        for (furi, diags) in all_file_diagnostics {
             self.client.publish_diagnostics(furi, diags, None).await;
         }
 
         self.client
-            .send_notification::<AnalysisFinished>(serde_json::json!({ "uri": uri.to_string() }))
+            .send_notification::<AnalysisFinished>(
+                serde_json::json!({ "uri": changed_uri.to_string() }),
+            )
             .await;
     }
 
