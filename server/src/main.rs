@@ -10,8 +10,8 @@ use tower_lsp::{LspService, Server};
 
 mod analyzer;
 mod engine;
+mod export;
 mod formatter;
-mod graphviz;
 mod lsp;
 mod models;
 mod source_manager;
@@ -40,9 +40,11 @@ enum Commands {
     /// Compile Tect source into visualization artifacts.
     ///
     /// Supports generating:
-    /// - JSON (Architecture & Functions)
     /// - HTML (Interactive Vis.js graph)
     /// - DOT (Graphviz)
+    /// - MMD (Mermaid.js)
+    /// - TEX (TikZ/LaTeX)
+    /// - JSON (Raw Data)
     #[command(visible_alias = "b")]
     Build {
         /// The input .tect file
@@ -50,22 +52,19 @@ enum Commands {
         input: PathBuf,
 
         /// The output file path.
-        /// The extension determines the format: .html, .dot, or .json
+        /// Extension determines format: .html, .dot, .mmd, .tex, .json
         #[arg(short, long, value_name = "OUTPUT")]
         output: PathBuf,
     },
 
     /// Format a Tect source file.
-    ///
-    /// By default, this overwrites the input file.
     #[command(visible_alias = "f")]
     Fmt {
         /// The input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
 
-        /// Optional output path. If provided, the formatted code is written here
-        /// instead of overwriting the input.
+        /// Optional output path.
         #[arg(short, long, value_name = "OUTPUT")]
         output: Option<PathBuf>,
     },
@@ -79,9 +78,6 @@ enum Commands {
     },
 
     /// Start the Language Server (LSP).
-    ///
-    /// This is typically used by editor extensions (VS Code, Neovim),
-    /// not run manually by users.
     Serve,
 }
 
@@ -126,21 +122,27 @@ fn handle_build(input: PathBuf, output: PathBuf) -> Result<()> {
         "html" => {
             let html = vis_js::generate_interactive_html(&graph);
             fs::write(&output, html)?;
-            println!("{} Generated HTML: {:?}", "Success:".green().bold(), output);
+            println!("{} HTML: {:?}", "Success:".green().bold(), output);
         }
-        "dot" => {
-            let dot = graphviz::to_dot(&graph);
-            fs::write(&output, dot)?;
-            println!(
-                "{} Generated Graphviz DOT: {:?}",
-                "Success:".green().bold(),
-                output
-            );
+        "dot" | "gv" => {
+            let content = export::dot::export(&graph);
+            fs::write(&output, content)?;
+            println!("{} DOT: {:?}", "Success:".green().bold(), output);
+        }
+        "mmd" | "mermaid" => {
+            let content = export::mermaid::export(&graph);
+            fs::write(&output, content)?;
+            println!("{} Mermaid: {:?}", "Success:".green().bold(), output);
+        }
+        "tex" => {
+            let content = export::tikz::export(&graph);
+            fs::write(&output, content)?;
+            println!("{} TikZ/LaTeX: {:?}", "Success:".green().bold(), output);
         }
         _ => {
             let json = serde_json::to_string_pretty(&graph)?;
             fs::write(&output, json)?;
-            println!("{} Generated JSON: {:?}", "Success:".green().bold(), output);
+            println!("{} JSON: {:?}", "Success:".green().bold(), output);
         }
     }
 
@@ -214,10 +216,8 @@ fn handle_check(input: PathBuf) -> Result<()> {
             _ => "Diagnostic".white(),
         };
 
-        // Resolve Line/Col
         let location_str = if let Some(span) = diag.span {
             let range = workspace.source_manager.resolve_range(span);
-            // LSP ranges are 0-based, humans are 1-based
             format!(
                 "{}:{}:{}",
                 workspace
