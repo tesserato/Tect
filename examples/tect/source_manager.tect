@@ -12,25 +12,28 @@ group SourceManager
 # The internal HashMap of paths to contents.
 variable SourceManagerState
 
-# **File Path**
-# OS filesystem path.
-constant FilePath
-
 # ------------------------------------------------------------
 # Functions
 # ------------------------------------------------------------
 
+# **Init Source Manager**
+# Creates the initial empty state map.
+SourceManager function InitSourceManager
+    > SourceManagerState
+
 # **Get ID**
-# Gets or creates a FileId for a path.
-SourceManager function GetId FilePath, SourceManagerState
-    > FileId
+# Gets or creates a FileId for a URI.
+# *Note: Threads state through to keep it alive.*
+SourceManager function GetId URI, SourceManagerState
+    > FileId, SourceManagerState
 
 # **Load File**
 # Reads from disk or updates from memory buffer.
+# *Update: Now passes `RawContent` through for the Analyzer.*
 SourceManager function LoadFile FileId, RawContent, SourceManagerState
-    > SourceManagerState
+    > SourceManagerState, RawContent
 
 # **Get Content**
 # Retrieves string content from the cache.
 SourceManager function GetContent FileId, SourceManagerState
-    > RawContent
+    > RawContent, SourceManagerState

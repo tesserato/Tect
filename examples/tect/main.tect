@@ -16,14 +16,25 @@ import "./vis_js.tect"
 # ------------------------------------------------------------
 
 # User types in VS Code
+# (This must be first to seed 'UserInput' into the pool)
 Activate
+
+# Initialize Server State
+# (Runs parallel/subsequently to inject State into the pool)
+InitSourceManager
+
+# Handle the notification
 HandleDidChange
 
 # ------------------------------------------------------------
 # 2. Analysis Phase (Server)
 # ------------------------------------------------------------
 
-# Workspace manager loads file
+# Resolve URI to internal ID
+# (Consumes URI from HandleDidChange and State from InitSourceManager)
+GetId
+
+# Workspace manager loads file into memory
 LoadFile
 
 # Analyzer parses definitions and resolves links

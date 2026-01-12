@@ -13,10 +13,6 @@ group LSP
 # JSON-RPC messages exchanged with Client.
 variable LSPMessage
 
-# **URI**
-# Document identifier.
-constant URI
-
 # ------------------------------------------------------------
 # Functions
 # ------------------------------------------------------------

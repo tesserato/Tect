@@ -8,6 +8,11 @@
 # Unique integer identifier for a file.
 constant FileId
 
+# **URI**
+# The unique identifier for the document (e.g., file:///...).
+# *Rust Type: `Url`*
+constant URI
+
 # **Span**
 # Byte-offset range in a source file.
 constant Span
@@ -18,7 +23,7 @@ variable RawContent
 
 # **Program Structure**
 # The Intermediate Representation (IR).
-# Contains artifacts, groups, and flow steps.
+# Contains the symbol table, artifact catalog, and flow steps.
 variable ProgramStructure
 
 # **Graph**

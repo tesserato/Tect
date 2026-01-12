@@ -20,7 +20,7 @@ variable DepGraph
 # **Scan Imports**
 # Parses the file to find `import` statements.
 Analyzer function ScanImports RawContent
-    > [FilePath]
+    > [URI]
 
 # **Detect Cycle**
 # DFS traversal to find circular dependencies.
@@ -41,6 +41,7 @@ Analyzer function PassResolution RawContent
 
 # **Analyze Workspace**
 # The main coordinator function.
-Analyzer function AnalyzeWorkspace FilePath, RawContent, SourceManagerState
-    > ProgramStructure
+# Consumes URI (from LSP) and State (from SourceManager).
+Analyzer function AnalyzeWorkspace URI, RawContent, SourceManagerState
+    > ProgramStructure, SourceManagerState
     | Diagnostic
