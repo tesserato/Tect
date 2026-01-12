@@ -55,7 +55,6 @@ variable HTMLIndex
 # Includes timing data and the count of files written.
 variable SuccessReport
 
-
 constant unused_constant
 variable unused_variable
 error unused_error

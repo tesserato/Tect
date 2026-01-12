@@ -55,6 +55,16 @@
                 "path": "./snippets.json"
             }
         ],
+        "configuration": {
+            "title": "Tect",
+            "properties": {
+                "tect.visConfig": {
+                    "type": "object",
+                    "description": "Custom configuration for the Vis.js network graph (e.g. physics, layout). See Vis.js docs for options.",
+                    "default": {}
+                }
+            }
+        },
         "commands": [
             {
                 "command": "tect.openPreview",

@@ -7,7 +7,8 @@
 
 use crate::analyzer::Workspace;
 use crate::engine::Flow;
-use crate::export::vis_js::{self, VisData};
+use crate::export::vis_js::VisData;
+use crate::export::{dot, mermaid, tikz, vis_js};
 use crate::formatter::format_tect_source;
 use crate::models::{Cardinality, Function, Graph, Kind, ProgramStructure, SymbolMetadata, Token};
 use regex::Regex;
@@ -120,7 +121,6 @@ impl LanguageServer for Backend {
         };
 
         if let Some((word, range)) = Self::get_word_at(&content, pos) {
-            // ... (Keyword check code same as before) ...
             let kw_doc = match word.as_str() {
                 "constant" => Some("Defines an immutable global architectural artifact."),
                 "variable" => Some("Defines a mutable or stateful architectural artifact."),
@@ -219,6 +219,15 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
+        // Check for import path first
+        if let Some(target_uri) = Self::check_import_at(&content, pos, &uri) {
+            return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                target_uri,
+                Range::new(Position::new(0, 0), Position::new(0, 0)),
+            ))));
+        }
+
+        // Check for symbols
         if let Some((word, _)) = Self::get_word_at(&content, pos) {
             if let Some(meta) = self.find_meta(&word, structure) {
                 if let Some(target_uri) = source_manager
@@ -506,6 +515,7 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
+    /// Handler for `tect/getGraph`. Returns JSON data for Vis.js.
     pub async fn get_visual_graph(&self, params: Value) -> LspResult<VisData> {
         let uri_str = params
             .get("uri")
@@ -516,13 +526,44 @@ impl Backend {
             Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI format"))?;
 
         let mut ws = self.workspace.lock().unwrap();
-
         ws.analyze(uri, None);
 
         let mut flow = Flow::new(true);
         let graph = flow.simulate(&ws.structure);
 
         Ok(vis_js::produce_vis_data(&graph))
+    }
+
+    /// Handler for `tect/exportGraph`. Returns the graph in various string formats.
+    pub async fn get_export_content(&self, params: Value) -> LspResult<String> {
+        let uri_str = params
+            .get("uri")
+            .and_then(|v| v.as_str())
+            .ok_or(LspError::invalid_params("Missing 'uri' parameter"))?;
+
+        let format = params
+            .get("format")
+            .and_then(|v| v.as_str())
+            .ok_or(LspError::invalid_params("Missing 'format' parameter"))?;
+
+        let uri =
+            Url::parse(uri_str).map_err(|_| LspError::invalid_params("Invalid URI format"))?;
+
+        let mut ws = self.workspace.lock().unwrap();
+        ws.analyze(uri, None);
+
+        let mut flow = Flow::new(true);
+        let graph = flow.simulate(&ws.structure);
+
+        match format {
+            "dot" => Ok(dot::export(&graph)),
+            "mermaid" => Ok(mermaid::export(&graph)),
+            "tex" => Ok(tikz::export(&graph)),
+            "json" => {
+                Ok(serde_json::to_string_pretty(&graph).map_err(|e| LspError::internal_error())?)
+            }
+            _ => Err(LspError::invalid_params("Unknown format")),
+        }
     }
 
     async fn process_change(&self, changed_uri: Url, content: Option<String>) {
@@ -652,6 +693,43 @@ impl Backend {
             children: None,
             deprecated: None,
         }
+    }
+
+    fn check_import_at(content: &str, pos: Position, base_uri: &Url) -> Option<Url> {
+        let line_str = content.lines().nth(pos.line as usize)?;
+
+        // Regex to match: import "path"
+        // Captures: 1 = quotes+path, 2 = path
+        let re = Regex::new(r#"^\s*import\s+("([^"]+)")"#).ok()?;
+
+        if let Some(cap) = re.captures(line_str) {
+            let full_match = cap.get(1)?; // "path"
+            let path_match = cap.get(2)?; // path
+
+            let match_start = full_match.start();
+            let match_end = full_match.end();
+
+            // Calculate byte offset of cursor in line
+            let mut char_offset = 0;
+            let mut byte_offset = 0;
+            for c in line_str.chars() {
+                if char_offset == pos.character as usize {
+                    break;
+                }
+                char_offset += 1;
+                byte_offset += c.len_utf8();
+            }
+
+            // Check if cursor is strictly inside quotes
+            if byte_offset > match_start && byte_offset < match_end {
+                let rel_path = path_match.as_str();
+                // Resolve relative to base_uri
+                if let Ok(target) = base_uri.join(rel_path) {
+                    return Some(target);
+                }
+            }
+        }
+        None
     }
 
     fn get_word_at(content: &str, pos: Position) -> Option<(String, Range)> {

@@ -3,12 +3,6 @@ A meta-programming language for reasoning about code architecture.
 
 
 
-- [ ] Hover description in keywords (error, data, etc)
-- [ ] functions are always pure, data is always immutable
-- [ ] format this document
-- [ ] show errors, etc: make sure when parsing is broken
-
-
 # kinds
 
 data
@@ -279,17 +273,15 @@ remove hardcoded html
 add icon (vscode files too)
 
 improve CLI help message
+Add 'tect.visConfig' setting for custom graph physics
 
 is it possible to track usage of variables and constants globally?
 
-right click export to formats from graph in vs code?
+should lsp.rs be broken down?
 
-button to stop graph from rotatin
+highlight the whole import path when ctrl click
 
-better colors for groups (more visible, and different between themselves)
 
-expand all collapse all toggle
 
-optional custom config for vs code graph
 
-click on import path to jump to file
+

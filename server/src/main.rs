@@ -315,6 +315,7 @@ async fn handle_serve() -> Result<()> {
         graph_cache: Mutex::new(HashMap::new()),
     })
     .custom_method("tect/getGraph", lsp::Backend::get_visual_graph)
+    .custom_method("tect/exportGraph", lsp::Backend::get_export_content)
     .finish();
 
     Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)

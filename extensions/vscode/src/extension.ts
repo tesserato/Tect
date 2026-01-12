@@ -159,6 +159,12 @@ class TectPreviewPanel {
                     case 'webviewReady':
                         this.update();
                         return;
+                    case 'saveImage':
+                        this.saveImage(message.data);
+                        return;
+                    case 'exportContent':
+                        this.exportContent(message.format);
+                        return;
                 }
             },
             null,
@@ -186,9 +192,79 @@ class TectPreviewPanel {
         if (!client) return;
         try {
             const visData = await client.sendRequest("tect/getGraph", { uri: this._uri.toString() });
-            this._panel.webview.postMessage({ command: 'update', data: visData });
+            
+            const config = vscode.workspace.getConfiguration("tect");
+            const visConfig = config.get("visConfig") || {};
+
+            this._panel.webview.postMessage({ 
+                command: 'update', 
+                data: visData,
+                config: visConfig 
+            });
         } catch (e) {
             console.error("Failed to fetch graph data", e);
+        }
+    }
+
+    private async saveImage(base64Data: string) {
+        const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+            return;
+        }
+
+        const buffer = Buffer.from(matches[2], 'base64');
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file('architecture.png'),
+            filters: { 'Images': ['png'] }
+        });
+
+        if (uri) {
+            fs.writeFile(uri.fsPath, buffer, (err) => {
+                if (err) {
+                    vscode.window.showErrorMessage(`Failed to save image: ${err.message}`);
+                } else {
+                    vscode.window.showInformationMessage('Graph saved successfully!');
+                }
+            });
+        }
+    }
+
+    private async exportContent(format: string) {
+        if (!client) return;
+        
+        let fileExt = "";
+        let filterName = "";
+        
+        switch (format) {
+            case 'dot': fileExt = 'dot'; filterName = 'Graphviz DOT'; break;
+            case 'mermaid': fileExt = 'mmd'; filterName = 'Mermaid Diagram'; break;
+            case 'tex': fileExt = 'tex'; filterName = 'LaTeX TikZ'; break;
+            case 'json': fileExt = 'json'; filterName = 'JSON Data'; break;
+            default: return;
+        }
+
+        try {
+            const content = await client.sendRequest<string>("tect/exportGraph", { 
+                uri: this._uri.toString(),
+                format: format 
+            });
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(`architecture.${fileExt}`),
+                filters: { [filterName]: [fileExt] }
+            });
+
+            if (uri) {
+                fs.writeFile(uri.fsPath, content, (err) => {
+                    if (err) {
+                        vscode.window.showErrorMessage(`Failed to save ${format.toUpperCase()}: ${err.message}`);
+                    } else {
+                        vscode.window.showInformationMessage(`${format.toUpperCase()} saved successfully!`);
+                    }
+                });
+            }
+        } catch (e) {
+            vscode.window.showErrorMessage(`Failed to generate export: ${e}`);
         }
     }
 
@@ -200,21 +276,87 @@ class TectPreviewPanel {
                 <meta charset="utf-8">
                 <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
                 <style>
-                    body { background-color: #0b0e14; color: #e0e0e0; margin: 0; padding: 0; overflow: hidden; height: 100vh; font-family: sans-serif; }
+                    body { background-color: #0b0e14; color: #e0e0e0; margin: 0; padding: 0; overflow: hidden; height: 100vh; font-family: sans-serif; user-select: none; }
                     #mynetwork { width: 100%; height: 100vh; }
+                    
+                    /* Toolbar */
+                    #toolbar {
+                        position: absolute;
+                        top: 20px;
+                        right: 20px;
+                        display: flex;
+                        gap: 10px;
+                        z-index: 100;
+                    }
+                    .btn {
+                        background: #1f2937;
+                        border: 1px solid #374151;
+                        color: #e5e7eb;
+                        padding: 6px 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 13px;
+                        transition: background 0.2s;
+                    }
+                    .btn:hover { background: #374151; }
+                    .btn.active { background: #3b82f6; border-color: #2563eb; color: white; }
+
+                    /* Custom Context Menu */
+                    #context-menu {
+                        position: absolute;
+                        display: none;
+                        background: #1f2937;
+                        border: 1px solid #374151;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                        border-radius: 4px;
+                        padding: 5px 0;
+                        z-index: 1000;
+                        min-width: 150px;
+                    }
+                    .context-item {
+                        padding: 8px 16px;
+                        cursor: pointer;
+                        color: #e5e7eb;
+                        font-size: 13px;
+                    }
+                    .context-item:hover {
+                        background: #374151;
+                    }
+                    .context-divider {
+                        height: 1px;
+                        background: #374151;
+                        margin: 4px 0;
+                    }
                 </style>
             </head>
             <body>
+                <div id="toolbar">
+                    <button class="btn" id="btn-physics" onclick="togglePhysics()">Pause Physics</button>
+                    <button class="btn" onclick="network.fit({animation:true})">Fit Graph</button>
+                    <button class="btn" onclick="expandAll()">Expand All</button>
+                    <button class="btn" onclick="collapseAll()">Collapse All</button>
+                </div>
+
                 <div id="mynetwork"></div>
+                <div id="context-menu">
+                    <div class="context-item" onclick="exportImage()">Export as PNG (Canvas)</div>
+                    <div class="context-divider"></div>
+                    <div class="context-item" onclick="requestExport('mermaid')">Export as Mermaid</div>
+                    <div class="context-item" onclick="requestExport('dot')">Export as DOT</div>
+                    <div class="context-item" onclick="requestExport('tex')">Export as LaTeX</div>
+                    <div class="context-item" onclick="requestExport('json')">Export as JSON</div>
+                </div>
+
                 <script>
                     const vscode = acquireVsCodeApi();
                     const container = document.getElementById('mynetwork');
+                    const ctxMenu = document.getElementById('context-menu');
                     let network = null;
                     let nodes = new vis.DataSet([]);
                     let edges = new vis.DataSet([]);
                     let currentGroups = [];
-                    // Using map passed from server now
                     let currentGroupColors = {};
+                    let physicsEnabled = true;
 
                     const clusterBy = (g) => ({
                         joinCondition: (n) => n.clusterGroup === g,
@@ -224,7 +366,6 @@ class TectPreviewPanel {
                             shape: 'box',
                             margin: 10,
                             color: { 
-                                // Use authoritative color from server, or fallback
                                 background: currentGroupColors[g] || '#fbbf24', 
                                 border: '#fff' 
                             }, 
@@ -232,23 +373,96 @@ class TectPreviewPanel {
                         }
                     });
 
+                    function togglePhysics() {
+                        physicsEnabled = !physicsEnabled;
+                        network.setOptions({ physics: { enabled: physicsEnabled } });
+                        const btn = document.getElementById('btn-physics');
+                        btn.textContent = physicsEnabled ? "Pause Physics" : "Resume Physics";
+                        btn.classList.toggle('active', !physicsEnabled);
+                    }
+
+                    function expandAll() {
+                        if(!network) return;
+                        // Iterate explicitly to handle potential nested or stubborn clusters
+                        let clusterIds = network.body.nodeIndices.filter(id => network.isCluster(id));
+                        // Limit iterations to prevent freezing if cycles occurred (rare in Vis.js)
+                        let safety = 0;
+                        while(clusterIds.length > 0 && safety < 10) {
+                            clusterIds.forEach(id => {
+                                try { network.openCluster(id); } catch(e){}
+                            });
+                            clusterIds = network.body.nodeIndices.filter(id => network.isCluster(id));
+                            safety++;
+                        }
+                    }
+
+                    function collapseAll() {
+                        if(!network) return;
+                        // Fully expand first to ensure a clean slate
+                        expandAll();
+                        // Re-cluster based on authoritative group list
+                        currentGroups.forEach(g => {
+                            try {
+                                network.cluster(clusterBy(g));
+                            } catch(e) { console.error(e); }
+                        });
+                    }
+
+                    function exportImage() {
+                        ctxMenu.style.display = 'none';
+                        const canvas = container.getElementsByTagName('canvas')[0];
+                        if (canvas) {
+                            const data = canvas.toDataURL('image/png');
+                            vscode.postMessage({ command: 'saveImage', data: data });
+                        }
+                    }
+
+                    function requestExport(fmt) {
+                        ctxMenu.style.display = 'none';
+                        vscode.postMessage({ command: 'exportContent', format: fmt });
+                    }
+
+                    // Context Menu Logic
+                    container.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        ctxMenu.style.top = e.offsetY + 'px';
+                        ctxMenu.style.left = e.offsetX + 'px';
+                        ctxMenu.style.display = 'block';
+                    });
+                    
+                    document.addEventListener('click', () => {
+                        ctxMenu.style.display = 'none';
+                    });
+
                     window.addEventListener('message', event => {
                         const message = event.data;
                         if (message.command === 'update' && message.data) {
                             const data = message.data;
+                            const userConfig = message.config || {};
+                            
                             currentGroups = data.groups || [];
                             currentGroupColors = data.groupColors || {};
 
-                            // Initialize Network if first run
                             if (!network) {
-                                const options = {
+                                const defaultOptions = {
                                     physics: { 
                                         enabled: true, 
                                         solver: 'forceAtlas2Based', 
                                         forceAtlas2Based: { gravitationalConstant: -100, springLength: 10 } 
                                     },
-                                    interaction: { hover: true, navigationButtons: true }
+                                    interaction: { hover: true, navigationButtons: true },
+                                    layout: { improvedLayout: true }
                                 };
+
+                                // Merge user config
+                                const options = { ...defaultOptions, ...userConfig };
+                                
+                                // Ensure physics matches user config if provided
+                                if (userConfig.physics && userConfig.physics.enabled !== undefined) {
+                                    physicsEnabled = userConfig.physics.enabled;
+                                    document.getElementById('btn-physics').textContent = physicsEnabled ? "Pause Physics" : "Resume Physics";
+                                }
+
                                 network = new vis.Network(container, { nodes, edges }, options);
                                 
                                 network.on("doubleClick", (params) => {
@@ -264,22 +478,18 @@ class TectPreviewPanel {
                                         }
                                     }
                                 });
+                            } else if (Object.keys(userConfig).length > 0) {
+                                network.setOptions(userConfig);
                             }
 
-                            // Differential Update to preserve Physics
-                            // The server sends stable UIDs based on artifact names.
                             nodes.update(data.nodes);
                             edges.update(data.edges);
                             
-                            // Cleanup: Remove nodes/edges that are no longer in the new data
                             const newIds = new Set(data.nodes.map(n => n.id));
                             const newEdgeIds = new Set(data.edges.map(e => e.id));
                             
-                            const removeNodes = nodes.getIds().filter(id => !newIds.has(id));
-                            const removeEdges = edges.getIds().filter(id => !newEdgeIds.has(id));
-                            
-                            nodes.remove(removeNodes);
-                            edges.remove(removeEdges);
+                            nodes.remove(nodes.getIds().filter(id => !newIds.has(id)));
+                            edges.remove(edges.getIds().filter(id => !newEdgeIds.has(id)));
                         }
                     });
 

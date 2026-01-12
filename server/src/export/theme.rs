@@ -8,13 +8,18 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// Hex colors for the group palette.
+/// High contrast, distinct colors chosen for visibility against dark backgrounds.
 pub const GROUP_PALETTE: &[&str] = &[
-    "#4f46e5", // Indigo 600
+    "#2563eb", // Blue 600
+    "#dc2626", // Red 600
     "#059669", // Emerald 600
     "#d97706", // Amber 600
-    "#e11d48", // Rose 600
+    "#7c3aed", // Violet 600
+    "#db2777", // Pink 600
     "#0891b2", // Cyan 600
-    "#c026d3", // Fuchsia 600
+    "#ea580c", // Orange 600
+    "#4f46e5", // Indigo 600
+    "#be123c", // Rose 700
 ];
 
 pub struct Style {
@@ -74,7 +79,7 @@ impl Theme {
             let (group_hex, group_latex) = Self::get_group_color(&group.name);
 
             Style {
-                fill: "#2563eb".into(), // Tect Blue
+                fill: "#1e293b".into(), // Slate 800 (Darker body for contrast)
                 border: group_hex,      // Dynamic Group Color
                 text: "#ffffff".into(),
                 shape: Shape::Box,
@@ -85,8 +90,8 @@ impl Theme {
         } else {
             // Ungrouped Node: Blue Body, Dark Blue Border
             Style {
-                fill: "#2563eb".into(),
-                border: "#1d4ed8".into(),
+                fill: "#1e293b".into(),
+                border: "#475569".into(), // Slate 600
                 text: "#ffffff".into(),
                 shape: Shape::Box,
                 latex_fill: "TectBlue".into(),
@@ -99,7 +104,7 @@ impl Theme {
     pub fn get_token_color(kind: &Kind) -> (&'static str, &'static str) {
         match kind {
             Kind::Constant(_) => ("#a855f7", "TectPurple"), // Purple
-            Kind::Variable(_) => ("#64748b", "TectGray"),   // Slate
+            Kind::Variable(_) => ("#94a3b8", "TectGray"),   // Slate 400
             Kind::Error(_) => ("#ef4444", "TectRed"),       // Red
         }
     }
