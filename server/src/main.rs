@@ -17,40 +17,41 @@ mod formatter;
 mod lsp;
 mod models;
 mod source_manager;
-// mod vis_js;
 
 #[cfg(test)]
 mod tests;
 
-/// Tect: Architectural Specification Language & Visualizer.
-///
-/// Tect is a tool for defining software architectures using a lightweight,
-/// type-safe language. It simulates data flow, detects architectural errors
-/// (like cycles or starvation), and exports diagrams to various formats.
-///
-/// =========================================================================
-/// COMMON WORKFLOWS
-/// =========================================================================
-///
-/// 1. Define architecture in .tect files
-///    (See examples in the repo for syntax)
-///
-/// 2. Verify logic (Check for starvation, cycles, unused symbols):
-///    $ tect check main.tect
-///
-/// 3. Generate diagrams (Export to standard formats):
-///    $ tect build main.tect -o arch.html  (Interactive HTML with Physics)
-///    $ tect build main.tect -o arch.mmd   (Mermaid for Markdown)
-///    $ tect build main.tect -o arch.tex   (LaTeX/TikZ for Papers)
-///
-/// =========================================================================
-///
+/// Architectural specification language & visualizer.
 #[derive(ClapParser)]
-#[command(name = "tect")]
-#[command(author = "Tesserato")]
-#[command(version = "0.0.4")]
-#[command(propagate_version = true)]
-#[command(verbatim_doc_comment)]
+#[command(
+    name = "tect",
+    author = "Tesserato",
+    version = "0.0.4",
+    propagate_version = true,
+    about = "Architectural specification language & visualizer",
+    long_about = r#"
+Define, validate, and visualize software architectures using a
+lightweight, type-safe language and rich tooling.
+
+Tect helps you:
+  • Model data flow and dependencies
+  • Detect architectural issues (cycles, starvation, dead ends)
+  • Generate diagrams for documentation, review, and publication
+
+COMMON WORKFLOWS
+
+  Validate an architecture:
+    tect check main.tect
+
+  Generate diagrams:
+    tect build main.tect -o arch.html   # Interactive visualization
+    tect build main.tect -o arch.mmd    # Mermaid (Markdown)
+    tect build main.tect -o arch.tex    # LaTeX / TikZ
+
+For detailed help on any command, run:
+  tect <command> --help
+"#
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -62,86 +63,75 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Compile to HTML, DOT, Mermaid, LaTeX, or JSON.
+    /// Generate architecture diagrams.
     ///
-    /// The output format is automatically determined by the output file extension.
+    /// The output format is inferred from the file extension.
     ///
-    /// [SUPPORTED FORMATS]
-    ///
-    /// .html   Interactive Web Graph (Vis.js)
-    ///         Best for: Exploring complex architectures with physics.
-    ///         Features: Search, Physics toggles, Clustering.
-    ///
-    /// .mmd    Mermaid.js Diagram
-    ///         Best for: Embedding in GitHub/GitLab READMEs, Notion, or Obsidian.
-    ///         Renders directly in many markdown previewers.
-    ///
-    /// .tex    TikZ/LaTeX (LuaLaTeX)
-    ///         Best for: Publication-quality PDF documents and academic papers.
-    ///         Uses the `force` graph library for auto-layout.
-    ///
-    /// .dot    Graphviz DOT
-    ///         Best for: Interoperability with Graphviz tools (dot, neato, fdp).
-    ///         Standard format for graph processing.
-    ///
-    /// .json   Raw Data
-    ///         Best for: Custom tooling or programmatic analysis.
-    ///         Contains the full node/edge list and group metadata.
+    /// Supported formats:
+    ///   .html  Interactive web visualization (Vis.js)
+    ///   .mmd   Mermaid diagram (Markdown)
+    ///   .tex   LaTeX / TikZ (LuaLaTeX)
+    ///   .dot   Graphviz DOT
+    ///   .json  Raw graph data
     #[command(visible_alias = "b")]
-    #[command(verbatim_doc_comment)]
     Build {
-        /// The input .tect file
+        /// Input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
 
-        /// The output file path.
-        /// The extension (.html, .mmd, .tex, .dot, .json) determines the format.
+        /// Output file path
         #[arg(short, long, value_name = "OUTPUT")]
         output: PathBuf,
     },
 
-    /// Auto-format Tect source to standard style.
+    /// Format Tect source code.
     ///
-    /// Standardizes indentation (4 spaces), aligns comments, and normalizes
-    /// token lists. By default, this command overwrites the input file.
+    /// Applies the standard Tect style:
+    ///   • 4-space indentation
+    ///   • Normalized token lists
+    ///   • Aligned comments
+    ///
+    /// By default, overwrites the input file.
     #[command(visible_alias = "f")]
     Fmt {
-        /// The input .tect file
+        /// Input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
 
-        /// Write to a specific output path instead of overwriting the input.
+        /// Write formatted output to a separate file
         #[arg(short, long, value_name = "OUTPUT")]
         output: Option<PathBuf>,
     },
 
-    /// Check source for syntax and logic errors.
+    /// Validate architecture syntax and logic.
     ///
-    /// Performs a full compiler pass:
-    /// 1. Syntax Parsing (Grammar validation)
-    /// 2. Semantic Analysis (Symbol resolution, Cycle detection)
-    /// 3. Flow Simulation (Starvation detection, Dead-end detection)
+    /// Runs the full analysis pipeline:
+    ///   1. Syntax parsing and grammar validation
+    ///   2. Semantic analysis (symbol resolution, cycle detection)
+    ///   3. Flow simulation (starvation and dead-end detection)
     ///
-    /// Prints colored diagnostics with file locations.
+    /// Exits with a non-zero code if errors are found.
     #[command(visible_alias = "c")]
-    #[command(verbatim_doc_comment)]
     Check {
-        /// The input .tect file
+        /// Input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
     },
 
     /// Start the Language Server (LSP).
     ///
-    /// Used by editor extensions (VS Code, Neovim) to provide autocomplete,
-    /// hover documentation, and live error highlighting.
-    /// Do not run this manually unless debugging the LSP protocol.
+    /// Used by editor integrations (VS Code, Neovim, etc.)
+    /// to provide autocomplete, hover documentation, and
+    /// live diagnostics.
+    ///
+    /// Not intended for direct interactive use.
     Serve,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
     let cmd = if cli.stdio {
         Commands::Serve
     } else {
