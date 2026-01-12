@@ -19,11 +19,11 @@ jobs:
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
                       suffix: ".exe"
-                    # Build Mac Intel on Mac ARM (Cross-compile is native on macOS)
+                    # MacOS Intel
                     - os: macos-latest
                       target: x86_64-apple-darwin
                       suffix: ""
-                    # Build Mac ARM on Mac ARM
+                    # MacOS ARM
                     - os: macos-latest
                       target: aarch64-apple-darwin
                       suffix: ""
@@ -59,7 +59,6 @@ jobs:
                     exit 1
                   fi
 
-                  # Copy to staging with the lowercase name expected by the extension
                   cp "$BIN_PATH" staging/tect${{ matrix.suffix }}
 
             - name: Upload Artifact
@@ -84,14 +83,22 @@ jobs:
             - name: Install Dependencies & Compile
               working-directory: ./extensions/vscode
               run: |
-                  # Changed from 'npm ci' to 'npm install' because package-lock.json might be missing
-                  npm install
+                  # 'npm ci' requires package-lock.json to exist in the repo
+                  npm ci
                   npm run compile
 
             - name: Prepare Extension Assets
               run: |
                   mkdir -p extensions/vscode/bin
+
+                  # Copy root LICENSE to extension folder (Overwrite if exists to ensure sync)
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
+
+                  # SAFETY FALLBACK: Only copy root README if the extension doesn't have one
+                  if [ ! -f extensions/vscode/README.md ] && [ -f README.md ]; then 
+                    echo "Extension README missing, copying root README."
+                    cp README.md extensions/vscode/README.md
+                  fi
 
             - name: Download All Binaries
               uses: actions/download-artifact@v4
@@ -119,7 +126,6 @@ jobs:
                   cp downloaded-bins/binary-aarch64-apple-darwin/tect extensions/vscode/bin/tect-aarch64-apple-darwin
                   chmod +x extensions/vscode/bin/tect-aarch64-apple-darwin
 
-                  # Debug: Show structure
                   ls -R extensions/vscode/bin/
 
             - name: Publish to Marketplace

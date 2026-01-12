@@ -32,7 +32,7 @@ editors/vscode/out/extension.js
 experiments/lib
 DRAFT.md
 extensions/vscode/node_modules
-extensions/vscode/package-lock.json
+# extensions/vscode/package-lock.json
 extensions/vscode/out
 extensions/vscode/bin
 *.vsix
