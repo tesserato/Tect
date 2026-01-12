@@ -55,6 +55,11 @@ variable HTMLIndex
 # Includes timing data and the count of files written.
 variable SuccessReport
 
+
+constant unused_constant
+variable unused_variable
+error unused_error
+
 # **File System Error**
 # Triggered when IO operations fail.
 # common causes:

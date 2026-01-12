@@ -1,12 +1,12 @@
 # Build Rust Server
-cd server
+Set-Location server
 cargo test
-cargo build
+cargo run -- --help
 
 # Build VS Code Extension
-cd ../editors/vscode
+Set-Location ../editors/vscode
 npm i
 npm run compile
 
-# Go back to root
-cd ../..
+# # Go back to root
+# cd ../..
