@@ -62,13 +62,11 @@ pub fn export(graph: &Graph) -> String {
             let style = Theme::get_node_style(node);
             let shape_open = match style.shape {
                 Shape::Box => "[",
-                Shape::Octagon => "{{",
                 Shape::Rounded => "(",
                 Shape::Diamond => "{",
             };
             let shape_close = match style.shape {
                 Shape::Box => "]",
-                Shape::Octagon => "}}",
                 Shape::Rounded => ")",
                 Shape::Diamond => "}",
             };

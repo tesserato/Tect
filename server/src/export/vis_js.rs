@@ -77,7 +77,6 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
         let group_name = n.function.group.as_ref().map(|g| g.name.clone());
         if let Some(ref g) = group_name {
             groups.insert(g.clone());
-            // Pre-calculate the authoritative color for this group
             if !group_colors.contains_key(g) {
                 let (hex, _) = Theme::get_group_color(g);
                 group_colors.insert(g.clone(), hex);
@@ -88,7 +87,6 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
 
         let vis_shape = match style.shape {
             Shape::Box => "box",
-            Shape::Octagon => "hexagon",
             Shape::Rounded => "box",
             Shape::Diamond => "box",
         };
@@ -109,7 +107,7 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             },
             border_width: style.stroke_width,
             font: VisFont {
-                color: style.text.into(),
+                color: style.text,
                 size: 14,
                 face: "sans-serif".into(),
                 stroke_width: 0,
@@ -165,7 +163,6 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
     let nodes_json = serde_json::to_string(&data.nodes).unwrap();
     let edges_json = serde_json::to_string(&data.edges).unwrap();
     let groups_json = serde_json::to_string(&data.groups).unwrap();
-    // Use the computed map from produce_vis_data, which is already authoritative
     let color_map_json = serde_json::to_string(&data.group_colors).unwrap();
 
     format!(

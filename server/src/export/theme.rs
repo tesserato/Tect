@@ -29,7 +29,6 @@ pub struct Style {
 
 pub enum Shape {
     Box,
-    Octagon,
     Rounded,
     Diamond,
 }

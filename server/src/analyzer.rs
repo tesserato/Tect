@@ -70,18 +70,18 @@ impl Workspace {
             visited_order.push(current_id);
 
             // Ensure loaded
-            if self.source_manager.get_content(current_id).is_none() {
-                if !self.source_manager.load_file(current_id, None) {
-                    self.report_error(
-                        current_id,
-                        None,
-                        format!(
-                            "Failed to read file: {:?}",
-                            self.source_manager.get_uri(current_id)
-                        ),
-                    );
-                    continue;
-                }
+            if self.source_manager.get_content(current_id).is_none()
+                && !self.source_manager.load_file(current_id, None)
+            {
+                self.report_error(
+                    current_id,
+                    None,
+                    format!(
+                        "Failed to read file: {:?}",
+                        self.source_manager.get_uri(current_id)
+                    ),
+                );
+                continue;
             }
 
             // Quick parse for imports to build graph

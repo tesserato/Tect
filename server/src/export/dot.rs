@@ -35,7 +35,6 @@ pub fn export(graph: &Graph) -> String {
             let style = Theme::get_node_style(node);
             let shape_str = match style.shape {
                 Shape::Box => "box",
-                Shape::Octagon => "octagon",
                 Shape::Rounded => "rect, style=\"rounded,filled\"",
                 Shape::Diamond => "diamond",
             };

@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
@@ -15,13 +15,6 @@ use tower_lsp::lsp_types::{DiagnosticSeverity, DiagnosticTag};
 pub fn hash_name(name: &str) -> u32 {
     let mut s = DefaultHasher::new();
     name.hash(&mut s);
-    (s.finish() & 0xFFFFFFFF) as u32
-}
-
-pub fn hash_context(base: &str, ctx: &str) -> u32 {
-    let mut s = DefaultHasher::new();
-    base.hash(&mut s);
-    ctx.hash(&mut s);
     (s.finish() & 0xFFFFFFFF) as u32
 }
 
@@ -197,7 +190,7 @@ impl Token {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
     pub uid: u32,
     pub name: String,
@@ -262,20 +255,15 @@ pub struct FlowStep {
 
 // --- Flow Entities ---
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     pub uid: u32,
-    pub function: Arc<Function>, // Arc<Function> doesn't derive Hash by default on the pointer, but we need content hash.
-    // However, for graph diffing, we can rely on UID.
-    // Note: We implement Hash manually or rely on `uid` for identity.
+    pub function: Arc<Function>,
     pub is_artificial_graph_start: bool,
     pub is_artificial_graph_end: bool,
     pub is_artificial_error_termination: bool,
 }
 
-// We rely on UID for identity equality in Sets/Maps usually,
-// but for 'Differential Updates', we need to hash content.
-// Since Function UIDs are deterministic hashes of names, we can rely on Node UID.
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         self.uid == other.uid
@@ -285,6 +273,16 @@ impl PartialEq for Node {
     }
 }
 impl Eq for Node {}
+
+// Manual Hash to match PartialEq and avoid hashing Arc<Function> content redundantly
+impl Hash for Node {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.uid.hash(state);
+        self.is_artificial_graph_start.hash(state);
+        self.is_artificial_graph_end.hash(state);
+        self.is_artificial_error_termination.hash(state);
+    }
+}
 
 impl Node {
     pub fn new(function: Arc<Function>) -> Self {

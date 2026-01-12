@@ -17,7 +17,7 @@ pub fn export(graph: &Graph) -> String {
     )
     .unwrap();
     writeln!(out, "\\usegdlibrary{{force}}").unwrap();
-    writeln!(out, "").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "% Tect Color Palette").unwrap();
     writeln!(out, "\\definecolor{{TectBlue}}{{HTML}}{{2563eb}}").unwrap();
     writeln!(out, "\\definecolor{{TectBlueDark}}{{HTML}}{{1d4ed8}}").unwrap();
@@ -37,14 +37,14 @@ pub fn export(graph: &Graph) -> String {
         )
         .unwrap();
     }
-    writeln!(out, "").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "\\begin{{document}}").unwrap();
-    writeln!(out, "").unwrap();
+    writeln!(out).unwrap();
     writeln!(out, "\\begin{{tikzpicture}}[").unwrap();
     writeln!(out, "  tect_node/.style={{draw=none, text=white, font=\\sffamily\\small, inner sep=6pt, rounded corners=2pt}},").unwrap();
     writeln!(out, "  tect_edge/.style={{draw=gray!50, thick, ->, >=stealth, font=\\sffamily\\tiny, align=center}}").unwrap();
     writeln!(out, "]").unwrap();
-    writeln!(out, "").unwrap();
+    writeln!(out).unwrap();
     writeln!(
         out,
         "\\graph [spring layout, node distance=2cm, iterations=500] {{"
@@ -68,7 +68,6 @@ pub fn export(graph: &Graph) -> String {
             let style = Theme::get_node_style(node);
             let shape_tikz = match style.shape {
                 Shape::Box => "rectangle",
-                Shape::Octagon => "regular polygon, regular polygon sides=8",
                 Shape::Rounded => "rectangle, rounded corners=5pt",
                 Shape::Diamond => "diamond",
             };
@@ -93,7 +92,7 @@ pub fn export(graph: &Graph) -> String {
         }
     }
 
-    writeln!(out, "").unwrap();
+    writeln!(out).unwrap();
 
     for edge in &graph.edges {
         let (_, color_name) = Theme::get_token_color(&edge.token.kind);
