@@ -7,9 +7,9 @@
 
 use crate::analyzer::Workspace;
 use crate::engine::Flow;
+use crate::export::vis_js::{self, VisData};
 use crate::formatter::format_tect_source;
 use crate::models::{Cardinality, Function, Kind, ProgramStructure, SymbolMetadata, Token};
-use crate::vis_js::{self, VisData};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};

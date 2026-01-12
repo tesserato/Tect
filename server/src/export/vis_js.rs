@@ -2,7 +2,11 @@
 //!
 //! Responsible for translating the logical architecture graph into
 //! a visual representation compatible with Vis.js.
+//!
+//! Note: This module uses the centralized `theme.rs` to ensure visual consistency
+//! with other export formats.
 
+use super::theme::{Shape, Theme};
 use crate::models::{Cardinality, Graph, Kind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -78,37 +82,34 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             groups.insert(g.clone());
         }
 
-        let bg = if n.is_artificial_error_termination {
-            "#dc2626" // Red
-        } else if n.is_artificial_graph_start || n.is_artificial_graph_end {
-            "#059669" // Emerald
-        } else {
-            "#1d4ed8" // Blue
-        };
+        // --- Use Centralized Theme ---
+        let style = Theme::get_node_style(n);
 
-        let border = if group_name.is_some() {
-            "#fbbf24"
-        } else {
-            "#ffffff"
+        // Map abstract Theme Shape to Vis.js specific string
+        let vis_shape = match style.shape {
+            Shape::Box => "box",
+            Shape::Octagon => "hexagon", // Vis.js approximation
+            Shape::Rounded => "box",     // Default box is slightly rounded
+            Shape::Diamond => "box",
         };
 
         vis_nodes.push(VisNode {
             id: n.uid,
             label: format!(" {} ", n.function.name),
-            shape: "box".into(),
+            shape: vis_shape.into(),
             margin: 10,
             cluster_group: group_name.clone(),
             color: VisColor {
-                background: bg.into(),
-                border: border.into(),
+                background: style.fill.into(),
+                border: style.border.into(),
                 highlight: VisHighlight {
-                    background: bg.into(),
+                    background: style.fill.into(),
                     border: "#ffffff".into(),
                 },
             },
             border_width: if group_name.is_some() { 2 } else { 1 },
             font: VisFont {
-                color: "#ffffff".into(),
+                color: style.text.into(),
                 size: 14,
                 face: "sans-serif".into(),
                 stroke_width: 0,
@@ -124,11 +125,8 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             Kind::Error(er) => &er.name,
         };
 
-        let color = if matches!(e.token.kind, Kind::Error(_)) {
-            "#f87171"
-        } else {
-            "#818cf8"
-        };
+        // --- Use Centralized Theme ---
+        let (color, _) = Theme::get_token_color(&e.token.kind);
 
         vis_edges.push(VisEdge {
             from: e.from_node_uid,

@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use tower_lsp::lsp_types::{DiagnosticSeverity, Url};
 use tower_lsp::{LspService, Server};
 
+use crate::export::vis_js;
+
 mod analyzer;
 mod engine;
 mod export;
@@ -15,7 +17,6 @@ mod formatter;
 mod lsp;
 mod models;
 mod source_manager;
-mod vis_js;
 
 #[cfg(test)]
 mod tests;
