@@ -1,6 +1,4 @@
 //! # Graphviz (DOT) Exporter
-//!
-//! Generates a .dot file for use with Graphviz (dot, neato, fdp).
 
 use super::theme::{Shape, Theme};
 use crate::models::{EdgeRelation, Graph};
@@ -16,14 +14,12 @@ pub fn export(graph: &Graph) -> String {
     writeln!(out, "    node [fontname=\"Helvetica\", fontsize=10];").unwrap();
     writeln!(out, "    edge [fontname=\"Helvetica\", fontsize=9];").unwrap();
 
-    // Group nodes by their group name for clusters
     let mut groups: HashMap<Option<String>, Vec<&crate::models::Node>> = HashMap::new();
     for node in &graph.nodes {
         let group_name = node.function.group.as_ref().map(|g| g.name.clone());
         groups.entry(group_name).or_default().push(node);
     }
 
-    // 1. Write Nodes (Clustered)
     for (group_opt, nodes) in groups {
         let is_cluster = group_opt.is_some();
 
@@ -31,7 +27,7 @@ pub fn export(graph: &Graph) -> String {
             writeln!(out, "    subgraph cluster_{} {{", sanitize_id(&group_name)).unwrap();
             writeln!(out, "        label=\"{}\";", group_name).unwrap();
             writeln!(out, "        style=rounded;").unwrap();
-            writeln!(out, "        color=\"#94a3b8\";").unwrap(); // Slate 400
+            writeln!(out, "        color=\"#94a3b8\";").unwrap();
             writeln!(out, "        fontcolor=\"#475569\";").unwrap();
         }
 
@@ -44,24 +40,24 @@ pub fn export(graph: &Graph) -> String {
                 Shape::Diamond => "diamond",
             };
 
-            // Basic HTML-like label for formatting
             let label = format!("<<B>{}</B>>", escape_html(&node.function.name));
 
-            // If style includes special style attr, handle it, else default to filled
             let style_attr = if shape_str.contains("style=") {
-                "" // already in shape_str
+                ""
             } else {
                 ", style=filled"
             };
 
+            // Apply style from theme
             writeln!(
                 out,
-                "        N_{} [label={}, shape={}, fillcolor=\"{}\", color=\"{}\", fontcolor=\"{}\"{}];",
+                "        N_{} [label={}, shape={}, fillcolor=\"{}\", color=\"{}\", penwidth={}, fontcolor=\"{}\"{}];",
                 node.uid,
                 label,
                 shape_str,
                 style.fill,
-                style.border,
+                style.border, // Group Color
+                style.stroke_width, // Thick stroke for groups
                 style.text,
                 style_attr
             )
@@ -73,7 +69,6 @@ pub fn export(graph: &Graph) -> String {
         }
     }
 
-    // 2. Write Edges
     for edge in &graph.edges {
         let (color, _) = Theme::get_token_color(&edge.token.kind);
         let style = match edge.relation {

@@ -1,8 +1,6 @@
 //! # Mermaid.js Exporter
-//!
-//! Generates a .mmd file compatible with GitHub, Notion, Obsidian, etc.
 
-use super::theme::{Shape, Theme};
+use super::theme::{Shape, Theme, GROUP_PALETTE};
 use crate::models::{EdgeRelation, Graph};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -12,16 +10,10 @@ pub fn export(graph: &Graph) -> String {
 
     writeln!(out, "flowchart TD").unwrap();
 
-    // Define classes (styles)
-    // We define generic classes and apply them to nodes to keep the graph readable
+    // Define Base Classes
     writeln!(
         out,
         "    classDef default fill:#1e293b,stroke:#334155,color:#fff;"
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "    classDef function fill:#2563eb,stroke:#1d4ed8,color:#fff;"
     )
     .unwrap();
     writeln!(
@@ -34,6 +26,22 @@ pub fn export(graph: &Graph) -> String {
         "    classDef error fill:#dc2626,stroke:#b91c1c,color:#fff;"
     )
     .unwrap();
+    writeln!(
+        out,
+        "    classDef function fill:#2563eb,stroke:#1d4ed8,color:#fff;"
+    )
+    .unwrap();
+
+    // Generate Dynamic Classes for Groups
+    // Fill is Blue (#2563eb), Border is Group Color, Thick Stroke
+    for (i, hex) in GROUP_PALETTE.iter().enumerate() {
+        writeln!(
+            out,
+            "    classDef group{} fill:#2563eb,stroke:{},stroke-width:3px,color:#fff;",
+            i, hex
+        )
+        .unwrap();
+    }
 
     // Group nodes
     let mut groups: HashMap<Option<String>, Vec<&crate::models::Node>> = HashMap::new();
@@ -54,7 +62,7 @@ pub fn export(graph: &Graph) -> String {
             let style = Theme::get_node_style(node);
             let shape_open = match style.shape {
                 Shape::Box => "[",
-                Shape::Octagon => "{{", // Hexagon is closest in mermaid
+                Shape::Octagon => "{{",
                 Shape::Rounded => "(",
                 Shape::Diamond => "{",
             };
@@ -65,7 +73,7 @@ pub fn export(graph: &Graph) -> String {
                 Shape::Diamond => "}",
             };
 
-            // Node Definition: N_123["Name"]
+            // Node Definition
             writeln!(
                 out,
                 "        N_{}{}\"{}\"{}",
@@ -73,14 +81,18 @@ pub fn export(graph: &Graph) -> String {
             )
             .unwrap();
 
-            // Apply specific class
-            let class_name = if node.is_artificial_error_termination {
-                "error"
+            // Assign Class
+            let class_name = if style.latex_border.starts_with("TectGroup") {
+                // Map TectGroupX -> groupX
+                style.latex_border.replace("TectGroup", "group")
+            } else if node.is_artificial_error_termination {
+                "error".to_string()
             } else if node.is_artificial_graph_start || node.is_artificial_graph_end {
-                "startend"
+                "startend".to_string()
             } else {
-                "function"
+                "function".to_string()
             };
+
             writeln!(out, "        class N_{} {}", node.uid, class_name).unwrap();
         }
 
@@ -97,8 +109,6 @@ pub fn export(graph: &Graph) -> String {
             _ => "-->",
         };
 
-        // Mermaid doesn't support changing edge colors easily per-edge without hacky styles.
-        // We will just stick to the label.
         writeln!(
             out,
             "    N_{} {}|{}| N_{}",

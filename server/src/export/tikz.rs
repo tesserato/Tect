@@ -1,9 +1,6 @@
 //! # TikZ (LaTeX) Exporter
-//!
-//! Generates a .tex file using the `graphs`, `graphdrawing`, and `force` libraries.
-//! Requires compilation with LuaLaTeX.
 
-use super::theme::{Shape, Theme};
+use super::theme::{Shape, Theme, GROUP_PALETTE};
 use crate::models::{EdgeRelation, Graph};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -11,7 +8,6 @@ use std::fmt::Write;
 pub fn export(graph: &Graph) -> String {
     let mut out = String::new();
 
-    // Preamble hint
     writeln!(out, "% Tect Architecture Export").unwrap();
     writeln!(out, "% Compile with: lualatex output.tex").unwrap();
     writeln!(out, "\\documentclass[tikz,border=10pt]{{standalone}}").unwrap();
@@ -24,15 +20,28 @@ pub fn export(graph: &Graph) -> String {
     writeln!(out, "").unwrap();
     writeln!(out, "% Tect Color Palette").unwrap();
     writeln!(out, "\\definecolor{{TectBlue}}{{HTML}}{{2563eb}}").unwrap();
+    writeln!(out, "\\definecolor{{TectBlueDark}}{{HTML}}{{1d4ed8}}").unwrap();
     writeln!(out, "\\definecolor{{TectRed}}{{HTML}}{{dc2626}}").unwrap();
+    writeln!(out, "\\definecolor{{TectRedDark}}{{HTML}}{{b91c1c}}").unwrap();
     writeln!(out, "\\definecolor{{TectGreen}}{{HTML}}{{059669}}").unwrap();
+    writeln!(out, "\\definecolor{{TectGreenDark}}{{HTML}}{{047857}}").unwrap();
     writeln!(out, "\\definecolor{{TectPurple}}{{HTML}}{{a855f7}}").unwrap();
     writeln!(out, "\\definecolor{{TectGray}}{{HTML}}{{64748b}}").unwrap();
+    // Dynamic Group Colors
+    for (i, hex) in GROUP_PALETTE.iter().enumerate() {
+        writeln!(
+            out,
+            "\\definecolor{{TectGroup{}}}{{HTML}}{{{}}}",
+            i,
+            hex.trim_start_matches('#')
+        )
+        .unwrap();
+    }
     writeln!(out, "").unwrap();
     writeln!(out, "\\begin{{document}}").unwrap();
     writeln!(out, "").unwrap();
     writeln!(out, "\\begin{{tikzpicture}}[").unwrap();
-    writeln!(out, "  tect_node/.style={{draw=none, fill=TectBlue, text=white, font=\\sffamily\\small, inner sep=6pt, rounded corners=2pt}},").unwrap();
+    writeln!(out, "  tect_node/.style={{draw=none, text=white, font=\\sffamily\\small, inner sep=6pt, rounded corners=2pt}},").unwrap();
     writeln!(out, "  tect_edge/.style={{draw=gray!50, thick, ->, >=stealth, font=\\sffamily\\tiny, align=center}}").unwrap();
     writeln!(out, "]").unwrap();
     writeln!(out, "").unwrap();
@@ -42,18 +51,13 @@ pub fn export(graph: &Graph) -> String {
     )
     .unwrap();
 
-    // Group nodes
     let mut groups: HashMap<Option<String>, Vec<&crate::models::Node>> = HashMap::new();
     for node in &graph.nodes {
         let group_name = node.function.group.as_ref().map(|g| g.name.clone());
         groups.entry(group_name).or_default().push(node);
     }
 
-    // Nodes
     for (group_opt, nodes) in groups {
-        // TikZ graphs library doesn't handle visual clusters (boxes around nodes)
-        // easily within the same layout pass without manual tweaking.
-        // We will just comment the group structure for now.
         if let Some(name) = group_opt {
             writeln!(out, "  % Group: {}", name).unwrap();
         } else {
@@ -69,11 +73,21 @@ pub fn export(graph: &Graph) -> String {
                 Shape::Diamond => "diamond",
             };
 
-            // N_123 [as="Name", fill=Color, ...]
+            // Apply fill and stroke colors from theme
+            // latex_fill is used for 'fill', latex_border is used for 'draw'
+            let draw_opts = if style.stroke_width > 0 {
+                format!(
+                    ", draw={}, line width={}pt",
+                    style.latex_border, style.stroke_width
+                )
+            } else {
+                "".to_string()
+            };
+
             writeln!(
                 out,
-                "  N_{} [as=\"{}\", tect_node, shape={}, fill={}];",
-                node.uid, node.function.name, shape_tikz, style.latex_color
+                "  N_{} [as=\"{}\", tect_node, shape={}, fill={}{}];",
+                node.uid, node.function.name, shape_tikz, style.latex_fill, draw_opts
             )
             .unwrap();
         }
@@ -81,7 +95,6 @@ pub fn export(graph: &Graph) -> String {
 
     writeln!(out, "").unwrap();
 
-    // Edges
     for edge in &graph.edges {
         let (_, color_name) = Theme::get_token_color(&edge.token.kind);
         let style_extra = match edge.relation {

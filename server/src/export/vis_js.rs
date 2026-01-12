@@ -1,17 +1,12 @@
 //! # Vis.js Data Translator & Exporter
 //!
-//! Responsible for translating the logical architecture graph into
-//! a visual representation compatible with Vis.js.
-//!
-//! Note: This module uses the centralized `theme.rs` to ensure visual consistency
-//! with other export formats.
+//! Note: This module uses the centralized `theme.rs` to ensure visual consistency.
 
 use super::theme::{Shape, Theme};
 use crate::models::{Cardinality, Graph, Kind};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-/// Represents the visual payload sent to the Webview or injected into HTML.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VisData {
     pub nodes: Vec<VisNode>,
@@ -69,8 +64,6 @@ pub struct VisEdge {
     pub font: VisFont,
 }
 
-/// Translates a logical Graph into visual VisData.
-/// This is the "Single Source of Truth" for styling.
 pub fn produce_vis_data(graph: &Graph) -> VisData {
     let mut vis_nodes = Vec::new();
     let mut vis_edges = Vec::new();
@@ -82,14 +75,12 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             groups.insert(g.clone());
         }
 
-        // --- Use Centralized Theme ---
         let style = Theme::get_node_style(n);
 
-        // Map abstract Theme Shape to Vis.js specific string
         let vis_shape = match style.shape {
             Shape::Box => "box",
-            Shape::Octagon => "hexagon", // Vis.js approximation
-            Shape::Rounded => "box",     // Default box is slightly rounded
+            Shape::Octagon => "hexagon",
+            Shape::Rounded => "box",
             Shape::Diamond => "box",
         };
 
@@ -100,14 +91,14 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             margin: 10,
             cluster_group: group_name.clone(),
             color: VisColor {
-                background: style.fill.into(),
-                border: style.border.into(),
+                background: style.fill.clone(),
+                border: style.border.clone(),
                 highlight: VisHighlight {
-                    background: style.fill.into(),
+                    background: style.fill,
                     border: "#ffffff".into(),
                 },
             },
-            border_width: if group_name.is_some() { 2 } else { 1 },
+            border_width: style.stroke_width,
             font: VisFont {
                 color: style.text.into(),
                 size: 14,
@@ -125,7 +116,6 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
             Kind::Error(er) => &er.name,
         };
 
-        // --- Use Centralized Theme ---
         let (color, _) = Theme::get_token_color(&e.token.kind);
 
         vis_edges.push(VisEdge {
@@ -156,13 +146,19 @@ pub fn produce_vis_data(graph: &Graph) -> VisData {
     }
 }
 
-/// Generates a complete standalone HTML file.
-/// Used by the CLI `build` command for portable exports.
 pub fn generate_interactive_html(graph: &Graph) -> String {
     let data = produce_vis_data(graph);
     let nodes_json = serde_json::to_string(&data.nodes).unwrap();
     let edges_json = serde_json::to_string(&data.edges).unwrap();
     let groups_json = serde_json::to_string(&data.groups).unwrap();
+
+    // Generate Dynamic Color Map for Clusters
+    let mut color_map = HashMap::new();
+    for group in &data.groups {
+        let (hex, _) = Theme::get_group_color(group);
+        color_map.insert(group, hex);
+    }
+    let color_map_json = serde_json::to_string(&color_map).unwrap();
 
     format!(
         r#"<!DOCTYPE html>
@@ -204,6 +200,7 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
     const nodes = new vis.DataSet({nodes_json});
     const edges = new vis.DataSet({edges_json});
     const groups = {groups_json};
+    const groupColors = {color_map_json};
     const container = document.getElementById('mynetwork');
     const configContainer = document.getElementById('config');
     const configControls = document.getElementById('config-controls');
@@ -232,7 +229,7 @@ pub fn generate_interactive_html(graph: &Graph) -> String {
     network.on("configChange", (params) => {{ optionsCode.innerText = JSON.stringify(params, null, 2); }});
     const clusterBy = (g) => ({{
         joinCondition: (n) => n.clusterGroup === g,
-        clusterNodeProperties: {{ id: 'c:'+g, label: g, shape: 'box', margin: 10, color: {{ background: '#fbbf24', border: '#fff' }}, font: {{ color: '#000', size: 16, face: 'sans-serif', strokeWidth: 0 }} }}
+        clusterNodeProperties: {{ id: 'c:'+g, label: g, shape: 'box', margin: 10, color: {{ background: groupColors[g] || '#fbbf24', border: '#fff' }}, font: {{ color: '#fff', size: 16, face: 'sans-serif', strokeWidth: 0 }} }}
     }});
     groups.forEach(g => network.cluster(clusterBy(g)));
     network.on("click", (p) => {{
