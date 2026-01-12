@@ -19,11 +19,11 @@ jobs:
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
                       suffix: ".exe"
-                    # Use macos-13 for Intel (x86_64) native build
+                    # MacOS Intel
                     - os: macos-13
                       target: x86_64-apple-darwin
                       suffix: ""
-                    # Use macos-latest (currently macos-14/ARM) for M1/M2 native build
+                    # MacOS ARM (M1/M2)
                     - os: macos-latest
                       target: aarch64-apple-darwin
                       suffix: ""
@@ -37,18 +37,24 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Build Binary
+              # Run from root (workspace context). Cargo will build the 'server' member.
               run: cargo build --release --target ${{ matrix.target }}
-              working-directory: ./server
 
             - name: Prepare Artifact
               shell: bash
               run: |
                   mkdir -p staging
-                  # Define source path based on target
-                  SRC_PATH="server/target/${{ matrix.target }}/release/tect${{ matrix.suffix }}"
+
+                  # The target directory is at the root, so we remove 'server/' prefix
+                  # Cargo always puts artifacts in target/<triple>/release/ when --target is passed
+                  SRC_PATH="target/${{ matrix.target }}/release/tect${{ matrix.suffix }}"
+
+                  echo "Looking for binary at: $SRC_PATH"
 
                   if [ ! -f "$SRC_PATH" ]; then
                     echo "::error::Binary not found at $SRC_PATH"
+                    # Fallback debug: list directories to help diagnose if it happens again
+                    ls -R target
                     exit 1
                   fi
 
@@ -81,14 +87,8 @@ jobs:
 
             - name: Prepare Extension Assets
               run: |
-                  # Ensure bin directory exists
                   mkdir -p extensions/vscode/bin
-
-                  # Copy root license/readme if they exist, otherwise rely on extension folder ones
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
-                  # Don't overwrite extension specific readme if it exists, or append? 
-                  # Usually extension has its own. Assuming existing one is good or cp root:
-                  # cp README.md extensions/vscode/README.md
 
             - name: Download All Binaries
               uses: actions/download-artifact@v4
@@ -99,7 +99,7 @@ jobs:
 
             - name: Place Binaries
               run: |
-                  # Move binaries to extensions/vscode/bin with the specific names expected by extension.ts
+                  # Move binaries to the expected location with platform-specific names
 
                   # Linux
                   cp downloaded-bins/binary-x86_64-unknown-linux-gnu/tect extensions/vscode/bin/tect-x86_64-unknown-linux-gnu
@@ -116,7 +116,6 @@ jobs:
                   cp downloaded-bins/binary-aarch64-apple-darwin/tect extensions/vscode/bin/tect-aarch64-apple-darwin
                   chmod +x extensions/vscode/bin/tect-aarch64-apple-darwin
 
-                  # Verify
                   ls -l extensions/vscode/bin/
 
             - name: Publish to Marketplace
