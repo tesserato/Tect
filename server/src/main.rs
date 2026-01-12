@@ -21,7 +21,6 @@ mod source_manager;
 #[cfg(test)]
 mod tests;
 
-
 /// Command-line interface definition for Tect.
 #[derive(ClapParser)]
 #[command(

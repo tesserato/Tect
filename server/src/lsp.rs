@@ -575,9 +575,9 @@ impl Backend {
             "dot" => Ok(dot::export(&graph)),
             "mermaid" => Ok(mermaid::export(&graph)),
             "tex" => Ok(tikz::export(&graph)),
-            "json" => {
-                Ok(serde_json::to_string_pretty(&graph).map_err(|e| LspError::internal_error())?)
-            }
+            "json" => Ok(
+                serde_json::to_string_pretty(&graph).map_err(|_e| LspError::internal_error())?
+            ),
             "html" => Ok(vis_js::generate_interactive_html(&graph)),
             _ => Err(LspError::invalid_params("Unknown format")),
         }
@@ -728,13 +728,11 @@ impl Backend {
             let match_end = full_match.end();
 
             // Calculate byte offset of cursor in line
-            let mut char_offset = 0;
             let mut byte_offset = 0;
-            for c in line_str.chars() {
-                if char_offset == pos.character as usize {
+            for (i, c) in line_str.chars().enumerate() {
+                if i == pos.character as usize {
                     break;
                 }
-                char_offset += 1;
                 byte_offset += c.len_utf8();
             }
 

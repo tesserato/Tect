@@ -560,8 +560,6 @@ impl Workspace {
         }
     }
 
-
-
     /// Resolves a list of tokens string representations into concrete `Token` instances.
     ///
     /// This function:
