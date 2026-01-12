@@ -1,19 +1,19 @@
 [package]
 name = "Tect"
-version = "0.0.0"
+version = "0.0.7"
 edition = "2021"
 
 authors = ["Tesserato <tesserato@hotmail.com>"]
 
 include = ["src/**/*", "README.md", "LICENSE"]
-description = "A meta-programming language for reasoning about code architecture."
+description = "Minimal (only 6 keywords), type-safe language for software architecture with rich tooling"
 license = "MIT"
 
 homepage = "https://github.com/tesserato/Tect"
 repository = "https://github.com/tesserato/Tect"
 documentation = "https://docs.rs/Tect"
 
-readme = "README.md"
+readme = "../README.md"
 
 keywords = ["architecture", "dsl", "modeling", "compiler", "visualization"]
 
@@ -33,7 +33,7 @@ dashmap = "6.1"
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-colored = "2.0"
+colored = "3.0"
 walkdir = "2.5"
 anyhow = "1.0"
 regex = "1.12"

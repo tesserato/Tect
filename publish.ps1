@@ -1,3 +1,5 @@
+cd server
+
 # Script to generate documentation, publish the crate, and tag the release
 cargo package --list --allow-dirty
 
