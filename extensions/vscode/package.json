@@ -1,9 +1,10 @@
 {
     "name": "tect",
-    "displayName": "Tect",
-    "description": "Lightweight Architectural Specification Language & Visualizer",
+    "displayName": "Tect Architecture Language",
+    "description": "Architectural Specification Language & Visualizer",
     "version": "0.0.4",
     "publisher": "tesserato",
+    "icon": "tect.png",
     "engines": {
         "vscode": "^1.108.0"
     },
@@ -26,7 +27,8 @@
         "syntaxes/**",
         "LICENSE",
         "language-configuration.json",
-        "snippets.json"
+        "snippets.json",
+        "tect.png"
     ],
     "contributes": {
         "languages": [
@@ -39,7 +41,11 @@
                 "extensions": [
                     ".tect"
                 ],
-                "configuration": "./language-configuration.json"
+                "configuration": "./language-configuration.json",
+                "icon": {
+                    "light": "./tect.png",
+                    "dark": "./tect.png"
+                }
             }
         ],
         "grammars": [

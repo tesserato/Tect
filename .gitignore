@@ -26,8 +26,8 @@ codebase.md
 codebase_excluded_paths.txt
 graph.json
 editors/vscode/out/extension.js
-*.png
-*.svg
+# *.png
+# *.svg
 *.html
 experiments/lib
 DRAFT.md
