@@ -20,57 +20,96 @@ mod vis_js;
 #[cfg(test)]
 mod tests;
 
+/// Tect: Architectural Specification Language & Visualizer.
+///
+/// Tect is a tool for defining software architectures using a lightweight,
+/// type-safe language. It simulates data flow, detects architectural errors
+/// (like cycles or starvation), and exports diagrams to various formats.
+///
+/// [COMMON WORKFLOWS]
+///
+/// 1. Define architecture in .tect files
+/// 2. Verify logic:
+///    $ tect check main.tect
+/// 3. Generate diagrams:
+///    $ tect build main.tect -o arch.html  (Interactive)
+///    $ tect build main.tect -o arch.mmd   (Mermaid)
+///    $ tect build main.tect -o arch.tex   (LaTeX/TikZ)
 #[derive(ClapParser)]
 #[command(name = "tect")]
 #[command(author = "Tesserato")]
 #[command(version = "0.0.4")]
-#[command(about = "Architectural Specification Language & Visualizer", long_about = None)]
 #[command(propagate_version = true)]
+#[command(verbatim_doc_comment)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    /// Force stdio mode (internal use for LSP)
+    /// Force stdio mode (internal use for LSP communication)
     #[arg(long, global = true, hide = true)]
     stdio: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Compile Tect source into visualization artifacts.
+    /// Compile to HTML, DOT, Mermaid, LaTeX, or JSON.
     ///
-    /// Supports generating:
-    /// - HTML (Interactive Vis.js graph)
-    /// - DOT (Graphviz)
-    /// - MMD (Mermaid.js)
-    /// - TEX (TikZ/LaTeX)
-    /// - JSON (Raw Data)
+    /// The output format is automatically determined by the output file extension.
+    ///
+    /// [SUPPORTED FORMATS]
+    ///
+    /// .html   Interactive Web Graph (Vis.js)
+    ///         Best for: Exploring complex architectures with physics.
+    ///
+    /// .mmd    Mermaid.js Diagram
+    ///         Best for: Embedding in GitHub/GitLab READMEs, Notion, or Obsidian.
+    ///
+    /// .tex    TikZ/LaTeX (LuaLaTeX)
+    ///         Best for: Publication-quality PDF documents and academic papers.
+    ///
+    /// .dot    Graphviz DOT
+    ///         Best for: Interoperability with Graphviz tools (dot, neato, fdp).
+    ///
+    /// .json   Raw Data
+    ///         Best for: Custom tooling or programmatic analysis.
     #[command(visible_alias = "b")]
+    #[command(verbatim_doc_comment)]
     Build {
         /// The input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
 
         /// The output file path.
-        /// Extension determines format: .html, .dot, .mmd, .tex, .json
+        /// The extension (.html, .mmd, .tex, .dot, .json) determines the format.
         #[arg(short, long, value_name = "OUTPUT")]
         output: PathBuf,
     },
 
-    /// Format a Tect source file.
+    /// Auto-format Tect source to standard style.
+    ///
+    /// Standardizes indentation (4 spaces), aligns comments, and normalizes
+    /// token lists. By default, this command overwrites the input file.
     #[command(visible_alias = "f")]
     Fmt {
         /// The input .tect file
         #[arg(value_name = "INPUT")]
         input: PathBuf,
 
-        /// Optional output path.
+        /// Write to a specific output path instead of overwriting the input.
         #[arg(short, long, value_name = "OUTPUT")]
         output: Option<PathBuf>,
     },
 
-    /// Check the source for syntax and logic errors.
+    /// Check source for syntax and logic errors.
+    ///
+    /// Performs a full compiler pass:
+    /// 1. Syntax Parsing (Grammar validation)
+    /// 2. Semantic Analysis (Symbol resolution, Cycle detection)
+    /// 3. Flow Simulation (Starvation detection, Dead-end detection)
+    ///
+    /// Prints colored diagnostics with file locations.
     #[command(visible_alias = "c")]
+    #[command(verbatim_doc_comment)]
     Check {
         /// The input .tect file
         #[arg(value_name = "INPUT")]
@@ -78,6 +117,10 @@ enum Commands {
     },
 
     /// Start the Language Server (LSP).
+    ///
+    /// Used by editor extensions (VS Code, Neovim) to provide autocomplete,
+    /// hover documentation, and live error highlighting.
+    /// Do not run this manually unless debugging the LSP protocol.
     Serve,
 }
 
