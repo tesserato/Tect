@@ -47,12 +47,8 @@ jobs:
                   # Target release directory
                   REL_DIR="target/${{ matrix.target }}/release"
 
-                  # Find binary case-insensitively (Tect or tect), ensuring we get the file with correct suffix
-                  # We use -iname to match Tect/tect, and verify it exists
+                  # Find binary case-insensitively (Tect or tect)
                   BIN_NAME="tect${{ matrix.suffix }}"
-
-                  # Find the file in the release dir. 
-                  # On Windows, we need the one ending in .exe
                   BIN_PATH=$(find "$REL_DIR" -maxdepth 1 -iname "$BIN_NAME" -type f | head -n 1)
 
                   echo "Found binary at: $BIN_PATH"
@@ -88,13 +84,13 @@ jobs:
             - name: Install Dependencies & Compile
               working-directory: ./extensions/vscode
               run: |
-                  npm ci
+                  # Changed from 'npm ci' to 'npm install' because package-lock.json might be missing
+                  npm install
                   npm run compile
 
             - name: Prepare Extension Assets
               run: |
                   mkdir -p extensions/vscode/bin
-                  # Copy root license if it exists
                   if [ -f LICENSE ]; then cp LICENSE extensions/vscode/LICENSE; fi
 
             - name: Download All Binaries
