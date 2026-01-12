@@ -220,11 +220,14 @@ impl LanguageServer for Backend {
         };
 
         // Check for import path first
-        if let Some(target_uri) = Self::check_import_at(&content, pos, &uri) {
-            return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+        if let Some((target_uri, origin_range)) = Self::check_import_at(&content, pos, &uri) {
+            let target_range = Range::new(Position::new(0, 0), Position::new(0, 0));
+            return Ok(Some(GotoDefinitionResponse::Link(vec![LocationLink {
+                origin_selection_range: Some(origin_range),
                 target_uri,
-                Range::new(Position::new(0, 0), Position::new(0, 0)),
-            ))));
+                target_range,
+                target_selection_range: target_range,
+            }])));
         }
 
         // Check for symbols
@@ -695,7 +698,7 @@ impl Backend {
         }
     }
 
-    fn check_import_at(content: &str, pos: Position, base_uri: &Url) -> Option<Url> {
+    fn check_import_at(content: &str, pos: Position, base_uri: &Url) -> Option<(Url, Range)> {
         let line_str = content.lines().nth(pos.line as usize)?;
 
         // Regex to match: import "path"
@@ -723,9 +726,23 @@ impl Backend {
             // Check if cursor is strictly inside quotes
             if byte_offset > match_start && byte_offset < match_end {
                 let rel_path = path_match.as_str();
+
+                // Compute Range of the inner string
+                let inner_start_byte = path_match.start();
+                let inner_end_byte = path_match.end();
+
+                // Convert byte offsets to UTF-16 character columns for LSP
+                let start_col = line_str[..inner_start_byte].encode_utf16().count() as u32;
+                let end_col = line_str[..inner_end_byte].encode_utf16().count() as u32;
+
+                let range = Range::new(
+                    Position::new(pos.line, start_col),
+                    Position::new(pos.line, end_col),
+                );
+
                 // Resolve relative to base_uri
                 if let Ok(target) = base_uri.join(rel_path) {
-                    return Some(target);
+                    return Some((target, range));
                 }
             }
         }
