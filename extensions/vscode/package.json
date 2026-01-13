@@ -28,7 +28,8 @@
         "LICENSE",
         "language-configuration.json",
         "snippets.json",
-        "tect.png"
+        "tect.png",
+        "open-chart.png"
     ],
     "contributes": {
         "languages": [
@@ -75,7 +76,7 @@
             {
                 "command": "tect.openPreview",
                 "title": "Tect: Open Architecture Preview",
-                "icon": "$(graph)",
+                "icon": "./open-chart.png",
                 "category": "Tect"
             }
         ],
