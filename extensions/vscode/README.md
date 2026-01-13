@@ -2,6 +2,8 @@
 
 The official Visual Studio Code extension for the **Tect** architectural specification language.
 
+![Demo](https://github.com/tesserato/Tect/blob/main/art/demo.gif?raw=true "Demo")
+
 ## Features
 
 ### 1. Live Architecture Preview

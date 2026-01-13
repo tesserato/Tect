@@ -1,5 +1,7 @@
 Tect is a minimal (only 6 keywords), type-safe language for software architecture with rich tooling. Define variables, constants, errors and functions declaratively, catch cycles and starvation early through simulation, and generate interactive diagrams directly from your source.
 
+![Demo](https://github.com/tesserato/Tect/blob/main/art/demo.gif?raw=true "Demo")
+
 ## Features
 
 - **Architecture as Code**: Define systems using a minimal, declarative syntax with only **6 keywords** (`constant`, `variable`, `error`, `group`, `function`, `import`).
