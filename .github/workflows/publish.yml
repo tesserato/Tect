@@ -3,7 +3,7 @@ name: Publish Extension
 on:
     push:
         tags:
-            - "v*"
+            - "vsix-v*"
 
 jobs:
     build-rust:
