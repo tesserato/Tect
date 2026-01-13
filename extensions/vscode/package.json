@@ -2,7 +2,7 @@
     "name": "tect",
     "displayName": "Tect Architecture Language",
     "description": "Architectural Specification Language & Visualizer",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "publisher": "tesserato",
     "icon": "tect.png",
     "engines": {
