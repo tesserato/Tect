@@ -25,13 +25,14 @@ Tect is a minimal (only 6 keywords), type-safe language for software architectur
 #### VS Code Extension
 For the best experience, install the **Tect** [extension for VS Code](https://marketplace.visualstudio.com/items?itemName=tesserato.tect). It provides:
 - Syntax highlighting and snippets.
-- Live architecture preview (Click the "Open Chart" icon in the editor title bar).
 - Go-to-definition (supports files and symbols).
 - Real-time error reporting.
+
+**Live architecture preview** Open a `.tect` file and click the "Open Chart" icon in the editor title bar to open the live architecture preview (Command `Tect: Open Architecture Preview`).
   
 ![Extension button](https://raw.githubusercontent.com/tesserato/Tect/refs/heads/main/art/extension-button-screenshot.jpg)
 
-#### Alternatively, install the CLI via crates.io [crates.io](https://crates.io/crates/Tect)
+#### Alternatively, install the CLI via [crates.io](https://crates.io/crates/Tect)
 ```bash
 cargo install Tect
 ```

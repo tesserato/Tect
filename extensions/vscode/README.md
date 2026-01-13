@@ -8,14 +8,13 @@ The official Visual Studio Code extension for the **Tect** architectural specifi
 
 ### 1. Live Architecture Preview
 
+Visualize your architecture in real-time as you type: Open a `.tect` file and click the "Open Chart" icon in the editor title bar to open the live architecture preview (Command `Tect: Open Architecture Preview`).
+
 ![Extension button](https://raw.githubusercontent.com/tesserato/Tect/refs/heads/main/art/extension-button-screenshot.jpg)
 
-Visualize your architecture in real-time as you type.
-- **Command**: `Tect: Open Architecture Preview` (or click the "Open Chart" icon in the editor title bar)
 - **Interactive**: Drag nodes, pan, and zoom.
 - **Toolbar**: Pause physics, fit graph, and expand/collapse groups.
 - **Export**: Right-click the graph to save as **PNG**, **HTML**, **Mermaid**, **DOT**, or **LaTeX**.
-
 
 ### 2. Intelligent Editing
 - **Syntax Highlighting**: Distinct colors for constants, variables, errors, and flow steps.
